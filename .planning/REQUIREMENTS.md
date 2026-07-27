@@ -161,7 +161,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | AUDIT-03 | Phase 7 | Pending |
 
 **Coverage:**
-- v1 requirements: 40 total (corrected from the 37 originally stated here — the itemized list above has always contained 40 REQ-IDs; see STATE.md Blockers/Concerns for this discrepancy note)
+- v1 requirements: 40 total (AUTH 4 + JIRA 6 + REL 5 + TMPL 6 + DOC 7 + ADO 5 + DEPL 4 + AUDIT 3) — confirmed 2026-07-27, supersedes the "37" originally stated here
 - Mapped to phases: 40/40 ✓
 - Unmapped: 0 ✓
 

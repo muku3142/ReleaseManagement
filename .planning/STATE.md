@@ -71,7 +71,6 @@ None yet.
 
 ### Blockers/Concerns
 
-- REQUIREMENTS.md stated "37 v1 requirements" but the actual listed REQ-IDs sum to 40 (AUTH 4 + JIRA 6 + REL 5 + TMPL 6 + DOC 7 + ADO 5 + DEPL 4 + AUDIT 3). Traceability corrected to 40/40 mapped. Flag if the 37 figure was meant to exclude some items.
 - Phase 2's Jira→ADO link-discovery spike outcome will determine Phase 6's exact scope (dev-status mechanism vs. commit/PR key-parsing fallback, or both) — revisit Phase 6 plan-phase once the spike lands.
 
 ## Deferred Items
