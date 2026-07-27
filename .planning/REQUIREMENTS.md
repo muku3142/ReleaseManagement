@@ -119,13 +119,52 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (pending roadmap) | — | Pending |
+| AUTH-01 | Phase 1 | Pending |
+| AUTH-02 | Phase 1 | Pending |
+| AUTH-03 | Phase 1 | Pending |
+| AUTH-04 | Phase 1 | Pending |
+| JIRA-01 | Phase 2 | Pending |
+| JIRA-02 | Phase 2 | Pending |
+| JIRA-03 | Phase 2 | Pending |
+| JIRA-04 | Phase 2 | Pending |
+| JIRA-05 | Phase 2 | Pending |
+| JIRA-06 | Phase 2 | Pending |
+| REL-01 | Phase 3 | Pending |
+| REL-02 | Phase 3 | Pending |
+| REL-03 | Phase 3 | Pending |
+| REL-04 | Phase 3 | Pending |
+| REL-05 | Phase 3 | Pending |
+| TMPL-01 | Phase 4 | Pending |
+| TMPL-02 | Phase 4 | Pending |
+| TMPL-03 | Phase 4 | Pending |
+| TMPL-04 | Phase 4 | Pending |
+| TMPL-05 | Phase 4 | Pending |
+| TMPL-06 | Phase 4 | Pending |
+| DOC-01 | Phase 5 | Pending |
+| DOC-02 | Phase 5 | Pending |
+| DOC-03 | Phase 5 | Pending |
+| DOC-04 | Phase 5 | Pending |
+| DOC-05 | Phase 5 | Pending |
+| DOC-06 | Phase 5 | Pending |
+| DOC-07 | Phase 5 | Pending |
+| ADO-01 | Phase 6 | Pending |
+| ADO-02 | Phase 6 | Pending |
+| ADO-03 | Phase 6 | Pending |
+| ADO-04 | Phase 6 | Pending |
+| ADO-05 | Phase 6 | Pending |
+| DEPL-01 | Phase 7 | Pending |
+| DEPL-02 | Phase 7 | Pending |
+| DEPL-03 | Phase 7 | Pending |
+| DEPL-04 | Phase 7 | Pending |
+| AUDIT-01 | Phase 7 | Pending |
+| AUDIT-02 | Phase 7 | Pending |
+| AUDIT-03 | Phase 7 | Pending |
 
 **Coverage:**
-- v1 requirements: 37 total
-- Mapped to phases: 0 — pending roadmap creation
-- Unmapped: 37 ⚠️
+- v1 requirements: 40 total (corrected from the 37 originally stated here — the itemized list above has always contained 40 REQ-IDs; see STATE.md Blockers/Concerns for this discrepancy note)
+- Mapped to phases: 40/40 ✓
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-27*
-*Last updated: 2026-07-27 after initial definition*
+*Last updated: 2026-07-27 after roadmap creation (7 phases, full coverage)*
