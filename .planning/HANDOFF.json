@@ -1,0 +1,65 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-27T12:39:17.374Z",
+  "phase": "1",
+  "phase_name": "Foundation & Authentication",
+  "phase_dir": ".planning/phases/01-foundation-authentication",
+  "plan": 0,
+  "task": 0,
+  "total_tasks": 0,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Project research (STACK/ARCHITECTURE/FEATURES/PITFALLS/SUMMARY)", "status": "done", "commit": "8e387f3"},
+    {"id": 2, "name": "Define v1 requirements (REQUIREMENTS.md)", "status": "done", "commit": "f9d1060"},
+    {"id": 3, "name": "Create roadmap (7 phases)", "status": "done", "commit": "8c7d16f"},
+    {"id": 4, "name": "Phase 1 discuss-phase — 01-CONTEXT.md + 01-DISCUSSION-LOG.md", "status": "done", "commit": "91a741c"},
+    {"id": 5, "name": "Record phase 1 context session in STATE.md", "status": "done", "commit": "50cd18d"},
+    {"id": 6, "name": "Enable research + standard granularity in .planning/config.json", "status": "done", "commit": "uncommitted"}
+  ],
+  "remaining_tasks": [
+    {"id": 7, "name": "Run /gsd-plan-phase for Phase 1 — produces PLAN.md (no plans exist yet)", "status": "not_started"},
+    {"id": 8, "name": "Execute Phase 1 plans (/gsd-execute-phase)", "status": "not_started"},
+    {"id": 9, "name": "Phases 2-7 — not started", "status": "not_started"}
+  ],
+  "blockers": [
+    {
+      "description": "REQUIREMENTS.md header says '37 v1 requirements' but the listed REQ-IDs sum to 40 (AUTH 4 + JIRA 6 + REL 5 + TMPL 6 + DOC 7 + ADO 5 + DEPL 4 + AUDIT 3). Traceability was corrected to 40/40 mapped.",
+      "type": "technical",
+      "workaround": "Proceed with 40; confirm with the user whether the 37 figure was meant to exclude specific items."
+    },
+    {
+      "description": "Phase 2's Jira->ADO link-discovery spike outcome determines Phase 6's exact scope (dev-status mechanism vs. commit/PR key parsing).",
+      "type": "external",
+      "workaround": "Does not block Phase 1. Revisit Phase 6 at plan time once the spike lands."
+    },
+    {
+      "description": "D-07: idle timeout is inherently stateful but D-05 mandates a stateless JWT. The planner must pick (a) short-lived access + refresh token, or (b) sliding-expiry re-issued token — and apply it consistently.",
+      "type": "technical",
+      "workaround": "Option (b) is noted as simpler and adequate. This is a planner decision, not a re-litigation of D-05."
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "Confirm the 37-vs-40 requirement count in REQUIREMENTS.md",
+      "context": "Traceability table now claims 40/40; the header still says 37.",
+      "blocking": false
+    },
+    {
+      "action": "Provide Jira Cloud site URL + a test email/API token, or confirm the stubbed-provider dev profile is the only path for now",
+      "context": "Phase 1 validates credentials against a real Jira Cloud site (AUTH-01, JIRA-01). Local dev falls back to a stubbed validation adapter behind a Spring profile + WireMock.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {"decision": "JIRA-01 (configure the Jira Cloud site) moved from Phase 2 into Phase 1", "rationale": "AUTH-01 cannot validate a token without knowing the site — inseparable. ROADMAP.md and REQUIREMENTS.md traceability both updated.", "phase": "1"},
+    {"decision": "A valid Jira API token for the configured site is sufficient to authenticate (D-01/D-02)", "rationale": "No allowlist, no group check, no separate user store. Write-side access is deliberately unscoped; accepted risk for an internal tool. Upgrade path is a Jira group check at sign-in — do not build it now.", "phase": "1"},
+    {"decision": "Record the acting user on every state change; build no role model (D-03)", "rationale": "Keeps an audit trail and lets roles be added later without a data migration.", "phase": "1"},
+    {"decision": "Stateless JWT in an httpOnly/Secure/SameSite cookie + Spring Security CSRF (D-05/D-08)", "rationale": "Statelessness without the XSS exposure of localStorage; same-origin single-jar deployment makes CSRF protection necessary.", "phase": "1"},
+    {"decision": "Jira token persisted with column-level encryption, key from env/mounted secret, key version recorded per row (D-10..D-13)", "rationale": "AUTH-03 requires a DB connection alone not expose plaintext. No cloud KMS dependency in Phase 1; key-version field makes later rotation/migration tolerable. Token is never returned to the client — replacement only.", "phase": "1"},
+    {"decision": "All external access is user-triggered — no background jobs (D-14)", "rationale": "Keeps the audit trail unambiguous about who caused each external call.", "phase": "1"},
+    {"decision": "Enable the research agent and set granularity to standard in .planning/config.json", "rationale": "Phase 1 establishes precedent for all seven phases (architecture boundaries, error shape, crypto) — coarse planning without research is too thin for that.", "phase": "1"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Run /gsd-plan-phase for Phase 1. The phase has 01-CONTEXT.md but no PLAN.md — planning is the only outstanding step before execution.",
+  "context_notes": "Planning-only project so far: zero source files exist, only .planning/ and CLAUDE.md. Phase 1 discussion is complete and unusually decision-dense (D-01..D-16 plus four items explicitly left to Claude's discretion: local dev without live Jira, landing-screen scope, hexagonal package layout specifics, error-response shape). The planner's job is to turn those into tasks, not to re-open them. The only genuine open implementation question is D-07 (how to express an idle timeout with a stateless JWT). Config was switched to research=true / granularity=standard immediately before pausing, so the next plan-phase run will spawn gsd-phase-researcher — that is intended. Note: the GSD workflow docs call `gsd-sdk query <group> <name>`; the installed CLI is `node C:/Users/ucs/.claude/get-shit-done/bin/gsd-tools.cjs <command>` with no `query` subcommand."
+}

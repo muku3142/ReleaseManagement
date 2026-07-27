@@ -13,7 +13,7 @@
     "quick_branch_template": null
   },
   "workflow": {
-    "research": false,
+    "research": true,
     "plan_check": false,
     "verifier": false,
     "nyquist_validation": false,
@@ -49,5 +49,5 @@
   "agent_skills": {},
   "claude_md_path": "./CLAUDE.md",
   "mode": "yolo",
-  "granularity": "coarse"
+  "granularity": "standard"
 }
