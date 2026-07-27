@@ -123,7 +123,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | AUTH-02 | Phase 1 | Pending |
 | AUTH-03 | Phase 1 | Pending |
 | AUTH-04 | Phase 1 | Pending |
-| JIRA-01 | Phase 2 | Pending |
+| JIRA-01 | Phase 1 | Pending |
 | JIRA-02 | Phase 2 | Pending |
 | JIRA-03 | Phase 2 | Pending |
 | JIRA-04 | Phase 2 | Pending |

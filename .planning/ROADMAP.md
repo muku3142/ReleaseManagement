@@ -12,8 +12,8 @@ The journey starts with a horizontal foundation (Spring Boot/React skeleton, hex
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Foundation & Authentication** - Spring Boot/React skeleton with hexagonal boundaries, single-jar deployment, and sign-in via the release manager's own Jira credentials
-- [ ] **Phase 2: Jira Ticket Browsing** - Connect to a Jira Cloud site and browse/filter the complete candidate ticket set; run the Jira→ADO link-discovery spike
+- [ ] **Phase 1: Foundation & Authentication** - Spring Boot/React skeleton with hexagonal boundaries, single-jar deployment, Jira site configuration, and sign-in via the release manager's own Jira credentials
+- [ ] **Phase 2: Jira Ticket Browsing** - Browse/filter the complete candidate ticket set from the configured Jira Cloud site; run the Jira→ADO link-discovery spike
 - [ ] **Phase 3: Release Assembly** - Create, freeze, and manage named/versioned releases built from browsed tickets
 - [ ] **Phase 4: Template Authoring** - Author, validate, and live-preview per-document-type templates against a safe, documented view-model
 - [ ] **Phase 5: Document Generation** - Generate, preview, and export release notes, runbooks, and approval documents as immutable snapshots
@@ -23,25 +23,28 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Phase Details
 
 ### Phase 1: Foundation & Authentication
-**Goal**: Release manager can sign in with their own Jira credentials and land on a running application that is architecturally ready for every later phase
+**Goal**: Release manager can configure the Jira Cloud site, sign in with their own Jira credentials, and land on a running application that is architecturally ready for every later phase
 **Mode:** mvp
 **Depends on**: Nothing (first phase)
-**Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04
+**Requirements**: AUTH-01, AUTH-02, AUTH-03, AUTH-04, JIRA-01
 **Success Criteria** (what must be TRUE):
-  1. Release manager can sign in by supplying their Jira email and API token, which the system validates live against Jira before granting access
-  2. Signing in with an invalid, expired, or revoked token is rejected with a clear error, not a silent failure or generic crash
-  3. Stored Jira credentials are encrypted at rest and never appear in any API response after being saved
-  4. Release manager can replace an expired or revoked Jira token from a settings screen without losing any existing releases, templates, or history
+  1. Release manager can configure which Jira Cloud site the system reads from, and see it in the UI
+  2. Release manager can sign in by supplying their Jira email and API token, which the system validates live against that site before granting access
+  3. Signing in with an invalid, expired, or revoked token is rejected with a clear error, not a silent failure or generic crash
+  4. Stored Jira credentials are encrypted at rest and never appear in any API response after being saved
+  5. Release manager can replace an expired or revoked Jira token from a settings screen without losing any existing releases, templates, or history
+
+Note: JIRA-01 was moved here from Phase 2 during phase-1 discussion — AUTH-01 requires validating a token against Jira, which is impossible without knowing the site, so the two cannot be separated.
 **Plans**: TBD
 **UI hint**: yes
 
 ### Phase 2: Jira Ticket Browsing
-**Goal**: Release manager can connect the tool to a Jira Cloud site and browse/filter the complete candidate ticket set for a release, with every Jira read scoped to their own credential
+**Goal**: Release manager can browse and filter the complete candidate ticket set for a release from the configured Jira Cloud site, with every Jira read scoped to their own credential
 **Mode:** mvp
 **Depends on**: Phase 1
-**Requirements**: JIRA-01, JIRA-02, JIRA-03, JIRA-04, JIRA-05, JIRA-06
+**Requirements**: JIRA-02, JIRA-03, JIRA-04, JIRA-05, JIRA-06
 **Success Criteria** (what must be TRUE):
-  1. Release manager can configure which Jira Cloud site the system reads from, and all reads use their own signed-in credential
+  1. All ticket reads use the signed-in user's own Jira credential, so results never exceed what that user can see in Jira
   2. Release manager can browse tickets filtered by project, fix version, and JQL, and sees the complete matching set even when it spans many pages (built against `/search/jql` with cursor pagination, never the deprecated `/search` endpoint)
   3. Ticket fields display correctly regardless of an instance's custom-field configuration (resolved by name via field metadata), and rich-text fields render as readable text
   4. Release manager gets a clear, actionable error when Jira is unreachable, rate-limited, or rejects the credential — distinguishable from "no results"
