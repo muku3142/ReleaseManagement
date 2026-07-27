@@ -16,14 +16,15 @@ Given a set of Jira tickets, produce accurate and consistent release documentati
 
 ### Active
 
-- [ ] Release manager can connect the system to a Jira instance and browse/select tickets for a release
+- [ ] Release manager signs in with their own Jira credentials, which scope what they can read
+- [ ] Release manager can connect the system to a Jira Cloud site and browse/select tickets for a release
 - [ ] Release manager can assemble a release: a named, versioned set of Jira tickets
 - [ ] Where a Jira ticket links to Azure DevOps, system follows that link and enriches the ticket with its commits and pull requests
 - [ ] Release manager can author templates with placeholders that resolve against release, ticket, and commit/PR data
 - [ ] System generates release notes from a template
 - [ ] System generates a deployment runbook (deploy and rollback steps) from a template
 - [ ] System generates approval / change-request documents from a template
-- [ ] Release manager can preview and export generated documents
+- [ ] Release manager can preview generated documents against a real release's data and export them as PDF and DOCX
 - [ ] Release manager can promote a release through a fixed environment ladder and see where it currently sits
 - [ ] System retains release and deployment history as an audit trail
 - [ ] Ticket-source integration sits behind a provider abstraction so a second provider can be added without reworking core
@@ -58,6 +59,9 @@ Given a set of Jira tickets, produce accurate and consistent release documentati
 - **Dependencies**: Azure DevOps is optional and read-only, limited to repository data (commits, pull requests), and reached only by following links found on a Jira ticket
 - **Resilience**: Azure DevOps being unlinked, unreachable or unauthorised must degrade gracefully — release assembly and document generation continue without code detail
 - **Architecture**: Ticket-source access must go through a provider interface from the start, even though only Jira is implemented
+- **Security**: Template source is untrusted user input — the rendering path must have no expression language, no method invocation and no arbitrary property traversal, and must be bounded in execution time and collection size
+- **External deadline**: Jira's legacy `/rest/api/*/search` endpoint already returns HTTP 410 Gone — build against `/search/jql` with cursor pagination and the dedicated paginated `/changelog` endpoint from day one. `expand=changelog` silently truncates at around 100 entries
+- **External deadline**: Azure DevOps retires global Personal Access Tokens on 1 December 2026, inside this project's build window — the credential model must use org-scoped tokens with tracked expiry from the start rather than being reworked later
 
 ## Key Decisions
 
@@ -71,17 +75,26 @@ Given a set of Jira tickets, produce accurate and consistent release documentati
 | Azure DevOps reached only via links present on a Jira ticket, at commit/PR level | User's stated need; makes ADO an optional enrichment rather than a required integration, so the tool works against Jira alone | — Pending |
 | Fixed environment ladder rather than per-app configuration | Simplifies the promotion model for v1; configurability can be added once the ladder is proven | — Pending |
 | User-authored templates rather than fixed document formats | User explicitly asked for a template generator, not three hardcoded reports | — Pending |
+| Logic-less template engine (Mustache/jmustache), not FreeMarker, Pebble, Thymeleaf or Handlebars.java | Templates are authored by users, so template source is untrusted input. Every full-expression Java engine has a documented sandbox-bypass history — including a CVSS 9.1 Thymeleaf bypass disclosed in 2026 — and several vendors state outright that they assume trusted authors. A logic-less engine has no expression language or class-resolution surface to escape from, so this is prevention rather than mitigation | — Pending |
+| Templates see a dedicated flattened view-model, never domain or JPA entities | Two reasons that reinforce each other: it removes the reflection/method-call surface that makes template injection possible, and it stops user templates from binding to internal field names — otherwise no domain refactor is ever safe again, with no compiler to catch the breakage | — Pending |
+| Generated documents stored as immutable snapshots with template version pinned | An audit trail is worthless if a template edit retroactively changes what a three-month-old document says. Regeneration produces a new revision instead of mutating history | — Pending |
+| Modular monolith — no microservices, event sourcing, CQRS or message broker | Single-role internal tool. Hexagonal package boundaries give the isolation that actually matters (keeping Jira concepts out of the domain) without distributed-system cost | — Pending |
+| Authenticate by reusing the user's own Jira credentials | Removes an entire user-store and password-reset surface, and makes the tool's read access exactly equal to the user's own Jira permissions rather than a broader service account | — Pending |
 
 ## Open Questions
 
-Deferred to research and phase discussion — not blocking roadmap creation:
+Resolved after research (2026-07-27):
 
-- **Authentication**: how the release manager signs in (organisational SSO/LDAP vs local accounts). Single-role, single-user-type keeps authorisation trivial either way.
-- **Multiple applications**: whether one instance manages releases for several applications/products sharing the one standard environment ladder. Assumed yes; confirm before data modelling.
-- **Environment ladder definition**: the actual stages (assumed a DEV → TEST → UAT → PROD style path) and whether promotion requires an in-tool approval step.
-- **Persistence**: database choice and whether generated documents are stored or regenerated on demand.
-- **Document export formats**: which formats matter (Markdown, HTML, PDF, DOCX, Confluence).
-- **Azure DevOps link discovery**: how the link from a Jira ticket to Azure DevOps is actually expressed in this environment — Jira's development-information/dev-status data, remote issue links, a custom field, or smart-commit references in the branch/commit text. This determines the whole ADO enrichment mechanism and needs verifying against a real ticket.
+- **Jira flavour** → **Jira Cloud**. Fixes the API to `/rest/api/3/`, authentication to API-token Basic auth, and means rich-text fields arrive as Atlassian Document Format and must be flattened.
+- **Authentication** → **reuse the user's own Jira credentials**. The release manager supplies their Jira email and API token; validating it against Jira both authenticates them and naturally scopes what tickets they can read. No separate user store.
+- **Document export formats** → **PDF and DOCX**. Markdown and HTML are not required as deliverables, though HTML is likely an internal intermediate on the way to PDF.
+- **Azure DevOps link discovery** → the Jira instance **has the Azure DevOps connector app installed**, so Jira's Development-panel data should carry commits and pull requests. The endpoint behind it is still Atlassian's internal, undocumented `dev-status` API, so this remains verify-first, not assume-first.
+- **Persistence** → PostgreSQL, and generated documents are **stored as immutable snapshots** with the template version pinned, not regenerated on demand. This is what makes the audit trail trustworthy when Jira data or a template later changes.
+
+Still open, deferred to phase discussion — not blocking roadmap creation:
+
+- **Multiple applications**: whether one instance manages releases for several applications/products sharing the one standard environment ladder. Assumed yes; this is a data-model dimension, not an architecture change. Confirm before release data modelling.
+- **Environment ladder definition**: the actual stages (assumed a DEV → TEST → UAT → PROD style path) and whether promotion requires an in-tool sign-off step.
 
 ## Evolution
 
