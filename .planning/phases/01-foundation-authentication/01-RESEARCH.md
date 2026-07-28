@@ -568,10 +568,9 @@ No `refresh_token` table — per Pattern 1, refresh tokens are stateless JWTs, n
    - What's unclear: whether this specific org's Jira Cloud site has any tenant-specific quirks (e.g., email visibility settings can null out `emailAddress` for some account types).
    - Recommendation: capture one real response (with a throwaway personal token against the actual configured site) as a WireMock fixture during Wave 0, before writing the mapper.
 
-2. **HS256 vs RS256 for the self-issued JWT**
-   - What we know: same process issues and validates, so a shared secret is architecturally sufficient.
-   - What's unclear: whether organisational policy (referenced generically in CLAUDE.md's "matches team/organisational standard" framing for other choices) has an opinion on symmetric vs asymmetric signing for internal tools.
-   - Recommendation: default to HS256 per this research; flag for a one-line confirmation in `/gsd-discuss-phase` follow-up or plan-review if the planner wants it explicitly reconfirmed.
+2. ~~**HS256 vs RS256 for the self-issued JWT**~~ — **RESOLVED 2026-07-28 by the user: HS256 with a shared secret from an env var**, mirroring the D-11 encryption-key pattern. Do not implement RS256.
+
+3. ~~**JDK 17 (installed) vs JDK 25 (stack target)**~~ — **RESOLVED 2026-07-28 by the user: target Java 25.** A JDK 25 distribution must be installed before the build can compile; the plan must treat this as an explicit prerequisite step rather than assuming the host toolchain. `maven.compiler.release`/`<release>` is 25, and the Environment Availability table below is superseded on this point.
 
 ## Environment Availability
 

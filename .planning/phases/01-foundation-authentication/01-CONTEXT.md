@@ -48,6 +48,11 @@ A running Spring Boot + React application with hexagonal package boundaries and 
 - **D-15:** The tool targets a single Jira Cloud site. Sign-in validates the supplied email and token against that site.
 - **D-16:** Because JIRA-01 now lands in this phase, Phase 1 must include both the stored site configuration and a way to see and set it. A sensible default is to seed it from application configuration for deployment while still exposing it in the UI, so a fresh environment is usable before anyone signs in.
 
+### Resolved after research (2026-07-28)
+
+- **D-17:** The build targets **Java 25**, per the stack table — not the JDK 17 that happens to be installed on the dev machine. Installing a JDK 25 distribution is an explicit prerequisite of the first plan; the build must not silently fall back to 17.
+- **D-18:** The self-issued JWT is signed with **HS256 using a shared secret supplied from an environment variable**, mirroring D-11's key-from-env pattern. Not RS256 — one process both issues and validates, so an asymmetric keypair buys nothing here. The decoder must pin the expected algorithm explicitly rather than trusting the token's own `alg` header.
+
 ### Claude's Discretion
 
 The user explicitly left these to me:
