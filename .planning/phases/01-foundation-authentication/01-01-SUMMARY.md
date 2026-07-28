@@ -168,3 +168,7 @@ None. Every piece of Task 1-3 functionality (JDK toolchain, schema, persistence,
 ## Threat Flags
 
 None beyond what the plan's own `<threat_model>` already covers (T-01-01 through T-01-06) — no new network endpoints, auth paths, or schema surfaces were introduced beyond what the plan specified.
+
+## Self-Check: PASSED
+
+All 22 created files verified present on disk. All 4 commits (c41c514, e196c20, af920bf, 900a1aa) verified in git log.
