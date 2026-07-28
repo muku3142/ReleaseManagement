@@ -35,7 +35,29 @@ Decimal phases appear between their surrounding integers in numeric order.
   5. Release manager can replace an expired or revoked Jira token from a settings screen without losing any existing releases, templates, or history
 
 Note: JIRA-01 was moved here from Phase 2 during phase-1 discussion — AUTH-01 requires validating a token against Jira, which is impossible without knowing the site, so the two cannot be separated.
-**Plans**: TBD
+**Plans**: 8 across 6 waves
+
+**Wave 1**
+  - 01: Java 25 toolchain, Spring Boot scaffold, hexagonal boundaries + ArchUnit, Flyway V1 baseline, ProblemDetail error shape, Jira site config API — JIRA-01
+
+**Wave 2** *(blocked on Wave 1 completion)*
+  - 02: React SPA built into the jar, app shell, settings screen, SPA deep-link forwarding — JIRA-01
+  - 03: Jira credential-validation port, failure taxonomy, live + stub adapters — AUTH-01
+  - 04: AES-256-GCM encrypted credential vault with key versioning — AUTH-03, AUTH-04
+
+**Wave 3** *(blocked on Wave 2 completion)*
+  - 05: HS256 JWT pair in httpOnly cookies, refresh with immutable absolute cap, CSRF, stateless filter chain — AUTH-01
+
+**Wave 4** *(blocked on Wave 3 completion)*
+  - 06: login/refresh/logout/session endpoints, per-principal credential resolution — AUTH-01, AUTH-02, AUTH-03
+
+**Wave 5** *(blocked on Wave 4 completion)*
+  - 07: sign-in screen, route guard, silent refresh, token-replacement flow — AUTH-01, AUTH-04
+
+**Wave 6** *(blocked on Wave 5 completion — NOT autonomous, requires a human and a real Jira site)*
+  - 08: live-Jira UAT of all five success criteria, plus capture of the real `/myself` fixture — AUTH-01, AUTH-02, AUTH-03, AUTH-04, JIRA-01
+
+Cross-cutting constraints (appear in 2+ plans): stateless sessions with no server-side token store or denylist (D-05, D-09); the acting user recorded on every state change (D-03); the stored token never returned to the client in any form (D-13); every failure surfaced as a ProblemDetail with a machine-readable `reason` (D-04); Java 25, never the installed JDK 17 (D-17).
 **UI hint**: yes
 
 ### Phase 2: Jira Ticket Browsing
