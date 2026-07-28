@@ -1,0 +1,6 @@
+app:
+  security:
+    cookie-secure: false
+logging:
+  level:
+    org.springframework.jdbc.core: DEBUG

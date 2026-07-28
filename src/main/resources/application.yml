@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: release-management
+  datasource:
+    url: ${RM_DB_URL:jdbc:postgresql://localhost:5432/releasemgmt}
+    username: ${RM_DB_USER:releasemgmt}
+    password: ${RM_DB_PASSWORD:releasemgmt}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  docker:
+    compose:
+      enabled: true
+      skip:
+        in-tests: true
+  threads:
+    virtual:
+      enabled: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+app:
+  jira:
+    default-base-url: ${RM_JIRA_DEFAULT_BASE_URL:https://example.atlassian.net}
+    connect-timeout: PT5S
+    read-timeout: PT10S
+  credential:
+    key: ${RM_CREDENTIAL_KEY}
+    key-version: ${RM_CREDENTIAL_KEY_VERSION:1}
+  jwt:
+    secret: ${RM_JWT_SECRET}
+    access-ttl: PT10M
+    refresh-ttl: PT30M
+    absolute-ttl: PT8H
+  security:
+    cookie-secure: true

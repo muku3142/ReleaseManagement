@@ -1,0 +1,9 @@
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: releasemgmt
+      POSTGRES_USER: releasemgmt
+      POSTGRES_PASSWORD: releasemgmt
+    ports:
+      - "5432:5432"

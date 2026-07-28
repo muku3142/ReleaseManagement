@@ -1,0 +1,12 @@
+spring:
+  docker:
+    compose:
+      enabled: false
+app:
+  credential:
+    key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+    key-version: 1
+  jwt:
+    secret: and0LXRlc3Qtc2VjcmV0LTAxMjM0NTY3ODlhYmNkZWY=
+  security:
+    cookie-secure: false
