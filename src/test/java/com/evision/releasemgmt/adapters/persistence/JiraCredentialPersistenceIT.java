@@ -1,0 +1,112 @@
+package com.evision.releasemgmt.adapters.persistence;
+
+import com.evision.releasemgmt.adapters.persistence.crypto.EncryptedTokenConverter;
+import com.evision.releasemgmt.domain.auth.JiraCredential;
+import com.evision.releasemgmt.ports.JiraCredentialRepository;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
+
+import java.time.Instant;
+import java.util.Base64;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@SpringBootTest
+@Testcontainers
+class JiraCredentialPersistenceIT {
+
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18");
+
+    @Autowired
+    private JiraCredentialRepository repository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    private EncryptedTokenConverter converter;
+
+    @Test
+    void encryptedTokenConverterBeanIsWiredAndRoundTrips() {
+        assertThat(converter).isNotNull();
+        String stored = converter.convertToDatabaseColumn("ATATT3xFfGF0-wiring-check");
+        assertThat(converter.convertToEntityAttribute(stored)).isEqualTo("ATATT3xFfGF0-wiring-check");
+    }
+
+    @Test
+    void storedColumnIsCiphertextNotPlaintext() {
+        repository.upsert("557058:abc-123", "rm@acme.com", "ATATT3xFfGF0-plain");
+
+        String rawColumn = jdbcTemplate.queryForObject(
+                "SELECT encrypted_token FROM jira_credential WHERE jira_account_id = ?",
+                String.class, "557058:abc-123");
+
+        assertThat(rawColumn).doesNotContain("ATATT3xFfGF0-plain").isNotEqualTo("ATATT3xFfGF0-plain");
+        byte[] decoded = Base64.getDecoder().decode(rawColumn);
+        assertThat(decoded[0]).isEqualTo((byte) 1);
+    }
+
+    @Test
+    void roundTripsThroughThePort() {
+        repository.upsert("557058:round-trip", "rm2@acme.com", "ATATT3xFfGF0-plain");
+
+        JiraCredential credential = repository.findByAccountId("557058:round-trip").orElseThrow();
+        assertThat(credential.apiToken()).isEqualTo("ATATT3xFfGF0-plain");
+        assertThat(credential.keyVersion()).isEqualTo(1);
+    }
+
+    @Test
+    void replacingTokenPreservesRowIdentityAndOtherRecords() {
+        String accountId = "557058:replace-me";
+        repository.upsert(accountId, "rm3@acme.com", "ATATT3xFfGF0-original");
+
+        Instant createdAt = jdbcTemplate.queryForObject(
+                "SELECT created_at FROM jira_credential WHERE jira_account_id = ?",
+                Instant.class, accountId);
+        Instant updatedAtBefore = jdbcTemplate.queryForObject(
+                "SELECT updated_at FROM jira_credential WHERE jira_account_id = ?",
+                Instant.class, accountId);
+
+        repository.upsert(accountId, "rm3@acme.com", "ATATT3xFfGF0-replaced");
+
+        Integer rowsForThisAccount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM jira_credential WHERE jira_account_id = ?", Integer.class, accountId);
+        assertThat(rowsForThisAccount).isEqualTo(1);
+        Instant createdAtAfter = jdbcTemplate.queryForObject(
+                "SELECT created_at FROM jira_credential WHERE jira_account_id = ?",
+                Instant.class, accountId);
+        Instant updatedAtAfter = jdbcTemplate.queryForObject(
+                "SELECT updated_at FROM jira_credential WHERE jira_account_id = ?",
+                Instant.class, accountId);
+
+        assertThat(createdAtAfter).isEqualTo(createdAt);
+        assertThat(updatedAtAfter).isAfter(updatedAtBefore);
+        assertThat(repository.findByAccountId(accountId).map(JiraCredential::apiToken))
+                .contains("ATATT3xFfGF0-replaced");
+
+        Integer siteConfigRowCount = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM jira_site_config", Integer.class);
+        assertThat(siteConfigRowCount).isEqualTo(1);
+    }
+
+    @Test
+    void secondAccountIsIsolatedFromTheFirst() {
+        repository.upsert("557058:first", "first@acme.com", "ATATT3xFfGF0-first");
+        repository.upsert("557058:second", "second@acme.com", "ATATT3xFfGF0-second");
+
+        Optional<JiraCredential> first = repository.findByAccountId("557058:first");
+        assertThat(first).isPresent();
+        assertThat(first.get().apiToken()).isEqualTo("ATATT3xFfGF0-first");
+        assertThat(repository.findByAccountId("557058:second").orElseThrow().apiToken())
+                .isEqualTo("ATATT3xFfGF0-second");
+    }
+}
