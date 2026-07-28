@@ -16,7 +16,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 
 ### Jira Integration
 
-- [ ] **JIRA-01**: Release manager can configure which Jira Cloud site the system reads from
+- [x] **JIRA-01**: Release manager can configure which Jira Cloud site the system reads from
 - [ ] **JIRA-02**: Release manager can browse candidate tickets filtered by project, fix version, and JQL
 - [ ] **JIRA-03**: Release manager sees the complete ticket set matching a filter, with paging handled to exhaustion rather than silently truncating at the first page
 - [ ] **JIRA-04**: Release manager sees the fields the tool needs even on Jira instances with differing custom-field configurations, because custom fields are resolved by name through field metadata rather than hardcoded IDs
@@ -123,7 +123,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | AUTH-02 | Phase 1 | Pending |
 | AUTH-03 | Phase 1 | Pending |
 | AUTH-04 | Phase 1 | Pending |
-| JIRA-01 | Phase 1 | Pending |
+| JIRA-01 | Phase 1 | Complete |
 | JIRA-02 | Phase 2 | Pending |
 | JIRA-03 | Phase 2 | Pending |
 | JIRA-04 | Phase 2 | Pending |
