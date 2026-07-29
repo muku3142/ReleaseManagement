@@ -12,7 +12,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [x] **AUTH-01**: Release manager can sign in by supplying their Jira email and API token, which the system validates against Jira before granting access
 - [x] **AUTH-02**: All Jira reads are performed with the signed-in user's own credential, so the tool never sees tickets the user could not see in Jira
 - [x] **AUTH-03**: Stored Jira credentials are encrypted at rest and never returned to the client after being saved
-- [ ] **AUTH-04**: Release manager can replace an expired or revoked Jira token without losing existing releases, templates or history
+- [x] **AUTH-04**: Release manager can replace an expired or revoked Jira token without losing existing releases, templates or history
 
 ### Jira Integration
 
@@ -122,7 +122,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | AUTH-01 | Phase 1 | Complete |
 | AUTH-02 | Phase 1 | Complete |
 | AUTH-03 | Phase 1 | Complete |
-| AUTH-04 | Phase 1 | Pending |
+| AUTH-04 | Phase 1 | Complete |
 | JIRA-01 | Phase 1 | Complete |
 | JIRA-02 | Phase 2 | Pending |
 | JIRA-03 | Phase 2 | Pending |
