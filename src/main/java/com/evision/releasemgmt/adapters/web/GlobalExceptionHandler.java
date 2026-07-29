@@ -56,6 +56,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                     "Jira site not configured",
                     "No Jira Cloud site is configured. Set one in Settings before signing in.",
                     "SITE_NOT_CONFIGURED");
+            case ACCOUNT_MISMATCH -> problem(HttpStatus.CONFLICT,
+                    "Token belongs to a different Jira account",
+                    "That API token authenticates as a different Jira account than the one you are signed in as. Sign out and sign in again with that account.",
+                    "ACCOUNT_MISMATCH");
         };
     }
 

@@ -5,6 +5,7 @@ import com.evision.releasemgmt.adapters.security.JwtTokenService;
 import com.evision.releasemgmt.application.JiraAccessContextService;
 import com.evision.releasemgmt.application.JiraSiteConfigService;
 import com.evision.releasemgmt.domain.auth.JiraAccessContext;
+import com.evision.releasemgmt.domain.auth.JiraCredential;
 import com.evision.releasemgmt.domain.jira.JiraSiteConfig;
 import com.evision.releasemgmt.ports.JiraCredentialRepository;
 import com.jayway.jsonpath.JsonPath;
@@ -29,6 +30,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.sql.Timestamp;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -243,6 +246,136 @@ class AuthControllerIT {
         JiraAccessContext otherContext = jiraAccessContextService.currentContext();
         assertThat(otherContext.accountId()).isEqualTo("other-account-id");
         assertThat(otherContext.apiToken()).isEqualTo("other-token");
+    }
+
+    @Test
+    void replaceCredentialWithValidTokenReturnsNoContent() throws Exception {
+        MvcResult loginResult = performValidLogin();
+        String accessTokenValue = extractCookieValue(
+                loginResult.getResponse().getHeaders(HttpHeaders.SET_COOKIE), AuthCookieWriter.ACCESS_COOKIE);
+
+        mockMvc.perform(put("/api/auth/credential")
+                        .with(csrf())
+                        .cookie(new MockCookie(AuthCookieWriter.ACCESS_COOKIE, accessTokenValue))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"apiToken\":\"valid-token\"}"))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+    }
+
+    @Test
+    void replaceCredentialIsNonDestructiveToTheStoredRowAndTheSiteConfig() throws Exception {
+        MvcResult loginResult = performValidLogin();
+        String accessTokenValue = extractCookieValue(
+                loginResult.getResponse().getHeaders(HttpHeaders.SET_COOKIE), AuthCookieWriter.ACCESS_COOKIE);
+
+        Timestamp createdAtBefore = jdbcTemplate.queryForObject(
+                "SELECT created_at FROM jira_credential WHERE jira_account_id = 'dev-account-id'", Timestamp.class);
+        Timestamp updatedAtBefore = jdbcTemplate.queryForObject(
+                "SELECT updated_at FROM jira_credential WHERE jira_account_id = 'dev-account-id'", Timestamp.class);
+        Map<String, Object> siteConfigBefore = jdbcTemplate.queryForMap("SELECT * FROM jira_site_config");
+
+        mockMvc.perform(put("/api/auth/credential")
+                        .with(csrf())
+                        .cookie(new MockCookie(AuthCookieWriter.ACCESS_COOKIE, accessTokenValue))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"apiToken\":\"valid-token\"}"))
+                .andExpect(status().isNoContent());
+
+        assertThat(credentialRowCount("dev-account-id")).isEqualTo(1);
+        String accountIdAfter = jdbcTemplate.queryForObject(
+                "SELECT jira_account_id FROM jira_credential WHERE jira_account_id = 'dev-account-id'", String.class);
+        assertThat(accountIdAfter).isEqualTo("dev-account-id");
+        Timestamp createdAtAfter = jdbcTemplate.queryForObject(
+                "SELECT created_at FROM jira_credential WHERE jira_account_id = 'dev-account-id'", Timestamp.class);
+        assertThat(createdAtAfter).isEqualTo(createdAtBefore);
+        Timestamp updatedAtAfter = jdbcTemplate.queryForObject(
+                "SELECT updated_at FROM jira_credential WHERE jira_account_id = 'dev-account-id'", Timestamp.class);
+        assertThat(updatedAtAfter.after(updatedAtBefore)).isTrue();
+        Map<String, Object> siteConfigAfter = jdbcTemplate.queryForMap("SELECT * FROM jira_site_config");
+        assertThat(siteConfigAfter).isEqualTo(siteConfigBefore);
+    }
+
+    @Test
+    void replaceCredentialStoresTheNewTokenEncryptedAtRest() throws Exception {
+        MvcResult loginResult = performValidLogin();
+        String accessTokenValue = extractCookieValue(
+                loginResult.getResponse().getHeaders(HttpHeaders.SET_COOKIE), AuthCookieWriter.ACCESS_COOKIE);
+
+        mockMvc.perform(put("/api/auth/credential")
+                        .with(csrf())
+                        .cookie(new MockCookie(AuthCookieWriter.ACCESS_COOKIE, accessTokenValue))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"apiToken\":\"valid-token\"}"))
+                .andExpect(status().isNoContent());
+
+        String rawColumn = jdbcTemplate.queryForObject(
+                "SELECT encrypted_token FROM jira_credential WHERE jira_account_id = 'dev-account-id'", String.class);
+        assertThat(rawColumn).doesNotContain("valid-token");
+    }
+
+    @Test
+    void replaceCredentialWithWrongTokenLeavesWorkingCredentialIntact() throws Exception {
+        MvcResult loginResult = performValidLogin();
+        String accessTokenValue = extractCookieValue(
+                loginResult.getResponse().getHeaders(HttpHeaders.SET_COOKIE), AuthCookieWriter.ACCESS_COOKIE);
+
+        mockMvc.perform(put("/api/auth/credential")
+                        .with(csrf())
+                        .cookie(new MockCookie(AuthCookieWriter.ACCESS_COOKIE, accessTokenValue))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"apiToken\":\"wrong-token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.reason").value("INVALID_CREDENTIALS"))
+                .andExpect(jsonPath("$.detail", Matchers.containsString("no longer valid")));
+
+        JiraCredential stillWorking = credentialRepository.findByAccountId("dev-account-id").orElseThrow();
+        assertThat(stillWorking.apiToken()).isEqualTo("valid-token");
+    }
+
+    @Test
+    void replaceCredentialWithoutAuthenticationIsUnauthorized() throws Exception {
+        mockMvc.perform(put("/api/auth/credential")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"apiToken\":\"valid-token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.reason").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    void replaceCredentialWithNoAccessCookieAndNoCsrfTokenIsRejectedByCsrfFilterItself() throws Exception {
+        // 01-05-SUMMARY.md's documented, unavoidable residual risk (threat_flag:
+        // csrf-bypass-residual-risk): oauth2ResourceServer() unconditionally exempts any
+        // request a bearer token is resolvable from - i.e. any request carrying the
+        // access_token cookie, valid or not - from CSRF protection, with no public API to
+        // remove that exemption (SecurityFilterChainIT.unsafeWriteWithoutAnyAccessCookieOrCsrfIsRejectedByCsrfFilterItself
+        // proves the same thing for PUT /api/settings/jira-site). SecurityConfig is out of
+        // scope for this plan, so this proves csrf.spa() is still enforced for this new
+        // endpoint the one way that is actually testable: no access_token cookie at all.
+        mockMvc.perform(put("/api/auth/credential")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"apiToken\":\"valid-token\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void replaceCredentialWithBlankTokenReturnsValidationFailed() throws Exception {
+        MvcResult loginResult = performValidLogin();
+        String accessTokenValue = extractCookieValue(
+                loginResult.getResponse().getHeaders(HttpHeaders.SET_COOKIE), AuthCookieWriter.ACCESS_COOKIE);
+
+        MvcResult result = mockMvc.perform(put("/api/auth/credential")
+                        .with(csrf())
+                        .cookie(new MockCookie(AuthCookieWriter.ACCESS_COOKIE, accessTokenValue))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"apiToken\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"))
+                .andReturn();
+
+        assertThat(result.getResponse().getContentAsString()).doesNotContain("\"apiToken\":\"\"");
     }
 
     private MvcResult performValidLogin() throws Exception {

@@ -2,6 +2,9 @@ package com.evision.releasemgmt.application;
 
 import com.evision.releasemgmt.adapters.security.JwtTokenService;
 import com.evision.releasemgmt.adapters.security.TokenPair;
+import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
+import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
+import com.evision.releasemgmt.domain.auth.JiraCredential;
 import com.evision.releasemgmt.domain.auth.JiraIdentity;
 import com.evision.releasemgmt.ports.JiraAuthPort;
 import com.evision.releasemgmt.ports.JiraCredentialRepository;
@@ -61,5 +64,22 @@ public class AuthenticationService {
         String accountId = accessJwt.getSubject();
         String email = accessJwt.getClaimAsString(JwtTokenService.CLAIM_EMAIL);
         return new LoginResult(pair, new SignedInUser(accountId, email, pair.absoluteExpiry()));
+    }
+
+    /**
+     * Revalidates a replacement token against the configured Jira site before storing
+     * anything (D-15), refuses to let one account's credential be overwritten by a token
+     * that authenticates as a different Jira account (AUTH-04, T-07-08), and otherwise
+     * upserts in place so created_at and every other record survive.
+     */
+    public void replaceToken(String accountId, String apiToken) {
+        JiraCredential existing = credentialRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new JiraAuthenticationException(JiraAuthFailureReason.INVALID_CREDENTIALS));
+        String siteBaseUrl = jiraSiteConfigService.get().baseUrl();
+        JiraIdentity identity = jiraAuthPort.validate(siteBaseUrl, existing.email(), apiToken);
+        if (!accountId.equals(identity.accountId())) {
+            throw new JiraAuthenticationException(JiraAuthFailureReason.ACCOUNT_MISMATCH);
+        }
+        credentialRepository.upsert(accountId, existing.email(), apiToken);
     }
 }

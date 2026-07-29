@@ -31,7 +31,7 @@ class JiraAuthProblemDetailTest {
             ProblemDetail pd = handler.handleJiraAuthFailure(new JiraAuthenticationException(reason));
             assertThat(pd).isNotNull();
         }
-        assertThat(JiraAuthFailureReason.values().length).isEqualTo(6);
+        assertThat(JiraAuthFailureReason.values().length).isEqualTo(7);
     }
 
     private HttpStatus expectedStatus(JiraAuthFailureReason reason) {
@@ -42,6 +42,7 @@ class JiraAuthProblemDetailTest {
             case JIRA_UNREACHABLE -> HttpStatus.SERVICE_UNAVAILABLE;
             case JIRA_ERROR -> HttpStatus.BAD_GATEWAY;
             case SITE_NOT_CONFIGURED -> HttpStatus.CONFLICT;
+            case ACCOUNT_MISMATCH -> HttpStatus.CONFLICT;
         };
     }
 }

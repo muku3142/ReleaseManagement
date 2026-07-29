@@ -4,6 +4,7 @@ import com.evision.releasemgmt.adapters.security.AuthCookieWriter;
 import com.evision.releasemgmt.adapters.security.JwtTokenService;
 import com.evision.releasemgmt.adapters.security.SessionRefreshException;
 import com.evision.releasemgmt.adapters.web.dto.LoginRequest;
+import com.evision.releasemgmt.adapters.web.dto.ReplaceJiraTokenRequest;
 import com.evision.releasemgmt.adapters.web.dto.SessionResponse;
 import com.evision.releasemgmt.application.AuthenticationService;
 import com.evision.releasemgmt.application.AuthenticationService.LoginResult;
@@ -16,6 +17,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -64,12 +66,23 @@ public class AuthController {
     public SessionResponse session(@AuthenticationPrincipal Jwt jwt) {
         Long absoluteExpEpoch = jwt.getClaim(JwtTokenService.CLAIM_ABSOLUTE_EXP);
         return new SessionResponse(
-                jwt.getSubject(),
+                accountId(jwt),
                 jwt.getClaimAsString(JwtTokenService.CLAIM_EMAIL),
                 Instant.ofEpochSecond(absoluteExpEpoch));
     }
 
+    @PutMapping("/credential")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void replaceCredential(@Valid @RequestBody ReplaceJiraTokenRequest request,
+                                   @AuthenticationPrincipal Jwt jwt) {
+        authenticationService.replaceToken(accountId(jwt), request.apiToken());
+    }
+
     private SessionResponse toResponse(SignedInUser user) {
         return new SessionResponse(user.accountId(), user.email(), user.absoluteExpiry());
+    }
+
+    private String accountId(Jwt jwt) {
+        return jwt.getSubject();
     }
 }

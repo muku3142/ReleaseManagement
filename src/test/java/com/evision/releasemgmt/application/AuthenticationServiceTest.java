@@ -5,6 +5,7 @@ import com.evision.releasemgmt.adapters.security.SessionRefreshException;
 import com.evision.releasemgmt.adapters.security.TokenPair;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
 import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
+import com.evision.releasemgmt.domain.auth.JiraCredential;
 import com.evision.releasemgmt.domain.auth.JiraIdentity;
 import com.evision.releasemgmt.domain.jira.JiraSiteConfig;
 import com.evision.releasemgmt.ports.JiraAuthPort;
@@ -16,14 +17,18 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 
 import java.time.Instant;
 
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 class AuthenticationServiceTest {
@@ -152,5 +157,77 @@ class AuthenticationServiceTest {
                 .isInstanceOf(SessionRefreshException.class)
                 .extracting(ex -> ((SessionRefreshException) ex).reason())
                 .isEqualTo(SessionRefreshException.Reason.SESSION_EXPIRED);
+    }
+
+    @Test
+    void replaceTokenRevalidatesAgainstJiraThenUpsertsInPlace() {
+        when(credentialRepository.findByAccountId("557058:abc-123"))
+                .thenReturn(Optional.of(new JiraCredential("557058:abc-123", "rm@acme.com", "old-tok", 1, Instant.now())));
+        when(jiraSiteConfigService.get()).thenReturn(new JiraSiteConfig(SITE_URL, Instant.now(), "actor"));
+        when(jiraAuthPort.validate(SITE_URL, "rm@acme.com", "new-tok"))
+                .thenReturn(new JiraIdentity("557058:abc-123", "rm@acme.com", "Release Manager"));
+
+        service.replaceToken("557058:abc-123", "new-tok");
+
+        InOrder inOrder = inOrder(jiraAuthPort, credentialRepository);
+        inOrder.verify(jiraAuthPort).validate(SITE_URL, "rm@acme.com", "new-tok");
+        inOrder.verify(credentialRepository).upsert("557058:abc-123", "rm@acme.com", "new-tok");
+    }
+
+    @Test
+    void replaceTokenPersistsNothingWhenValidationFails() {
+        when(credentialRepository.findByAccountId("557058:abc-123"))
+                .thenReturn(Optional.of(new JiraCredential("557058:abc-123", "rm@acme.com", "old-tok", 1, Instant.now())));
+        when(jiraSiteConfigService.get()).thenReturn(new JiraSiteConfig(SITE_URL, Instant.now(), "actor"));
+        when(jiraAuthPort.validate(SITE_URL, "rm@acme.com", "wrong-tok"))
+                .thenThrow(new JiraAuthenticationException(JiraAuthFailureReason.INVALID_CREDENTIALS));
+
+        assertThatThrownBy(() -> service.replaceToken("557058:abc-123", "wrong-tok"))
+                .isInstanceOf(JiraAuthenticationException.class)
+                .extracting(ex -> ((JiraAuthenticationException) ex).reason())
+                .isEqualTo(JiraAuthFailureReason.INVALID_CREDENTIALS);
+
+        verify(credentialRepository).findByAccountId("557058:abc-123");
+        verifyNoMoreInteractions(credentialRepository);
+    }
+
+    @Test
+    void replaceTokenRejectsAccountMismatchWithoutPersisting() {
+        when(credentialRepository.findByAccountId("557058:abc-123"))
+                .thenReturn(Optional.of(new JiraCredential("557058:abc-123", "rm@acme.com", "old-tok", 1, Instant.now())));
+        when(jiraSiteConfigService.get()).thenReturn(new JiraSiteConfig(SITE_URL, Instant.now(), "actor"));
+        when(jiraAuthPort.validate(SITE_URL, "rm@acme.com", "other-tok"))
+                .thenReturn(new JiraIdentity("557058:zzz", "other@acme.com", "Other User"));
+
+        assertThatThrownBy(() -> service.replaceToken("557058:abc-123", "other-tok"))
+                .isInstanceOf(JiraAuthenticationException.class)
+                .extracting(ex -> ((JiraAuthenticationException) ex).reason())
+                .isEqualTo(JiraAuthFailureReason.ACCOUNT_MISMATCH);
+
+        verify(credentialRepository, never()).upsert(any(), any(), any());
+    }
+
+    @Test
+    void replaceTokenWithNoStoredCredentialFailsBeforeValidating() {
+        when(credentialRepository.findByAccountId("no-such-account")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.replaceToken("no-such-account", "tok"))
+                .isInstanceOf(JiraAuthenticationException.class)
+                .extracting(ex -> ((JiraAuthenticationException) ex).reason())
+                .isEqualTo(JiraAuthFailureReason.INVALID_CREDENTIALS);
+
+        verifyNoInteractions(jiraAuthPort);
+    }
+
+    @Test
+    void replaceTokenPropagatesSiteNotConfiguredWithoutValidating() {
+        when(credentialRepository.findByAccountId("557058:abc-123"))
+                .thenReturn(Optional.of(new JiraCredential("557058:abc-123", "rm@acme.com", "old-tok", 1, Instant.now())));
+        when(jiraSiteConfigService.get()).thenThrow(new JiraSiteConfigService.JiraSiteNotConfiguredException());
+
+        assertThatThrownBy(() -> service.replaceToken("557058:abc-123", "tok"))
+                .isInstanceOf(JiraSiteConfigService.JiraSiteNotConfiguredException.class);
+
+        verifyNoInteractions(jiraAuthPort);
     }
 }
