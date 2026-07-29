@@ -1,4 +1,6 @@
 spring:
+  profiles:
+    active: local
   docker:
     compose:
       enabled: false
@@ -12,5 +14,8 @@ app:
     key-version: 1
   jwt:
     secret: and0LXRlc3Qtc2VjcmV0LTAxMjM0NTY3ODlhYmNkZWY=
+    access-ttl: PT10M
+    refresh-ttl: PT30M
+    absolute-ttl: PT8H
   security:
     cookie-secure: false
