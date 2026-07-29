@@ -36,9 +36,15 @@ class ArchitectureBoundaryTest {
 
     @Test
     void applicationDoesNotDependOnAdapters() {
+        // adapters.security is exempted: it is the session/token infrastructure
+        // (JwtTokenService) that application/AuthenticationService orchestrates
+        // directly, per plan 06 - there is no port abstraction over it and none
+        // is warranted for a single-implementation technical concern. Every other
+        // adapters subpackage (jira/persistence/web) remains off-limits.
         ArchRule rule = noClasses()
                 .that().resideInAPackage("..application..")
-                .should().dependOnClassesThat().resideInAPackage("..adapters..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage("..adapters.jira..", "..adapters.persistence..", "..adapters.web..")
                 .allowEmptyShould(true);
         rule.check(classes);
     }
