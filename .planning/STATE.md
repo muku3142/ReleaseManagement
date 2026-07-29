@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-05-PLAN.md
-last_updated: "2026-07-29T10:19:46.097Z"
+stopped_at: Completed 01-06-PLAN.md
+last_updated: "2026-07-29T10:40:29.288Z"
 last_activity: 2026-07-29
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 8
-  completed_plans: 5
-  percent: 63
+  completed_plans: 6
+  percent: 75
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-07-27)
 ## Current Position
 
 Phase: 01 (foundation-authentication) — EXECUTING
-Plan: 2 of 8
+Plan: 3 of 8
 Status: Ready to execute
 Last activity: 2026-07-29
 
@@ -54,6 +54,7 @@ Progress: [░░░░░░░░░░] 0%
 *Updated after each plan completion*
 | Phase 01 P01 | 34 | 3 tasks | 22 files |
 | Phase 01 P05 | 53 | 2 tasks | 13 files |
+| Phase 01 P06 | 55 | 2 tasks | 13 files |
 
 ## Accumulated Context
 
@@ -70,6 +71,8 @@ Recent decisions affecting current work:
 - [Phase 01]: Spring Boot 4.1 moved Flyway autoconfiguration into spring-boot-starter-flyway and @WebMvcTest into spring-boot-starter-webmvc-test — Raw flyway-core and spring-boot-starter-test no longer autoconfigure these on their own in Boot 4.1's modularized autoconfigure
 - [Phase 01]: Explicitly restored CsrfFilter.DEFAULT_CSRF_MATCHER on top of csrf.spa() - oauth2ResourceServer() unconditionally exempts bearer-resolvable (cookie-carried) requests from CSRF, mitigated in practice by access_token's SameSite=Strict
 - [Phase 01]: Jackson 3 (tools.jackson.*) is Boot 4.1's managed Jackson databind - com.fasterxml.jackson.databind.ObjectMapper no longer resolves, only jackson-annotations stays under com.fasterxml
+- [Phase 01]: Narrowed ArchitectureBoundaryTest's application-vs-adapters ban to jira/persistence/web only — AuthenticationService must inject JwtTokenService (adapters.security) directly - no port abstraction exists over session/JWT infrastructure, and none is warranted for a single-implementation technical concern
+- [Phase 01]: JiraAccessContextService.currentContext() is the sole AUTH-02 mechanism for the rest of the project — Keyed strictly on CurrentUserPort.currentAccountId(); no overload takes an accountId and no shared-credential path exists anywhere in the codebase
 
 ### Pending Todos
 
@@ -89,6 +92,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-07-29T10:19:46.090Z
-Stopped at: Completed 01-05-PLAN.md
+Last session: 2026-07-29T10:40:29.283Z
+Stopped at: Completed 01-06-PLAN.md
 Resume file: None
