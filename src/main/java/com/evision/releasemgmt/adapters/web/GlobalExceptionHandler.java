@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.web;
 
+import com.evision.releasemgmt.adapters.security.SessionRefreshException;
 import com.evision.releasemgmt.application.JiraSiteConfigService.JiraSiteNotConfiguredException;
 import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
 import org.springframework.http.HttpHeaders;
@@ -55,6 +56,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                     "Jira site not configured",
                     "No Jira Cloud site is configured. Set one in Settings before signing in.",
                     "SITE_NOT_CONFIGURED");
+        };
+    }
+
+    @ExceptionHandler(SessionRefreshException.class)
+    public ProblemDetail handleSessionRefreshFailure(SessionRefreshException ex) {
+        return switch (ex.reason()) {
+            case SESSION_EXPIRED -> problem(HttpStatus.UNAUTHORIZED,
+                    "Session expired",
+                    "Your session has expired. Sign in again with your Jira email and API token.",
+                    ex.reason().name());
+            case INVALID_SESSION -> problem(HttpStatus.UNAUTHORIZED,
+                    "Session invalid",
+                    "Your session is no longer valid. Sign in again.",
+                    ex.reason().name());
         };
     }
 
