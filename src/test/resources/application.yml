@@ -5,6 +5,8 @@ spring:
 app:
   jira:
     default-base-url: https://test.atlassian.net
+    connect-timeout: PT5S
+    read-timeout: PT10S
   credential:
     key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
     key-version: 1

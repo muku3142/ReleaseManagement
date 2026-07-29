@@ -1,6 +1,7 @@
 package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.application.JiraSiteConfigService.JiraSiteNotConfiguredException;
+import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -25,6 +26,36 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleJiraSiteNotConfigured(JiraSiteNotConfiguredException ex) {
         return problem(HttpStatus.CONFLICT, "Jira site not configured",
                 "No Jira Cloud site is configured yet.", "SITE_NOT_CONFIGURED");
+    }
+
+    @ExceptionHandler(JiraAuthenticationException.class)
+    public ProblemDetail handleJiraAuthFailure(JiraAuthenticationException ex) {
+        return switch (ex.reason()) {
+            case INVALID_CREDENTIALS -> problem(HttpStatus.UNAUTHORIZED,
+                    "Jira credential rejected",
+                    "Your Jira credential is no longer valid. Enter your Jira email and a current API token.",
+                    "INVALID_CREDENTIALS");
+            case JIRA_FORBIDDEN -> problem(HttpStatus.FORBIDDEN,
+                    "Jira access denied",
+                    "The Jira account authenticated successfully but is not permitted to access the configured site.",
+                    "JIRA_FORBIDDEN");
+            case JIRA_RATE_LIMITED -> problem(HttpStatus.TOO_MANY_REQUESTS,
+                    "Jira rate limit reached",
+                    "Jira is rate-limiting requests. Wait a moment and try again.",
+                    "JIRA_RATE_LIMITED");
+            case JIRA_UNREACHABLE -> problem(HttpStatus.SERVICE_UNAVAILABLE,
+                    "Jira unreachable",
+                    "The configured Jira site could not be reached. Check the site URL in Settings and your network.",
+                    "JIRA_UNREACHABLE");
+            case JIRA_ERROR -> problem(HttpStatus.BAD_GATEWAY,
+                    "Jira returned an error",
+                    "The configured Jira site returned an unexpected error.",
+                    "JIRA_ERROR");
+            case SITE_NOT_CONFIGURED -> problem(HttpStatus.CONFLICT,
+                    "Jira site not configured",
+                    "No Jira Cloud site is configured. Set one in Settings before signing in.",
+                    "SITE_NOT_CONFIGURED");
+        };
     }
 
     @Override
