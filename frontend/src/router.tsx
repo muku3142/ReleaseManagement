@@ -1,23 +1,51 @@
-import { createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
+import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
 import { AppShell } from './components/AppShell';
 import { DashboardRoute } from './routes/DashboardRoute';
 import { SettingsRoute } from './routes/SettingsRoute';
+import { LoginRoute } from './routes/LoginRoute';
+import { fetchSessionOrNull } from './api/auth';
+import { queryClient } from './api/queryClient';
 
 const rootRoute = createRootRoute({ component: AppShell });
 
-const dashboardRoute = createRoute({
+const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
+  path: '/login',
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
+    redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
+  }),
+  component: LoginRoute,
+});
+
+// Pathless layout route: every route nested under this one requires a signed-in
+// session, checked once via the shared query cache before any child route renders.
+const authenticatedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'authenticated',
+  beforeLoad: async ({ location }) => {
+    const session = await fetchSessionOrNull(queryClient);
+    if (!session) {
+      throw redirect({ to: '/login', search: { redirect: location.href } });
+    }
+  },
+});
+
+const dashboardRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
   path: '/',
   component: DashboardRoute,
 });
 
 const settingsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authenticatedRoute,
   path: '/settings',
   component: SettingsRoute,
 });
 
-const routeTree = rootRoute.addChildren([dashboardRoute, settingsRoute]);
+const routeTree = rootRoute.addChildren([
+  authenticatedRoute.addChildren([dashboardRoute, settingsRoute]),
+  loginRoute,
+]);
 
 export const router = createRouter({ routeTree });
 
