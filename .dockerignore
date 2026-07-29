@@ -1,0 +1,31 @@
+# Build output — rebuilt inside the image
+target/
+frontend/dist/
+
+# Host-platform node_modules must never reach the Linux build: npm installs
+# platform-specific binaries (esbuild, rollup), and Windows ones fail there.
+# The frontend-maven-plugin runs `npm ci` inside the builder stage instead.
+frontend/node_modules/
+node_modules/
+
+# VCS and planning artifacts — not build inputs
+.git/
+.gitignore
+.planning/
+.claude/
+docs/
+
+# Local tooling
+.idea/
+*.iml
+.vscode/
+
+# Compose files are used to run the image, never to build it
+compose*.yaml
+Dockerfile
+.dockerignore
+
+# Never let a local secrets file into the build context
+.env
+*.env
+!.env.example

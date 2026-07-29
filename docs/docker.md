@@ -1,0 +1,279 @@
+# Running on Docker Desktop
+
+How to build and run the whole service — app plus database — as containers. Every command
+and output below was executed and verified on Docker Desktop 29.1.3 / Windows 10.
+
+Companion documents: [architecture.md](architecture.md),
+[database.md](database.md), [local-postgres.md](local-postgres.md) (database-only dev setup).
+
+---
+
+## TL;DR
+
+```bash
+cp .env.example .env
+echo "RM_CREDENTIAL_KEY=$(openssl rand -base64 32)" >> .env
+echo "RM_JWT_SECRET=$(openssl rand -base64 32)"     >> .env
+
+docker compose -f compose.app.yaml up --build -d
+```
+
+Then open **http://localhost:8080**.
+
+---
+
+## Two compose files, and why
+
+| File | Contains | Used for |
+|------|----------|----------|
+| `compose.yaml` | Postgres only | Backing service for `mvn spring-boot:run` / `mvn test` |
+| `compose.app.yaml` | Postgres **+ the app** | Running the whole service in containers |
+
+**The app service is deliberately not in `compose.yaml`.** Spring Boot's docker-compose
+integration reads `compose.yaml` on `mvn spring-boot:run`; an `app` service there would make
+the application try to start a container of itself on every local run. Keeping them separate
+means neither mode interferes with the other.
+
+The two also differ in data durability. `compose.yaml` declares no volume — its data is
+anonymous and disposable, which is what you want for a dev database you reset freely.
+`compose.app.yaml` uses a named `pgdata` volume so data survives `down`/`up`.
+
+> Both stacks publish port **5432** and share the compose project name `releasemanagement`.
+> Run one at a time — `docker compose down` before bringing up the other, or you get a port
+> clash.
+
+---
+
+## Prerequisites
+
+- Docker Desktop running (the build needs the daemon; so do the Testcontainers tests).
+- Nothing else. **Java, Maven, Node and npm are not required on the host** — the builder
+  image carries the JDK and Maven, and the `frontend-maven-plugin` downloads its own Node
+  into the build. This is the fastest path to a running instance on a clean machine.
+
+---
+
+## Secrets
+
+Two secrets have **no defaults**, by design. Compose refuses to start without them rather
+than booting a credential-handling service with a predictable encryption key:
+
+```
+error while interpolating services.app.environment.RM_CREDENTIAL_KEY:
+required variable RM_CREDENTIAL_KEY is missing a value
+```
+
+Generate both:
+
+```bash
+cp .env.example .env
+echo "RM_CREDENTIAL_KEY=$(openssl rand -base64 32)" >> .env
+echo "RM_JWT_SECRET=$(openssl rand -base64 32)"     >> .env
+```
+
+`.env` is gitignored. Never commit it.
+
+| Variable | Constraint | Consequence of changing it |
+|----------|-----------|---------------------------|
+| `RM_CREDENTIAL_KEY` | base64, **exactly 32 bytes** | Stored Jira tokens become undecryptable; every user must re-enter their API token |
+| `RM_JWT_SECRET` | base64, **≥32 bytes** | All active sessions invalidated; users just sign in again |
+| `RM_CREDENTIAL_KEY_VERSION` | 1–127, default `1` | Metadata only — leave alone unless actually rotating |
+| `RM_JIRA_DEFAULT_BASE_URL` | Jira site URL | Only seeds an **empty** database; no effect once seeded — change the site in the UI |
+| `RM_PORT` | default `8080` | Host port only; the container always listens on 8080 |
+| `RM_DB_PASSWORD` | default `releasemgmt` | Must be set before first start, or the volume initialises with the old value |
+
+Both length constraints are validated at startup, so a bad key fails fast with a clear
+message instead of surfacing later as a decryption error.
+
+---
+
+## Build and run
+
+```bash
+docker compose -f compose.app.yaml up --build -d
+```
+
+Expected:
+
+```
+ Container releasemanagement-postgres-1  Healthy
+ Container releasemanagement-app-1       Started
+```
+
+The app **waits for Postgres to pass a `pg_isready` healthcheck** before starting
+(`depends_on: condition: service_healthy`), so the JVM never races a database that is still
+initialising.
+
+Watch it come up:
+
+```bash
+docker compose -f compose.app.yaml logs -f app
+docker inspect --format '{{.State.Health.Status}}' releasemanagement-app-1
+```
+
+The app has its own healthcheck against `/actuator/health` with a 45s start period.
+
+### Verified working state
+
+```bash
+$ curl -s http://localhost:8080/actuator/health
+{"groups":["liveness","readiness"],"status":"UP"}
+
+$ curl -s http://localhost:8080/api/settings/jira-site
+{"baseUrl":"https://acme.atlassian.net","updatedAt":"...","updatedBy":"application-config-seed"}
+
+$ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/settings
+200
+```
+
+The last one confirms SPA deep links survive a hard refresh —
+`SpaForwardingController` forwards non-`/api`, non-`/actuator`, extensionless paths to
+`index.html`.
+
+Schema state inside the stack:
+
+```bash
+$ docker exec releasemanagement-postgres-1 \
+    psql -U releasemgmt -d releasemgmt -c "select version, description, success from flyway_schema_history;"
+ version | description | success
+---------+-------------+---------
+ 1       | init schema | t
+```
+
+### One response that looks wrong but is correct
+
+```bash
+$ curl -X PUT http://localhost:8080/api/settings/jira-site \
+    -H "Content-Type: application/json" -d '{"baseUrl":"https://evil.example.com"}'
+{"status":403,"title":"Access denied","reason":"FORBIDDEN"}
+```
+
+**403, not 401** — because `curl` sent no CSRF token, so `CsrfFilter` rejected the request
+*before* the authentication filter ran. This is CSRF protection working, and it is the
+behaviour `SecurityFilterChainIT` asserts. A request carrying a valid CSRF token but no
+session returns 401 `UNAUTHENTICATED`.
+
+---
+
+## Image design
+
+`Dockerfile` is a two-stage build.
+
+**Build stage** — `maven:3.9-eclipse-temurin-25`:
+- `pom.xml` is copied and dependencies resolved *before* sources, so a source-only change
+  does not re-resolve the whole tree.
+- A BuildKit cache mount on `/root/.m2` persists the Maven repository across builds.
+- `-DskipTests` is correct here: the suite needs Docker and a Postgres instance, neither of
+  which exists inside an image build. Tests belong in CI and `mvn test`, not as a packaging
+  side effect.
+- The `frontend` Maven profile self-activates on `frontend/package.json`, so the SPA is built
+  and embedded at `BOOT-INF/classes/static/` automatically.
+
+**Runtime stage** — `eclipse-temurin:25-jre` (JRE, not JDK):
+- Runs as a **non-root** `app` user (uid/gid 1001).
+- `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75` so the JVM sizes its heap from the
+  *container* limit. Without it the JVM reads the host's memory and gets OOM-killed whenever
+  the container limit is lower.
+- `SPRING_DOCKER_COMPOSE_ENABLED=false` — Boot's compose integration must stay off inside the
+  container; there is no `docker` CLI in the image, and Postgres comes from the compose file.
+- `curl` is installed solely for the healthcheck.
+
+### Layering
+
+The jar is exploded with `java -Djarmode=tools -jar ... extract --layers` and copied in four
+`COPY` steps, so dependencies (rarely change) and application classes (change every build)
+land in **separate image layers** — pushes and pulls then move only what differs.
+
+Worth knowing if you edit the Dockerfile: **Boot 4.1's `extract` produces a thin runnable jar
+plus a sibling `lib/` directory**, with dependencies resolved through the manifest
+`Class-Path`. It is *not* a fat-jar/`JarLauncher` layout, so the entrypoint is a plain
+`java -jar` and `lib/` must stay next to the jar. The jar is renamed to `app.jar` so
+`ENTRYPOINT` is not coupled to the project version.
+
+Current image size: **~604 MB**.
+
+### `.dockerignore` matters
+
+`frontend/node_modules/` is excluded, and this is not merely an optimisation: npm installs
+**platform-specific binaries** (esbuild, rollup), so shipping a Windows `node_modules` into a
+Linux build breaks it. The builder runs `npm ci` inside the image instead. `target/`, `.git/`,
+`.planning/` and `.env` are excluded too.
+
+---
+
+## Lifecycle
+
+```bash
+docker compose -f compose.app.yaml up --build -d   # build and start
+docker compose -f compose.app.yaml ps              # status
+docker compose -f compose.app.yaml logs -f app     # follow app logs
+docker compose -f compose.app.yaml restart app     # restart just the app
+docker compose -f compose.app.yaml stop            # stop, keep data
+docker compose -f compose.app.yaml down            # remove containers, KEEP data
+docker compose -f compose.app.yaml down -v         # remove containers AND data
+```
+
+After changing backend or frontend code, rebuild:
+
+```bash
+docker compose -f compose.app.yaml up --build -d app
+```
+
+Build the image on its own:
+
+```bash
+docker build -t release-management:0.1.0-SNAPSHOT .
+```
+
+---
+
+## Troubleshooting
+
+**`required variable RM_CREDENTIAL_KEY is missing a value`**
+No `.env`, or you ran `docker compose` without it. Either create `.env` (compose reads it
+automatically from the project directory) or pass `--env-file <path>` explicitly. This guard
+is intentional.
+
+**Postgres exits 1 with a message about `pg_ctlcluster` and major-version directories**
+The volume is mounted at the wrong path. `postgres:18+` stores data in a major-version
+subdirectory, so the mount must be at **`/var/lib/postgresql`**, not
+`/var/lib/postgresql/data`. If you hit this after editing the compose file, discard the
+half-initialised volume: `docker compose -f compose.app.yaml down -v`.
+See [docker-library/postgres#1259](https://github.com/docker-library/postgres/pull/1259).
+
+**`Could not find or load main class org.springframework.boot.loader.launch.JarLauncher`**
+The entrypoint assumes a fat-jar layout the extraction does not produce. See
+[Layering](#layering) — use `java -jar /app/app.jar`.
+
+**Port 5432 or 8080 already in use**
+Another stack is up. `docker compose down` (the Postgres-only one) first, or set `RM_PORT`
+for the app. Both compose files share the project name `releasemanagement`.
+
+**App unhealthy, logs show a database connection failure**
+Check `docker compose -f compose.app.yaml ps` — if `postgres` is not `healthy`, read its
+logs. Inside the stack the app reaches the database at hostname `postgres`, not `localhost`.
+
+**Changed `RM_JIRA_DEFAULT_BASE_URL` but the app still shows the old site**
+Expected. The seeder writes only when `jira_site_config` is empty. Change the site in the UI,
+or reset with `down -v`.
+
+**Build is slow the first time**
+It resolves the full Maven tree and downloads Node. Subsequent builds reuse the BuildKit
+`/root/.m2` cache mount and the dependency layer.
+
+---
+
+## Not production-ready as-is
+
+This stack is for local and demo use. Before deploying anywhere real:
+
+- **`SPRING_PROFILES_ACTIVE=local` sets `cookie-secure=false`**, because this stack serves
+  plain HTTP on localhost where `Secure` cookies are unreliable. `AuthCookieWriter` refuses
+  to start with `cookie-secure=false` outside the `local` profile — a guard that exists
+  precisely so this cannot ship by accident. Production must terminate TLS and drop the
+  `local` profile.
+- **Secrets come from `.env`.** Use a real secret manager instead.
+- **The Postgres password defaults to `releasemgmt`** and the database is exposed on the host.
+- **No resource limits** are set. Add them; `MaxRAMPercentage` only pays off once a container
+  memory limit exists.
+- **No backup** for the `pgdata` volume.

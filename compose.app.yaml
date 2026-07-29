@@ -1,0 +1,60 @@
+# Full application stack: the built service plus its database.
+#
+# Deliberately NOT named compose.yaml. Spring Boot's docker-compose integration
+# reads compose.yaml on `mvn spring-boot:run`, so adding an `app` service there
+# would make the app try to start a container of itself. compose.yaml stays a
+# Postgres-only dev dependency; this file is the run-the-whole-thing stack.
+#
+#   docker compose -f compose.app.yaml up --build -d
+#
+# Requires RM_CREDENTIAL_KEY and RM_JWT_SECRET — see .env.example.
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: releasemgmt
+      POSTGRES_USER: releasemgmt
+      POSTGRES_PASSWORD: ${RM_DB_PASSWORD:-releasemgmt}
+    volumes:
+      # postgres:18+ stores data in a major-version subdirectory, so the mount
+      # goes at /var/lib/postgresql, NOT /var/lib/postgresql/data. Mounting the
+      # old path makes the image refuse to start. See docker-library/postgres#1259.
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      # `app` waits on this, so the JVM never starts against a database that is
+      # still initialising.
+      test: ["CMD-SHELL", "pg_isready -U releasemgmt -d releasemgmt"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: release-management:0.1.0-SNAPSHOT
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # `local` is required, not cosmetic: AuthCookieWriter refuses to start with
+      # cookie-secure=false outside this profile, and this stack serves plain
+      # HTTP on localhost, where Secure cookies are unreliable.
+      SPRING_PROFILES_ACTIVE: local
+      RM_DB_URL: jdbc:postgresql://postgres:5432/releasemgmt
+      RM_DB_USER: releasemgmt
+      RM_DB_PASSWORD: ${RM_DB_PASSWORD:-releasemgmt}
+      # No defaults on purpose — compose fails fast rather than booting the
+      # service with a predictable encryption key or signing secret.
+      RM_CREDENTIAL_KEY: ${RM_CREDENTIAL_KEY:?set RM_CREDENTIAL_KEY, e.g. openssl rand -base64 32}
+      RM_CREDENTIAL_KEY_VERSION: ${RM_CREDENTIAL_KEY_VERSION:-1}
+      RM_JWT_SECRET: ${RM_JWT_SECRET:?set RM_JWT_SECRET, e.g. openssl rand -base64 32}
+      RM_JIRA_DEFAULT_BASE_URL: ${RM_JIRA_DEFAULT_BASE_URL:-https://example.atlassian.net}
+    ports:
+      - "${RM_PORT:-8080}:8080"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
