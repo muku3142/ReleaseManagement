@@ -170,6 +170,19 @@ Both cookies are `httpOnly`, `SameSite=Strict`, and `secure` — with `cookie-se
 permitted **only** under the `local` profile, enforced by a startup check in
 `AuthCookieWriter` that throws otherwise.
 
+### This is not OAuth
+
+The project depends on `spring-boot-starter-oauth2-resource-server`, but **there is no OAuth
+flow here** — no authorization server, no client registration, no `/authorize` redirect, no
+authorization-code exchange, no PKCE, no third-party identity provider. Spring's
+resource-server support is used purely as its JWT **validation** library, which is the
+idiomatic way to validate bearer JWTs in Spring Security.
+
+The tokens are self-issued: this application signs them with a local HS256 secret and
+validates its own signatures. `spring-boot-starter-oauth2-client` is **not** on the
+classpath. The Jira credential itself is an API token sent as HTTP Basic, not an OAuth
+access token.
+
 Three validators are layered on the decoder in `JwtConfig`:
 
 - **Algorithm pinning** — `macAlgorithm(MacAlgorithm.HS256)`. The decoder will not accept a
@@ -217,15 +230,39 @@ ships. Recorded in `01-05-SUMMARY.md` threat flags.
 
 From `SecurityConfig`, in order:
 
+Rules are evaluated in order:
+
 | Matcher | Access |
 |---------|--------|
 | `POST /api/auth/login`, `/refresh`, `/logout` | permit all |
 | `GET /api/settings/jira-site` | permit all — a fresh environment must be readable before anyone can sign in |
 | `/actuator/health` | permit all |
 | `/api/**` | authenticated |
-| anything else | permit all — SPA static assets and deep links |
+| `/actuator/**` | authenticated — widening `management.endpoints.web.exposure.include` must not silently publish `env`/`beans` |
+| `GET`/`HEAD` `/**` | permit all — the SPA: `index.html`, static assets, forwarded deep links |
+| anything else | **deny** |
 
-Stateless throughout: `SessionCreationPolicy.STATELESS`, no server-side session store.
+The chain ends fail-**closed**. Only `GET`/`HEAD` reach the SPA catch-all, so a future
+non-`/api` endpoint cannot become publicly writable merely by being forgotten.
+
+Session handling is stateless (`SessionCreationPolicy.STATELESS`, no server-side session
+store) with exactly one exception: the `sessions_invalidated_at` column that makes logout
+real (see below). It is consulted only on refresh.
+
+### Logout actually ends the session
+
+`POST /api/auth/logout` stamps `sessions_invalidated_at` on the credential row and clears
+both cookies. Refresh then rejects any token whose `iat` predates that instant.
+
+Without the server-side stamp, logout would only delete the browser's copy of the cookies —
+a captured refresh token would remain valid for its full 30-minute TTL and be chainable up to
+the 8-hour cap. Logout reads the **refresh cookie** rather than the authenticated principal
+deliberately: the access token may already have expired while the refresh token is still
+live, and that is precisely the case most worth invalidating.
+
+There is deliberately no combined decode-and-reissue method on `JwtTokenService` —
+`decodeRefreshToken` and `reissueFrom` are separate so the invalidation check sits between
+them and cannot be bypassed by calling a convenience method.
 
 ### Per-user credential resolution (AUTH-02)
 

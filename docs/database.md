@@ -130,6 +130,7 @@ CREATE TABLE jira_credential (
 | `key_version` | `SMALLINT` NOT NULL | Which encryption key wrote this row. Metadata only — see below. |
 | `created_at` | `TIMESTAMPTZ` NOT NULL | First sign-in. |
 | `updated_at` | `TIMESTAMPTZ` NOT NULL | Last token replacement. |
+| `sessions_invalidated_at` | `TIMESTAMPTZ` NULL | Added in `V2`. Set on logout; refresh tokens issued before it are rejected. Cleared on a fresh login. |
 
 ### Why `accountId` is the primary key, not email
 
@@ -175,12 +176,23 @@ This is a deliberate choice not to build rotation machinery nobody needs yet, wh
 paying the one-column cost that makes rotation possible later without a migration under
 pressure. Both the column and the envelope byte are validated to be in `1..127` at startup.
 
-### No cascade on sign-out
+### Sign-out invalidates sessions but keeps the credential
 
-`POST /api/auth/logout` clears cookies; it does **not** delete the credential row. That is
-intentional — the stored token is what lets the system read Jira on the user's behalf, and
-signing out of the UI is not a statement that the credential should be revoked. Token
-replacement is an explicit action: `PUT /api/auth/credential`.
+`POST /api/auth/logout` stamps `sessions_invalidated_at` and clears cookies. It does **not**
+delete the credential row — the stored token is what lets the system read Jira on the user's
+behalf, and signing out of the UI is not a statement that the credential should be revoked.
+Token replacement stays an explicit action: `PUT /api/auth/credential`.
+
+`sessions_invalidated_at` exists because the session is stateless: without it, clearing
+cookies would leave a captured refresh token usable for its full 30-minute TTL and chainable
+up to the 8-hour absolute cap, so logout would be a client-side gesture rather than a
+session teardown. Refresh compares the token's `iat` against this column and rejects
+anything older. A fresh login resets it to `NULL`, which also avoids depending on
+second-precision ordering between a new token's `iat` and the previous logout instant.
+
+This is the one piece of server-side session state in an otherwise stateless design. It is
+read only on refresh, never on ordinary authenticated requests, so it costs nothing on the
+hot path.
 
 ---
 
