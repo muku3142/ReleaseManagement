@@ -42,7 +42,9 @@ services:
       # `local` is required, not cosmetic: AuthCookieWriter refuses to start with
       # cookie-secure=false outside this profile, and this stack serves plain
       # HTTP on localhost, where Secure cookies are unreliable.
-      SPRING_PROFILES_ACTIVE: local
+      # Add stub-jira (RM_PROFILES=local,stub-jira) to sign in without a real Jira
+      # site — it accepts exactly dev@example.com / valid-token.
+      SPRING_PROFILES_ACTIVE: ${RM_PROFILES:-local}
       RM_DB_URL: jdbc:postgresql://postgres:5432/releasemgmt
       RM_DB_USER: releasemgmt
       RM_DB_PASSWORD: ${RM_DB_PASSWORD:-releasemgmt}
