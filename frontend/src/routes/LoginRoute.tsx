@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLogin, messageForReason } from '../api/auth';
 import { useJiraSite } from '../api/jiraSite';
 import { ApiError } from '../api/client';
+import { safeRedirectTarget } from '../safeRedirect';
 
 export function LoginRoute() {
   const [email, setEmail] = useState('');
@@ -19,8 +20,7 @@ export function LoginRoute() {
       {
         onSuccess: () => {
           const search = new URLSearchParams(window.location.search);
-          const redirectTo = search.get('redirect');
-          window.location.assign(redirectTo || '/');
+          window.location.assign(safeRedirectTarget(search.get('redirect')));
         },
       },
     );

@@ -5,6 +5,7 @@ import { SettingsRoute } from './routes/SettingsRoute';
 import { LoginRoute } from './routes/LoginRoute';
 import { fetchSessionOrNull } from './api/auth';
 import { queryClient } from './api/queryClient';
+import { safeRedirectTarget } from './safeRedirect';
 
 const rootRoute = createRootRoute({ component: AppShell });
 
@@ -12,7 +13,7 @@ const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
   validateSearch: (search: Record<string, unknown>): { redirect?: string } => ({
-    redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
+    redirect: typeof search.redirect === 'string' ? safeRedirectTarget(search.redirect) : undefined,
   }),
   component: LoginRoute,
 });
