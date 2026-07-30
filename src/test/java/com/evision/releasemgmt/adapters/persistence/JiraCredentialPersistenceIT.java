@@ -42,6 +42,48 @@ class JiraCredentialPersistenceIT {
         assertThat(converter.convertToEntityAttribute(stored)).isEqualTo("ATATT3xFfGF0-wiring-check");
     }
 
+    /**
+     * A row encrypted under a superseded key must not block the sign-in that replaces it.
+     * upsert previously did findById + save, which decrypted the stored token first, so
+     * rotating RM_CREDENTIAL_KEY threw on login and locked every existing user out with no
+     * recovery path — re-entering the token went through the same failing read.
+     *
+     * <p>Simulating rotation by writing ciphertext this key cannot decrypt is equivalent to
+     * the key having changed under an existing row, and avoids rebuilding the context with a
+     * different key.
+     */
+    @Test
+    void upsertOverwritesARowEncryptedUnderASupersededKey() {
+        repository.upsert("557058:rotated", "rm@acme.com", "token-under-old-key");
+        // key version 1, a valid-looking IV, then bytes that will fail the GCM tag check
+        byte[] undecryptable = new byte[1 + 12 + 32];
+        undecryptable[0] = 1;
+        jdbcTemplate.update(
+                "UPDATE jira_credential SET encrypted_token = ? WHERE jira_account_id = ?",
+                Base64.getEncoder().encodeToString(undecryptable), "557058:rotated");
+
+        repository.upsert("557058:rotated", "rm@acme.com", "token-under-new-key");
+
+        assertThat(repository.findByAccountId("557058:rotated"))
+                .map(JiraCredential::apiToken)
+                .contains("token-under-new-key");
+    }
+
+    @Test
+    void sessionInvalidationDoesNotRequireDecryptingTheStoredToken() {
+        repository.upsert("557058:invalidate", "rm@acme.com", "some-token");
+        byte[] undecryptable = new byte[1 + 12 + 32];
+        undecryptable[0] = 1;
+        jdbcTemplate.update(
+                "UPDATE jira_credential SET encrypted_token = ? WHERE jira_account_id = ?",
+                Base64.getEncoder().encodeToString(undecryptable), "557058:invalidate");
+
+        Instant at = Instant.now();
+        repository.markSessionsInvalidated("557058:invalidate", at);
+
+        assertThat(repository.findSessionsInvalidatedAt("557058:invalidate")).isPresent();
+    }
+
     @Test
     void storedColumnIsCiphertextNotPlaintext() {
         repository.upsert("557058:abc-123", "rm@acme.com", "ATATT3xFfGF0-plain");

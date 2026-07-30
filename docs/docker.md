@@ -12,13 +12,14 @@ Companion documents: [architecture.md](architecture.md),
 
 ```bash
 cp .env.example .env
-echo "RM_CREDENTIAL_KEY=$(openssl rand -base64 32)" >> .env
-echo "RM_JWT_SECRET=$(openssl rand -base64 32)"     >> .env
+sed -i "s|^RM_CREDENTIAL_KEY=.*|RM_CREDENTIAL_KEY=$(openssl rand -base64 32)|" .env
+sed -i "s|^RM_JWT_SECRET=.*|RM_JWT_SECRET=$(openssl rand -base64 32)|" .env
 
 docker compose -f compose.app.yaml up --build -d
 ```
 
-Then open **http://localhost:8080**.
+Then open **http://localhost:8080** and sign in with `dev@example.com` / `valid-token`
+(the `stub-jira` profile, on by default in `.env.example` — no real Jira tenant needed).
 
 ---
 
@@ -63,15 +64,43 @@ error while interpolating services.app.environment.RM_CREDENTIAL_KEY:
 required variable RM_CREDENTIAL_KEY is missing a value
 ```
 
-Generate both:
+Create `.env` and fill both in. Substitute rather than append — appending with `>>` leaves
+duplicate keys in the file, which works but is confusing to read later:
 
 ```bash
 cp .env.example .env
-echo "RM_CREDENTIAL_KEY=$(openssl rand -base64 32)" >> .env
-echo "RM_JWT_SECRET=$(openssl rand -base64 32)"     >> .env
+sed -i "s|^RM_CREDENTIAL_KEY=.*|RM_CREDENTIAL_KEY=$(openssl rand -base64 32)|" .env
+sed -i "s|^RM_JWT_SECRET=.*|RM_JWT_SECRET=$(openssl rand -base64 32)|" .env
 ```
 
-`.env` is gitignored. Never commit it.
+Compose reads `.env` from the project directory automatically, so no `--env-file` flag is
+needed for any command. `.env` is gitignored — never commit it.
+
+Verify the two lengths, since the app validates them at startup and refuses to boot on a
+mismatch:
+
+```bash
+grep ^RM_CREDENTIAL_KEY= .env | cut -d= -f2- | base64 -d | wc -c   # must be exactly 32
+grep ^RM_JWT_SECRET=     .env | cut -d= -f2- | base64 -d | wc -c   # must be >= 32
+```
+
+### Applying changed secrets to a running stack
+
+Compose fixes environment values at **container-creation** time, so editing `.env` has no
+effect on an already-running container. `--force-recreate` is what applies it:
+
+```bash
+docker compose -f compose.app.yaml up -d --force-recreate app
+```
+
+Without it the container keeps the old baked-in values, and you will conclude the new secret
+"didn't work".
+
+Changing `RM_JWT_SECRET` invalidates active sessions — users sign in again, nothing else.
+Changing `RM_CREDENTIAL_KEY` makes every stored Jira token undecryptable; users must sign in
+again to re-supply one. That recovery works: `upsert` writes via JPQL specifically so it never
+decrypts the row it is replacing. (It previously did a `findById` first, which threw on the
+stale ciphertext and locked users out of the very action that would fix it.)
 
 | Variable | Constraint | Consequence of changing it |
 |----------|-----------|---------------------------|

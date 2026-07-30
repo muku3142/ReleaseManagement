@@ -29,37 +29,41 @@ public class JiraCredentialRepositoryAdapter implements JiraCredentialRepository
                 .map(e -> new JiraCredential(e.getJiraAccountId(), e.getJiraEmail(), e.getToken(), e.getKeyVersion(), e.getUpdatedAt()));
     }
 
+    /**
+     * Updates via JPQL rather than findById + save. Loading the entity would decrypt the
+     * stored token, so a row encrypted under a superseded key would make this throw — and
+     * this is exactly the call that replaces an unreadable token, so a key rotation would
+     * lock every user out with no way back in.
+     *
+     * <p>Clearing sessions_invalidated_at is intentional: a fresh sign-in supersedes any
+     * earlier logout, so the new pair is accepted without depending on second-precision
+     * ordering between the token's iat and the previous invalidation instant.
+     */
     @Override
     @Transactional
     public void upsert(String accountId, String email, String apiToken) {
         Instant now = Instant.now();
-        JiraCredentialEntity entity = jpa.findById(accountId).orElseGet(() -> {
-            JiraCredentialEntity created = new JiraCredentialEntity();
-            created.setJiraAccountId(accountId);
-            created.setCreatedAt(now);
-            return created;
-        });
-        entity.setJiraEmail(email);
-        entity.setToken(apiToken);
-        entity.setKeyVersion((short) activeKeyVersion);
-        entity.setUpdatedAt(now);
-        // a fresh sign-in supersedes any earlier invalidation, so the new pair is accepted
-        // without depending on second-precision iat vs. invalidated-at ordering
-        entity.setSessionsInvalidatedAt(null);
-        jpa.save(entity);
+        if (jpa.replaceCredential(accountId, email, apiToken, (short) activeKeyVersion, now) > 0) {
+            return;
+        }
+        JiraCredentialEntity created = new JiraCredentialEntity();
+        created.setJiraAccountId(accountId);
+        created.setJiraEmail(email);
+        created.setToken(apiToken);
+        created.setKeyVersion((short) activeKeyVersion);
+        created.setCreatedAt(now);
+        created.setUpdatedAt(now);
+        jpa.save(created);
     }
 
     @Override
     public Optional<Instant> findSessionsInvalidatedAt(String accountId) {
-        return jpa.findById(accountId).map(JiraCredentialEntity::getSessionsInvalidatedAt);
+        return jpa.findSessionsInvalidatedAt(accountId);
     }
 
     @Override
     @Transactional
     public void markSessionsInvalidated(String accountId, Instant at) {
-        jpa.findById(accountId).ifPresent(entity -> {
-            entity.setSessionsInvalidatedAt(at);
-            jpa.save(entity);
-        });
+        jpa.markSessionsInvalidated(accountId, at);
     }
 }
