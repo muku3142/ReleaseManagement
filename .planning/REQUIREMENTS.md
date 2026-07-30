@@ -9,7 +9,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 
 ### Authentication
 
-- [ ] **AUTH-01**: Release manager can sign in by supplying their Jira email and API token, which the system validates against Jira before granting access
+- [x] **AUTH-01**: Release manager can sign in by supplying their Jira email and API token, which the system validates against Jira before granting access
 - [ ] **AUTH-02**: All Jira reads are performed with the signed-in user's own credential, so the tool never sees tickets the user could not see in Jira
 - [x] **AUTH-03**: Stored Jira credentials are encrypted at rest and never returned to the client after being saved
 - [ ] **AUTH-04**: Release manager can replace an expired or revoked Jira token without losing existing releases, templates or history
@@ -119,7 +119,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 1 | In Progress |
+| AUTH-01 | Phase 1 | Complete |
 | AUTH-02 | Phase 1 | In Progress |
 | AUTH-03 | Phase 1 | Complete |
 | AUTH-04 | Phase 1 | In Progress |
@@ -167,14 +167,15 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 ### Evidence notes for Phase 1 requirements
 
-Phase 1 plans 01-01 through 01-07 are implemented and green (103 backend + 11 frontend
-tests), but three requirements were marked Complete before the evidence supported it. They
-are `In Progress` until plan **01-08** (live-Jira UAT, the phase's exit gate) is run by a
-human. Do not re-tick them on the strength of a passing test suite alone.
+Phase 1 plans 01-01 through 01-07 are implemented and green (119 backend + 15 frontend
+tests). Three requirements had been marked Complete before the evidence supported it.
+**AUTH-01 closed 2026-07-30** on live-Jira confirmation; **AUTH-02** and **AUTH-04** remain
+`In Progress`. Do not re-tick those on the strength of a passing test suite alone — plan
+**01-08** (`01-08-UAT-RESULTS.md`) records exactly what is and is not evidenced.
 
 | ID | Verified today | Still unevidenced |
 |----|----------------|-------------------|
-| AUTH-01 | Full sign-in path, failure taxonomy, and cookie session — against the `stub-jira` profile and WireMock | The defining verb is "validates **against Jira**". No credential has ever been checked against a real Jira Cloud site. |
+| AUTH-01 | ✅ **Closed 2026-07-30.** Sign-in confirmed against `https://evisionegypt.atlassian.net` with the `stub-jira` profile off; real accountId `5f5f5f58aba9660071082b49` persisted, and an invalid token rejected live as `401 INVALID_CREDENTIALS`. See `01-08-UAT-RESULTS.md`. | — |
 | AUTH-02 | The mechanism: `JiraAccessContextService.currentContext()` resolves credentials only for the authenticated principal, with no `accountId` overload and so no code path to another user's credential | The claim is about "all Jira **reads**", and there are no ticket reads in the codebase yet. It is currently vacuously true; Phase 2 is where it becomes meaningful. |
 | AUTH-04 | `PUT /api/auth/credential` revalidates and replaces the stored token; `ACCOUNT_MISMATCH` blocks a different account's token from overwriting the credential | Replacement has not been exercised against a genuinely **revoked** real token — a stub cannot model revocation faithfully. "Without losing existing releases, templates or history" is also untestable until Phases 3-5 create those. |
 
