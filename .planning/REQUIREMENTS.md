@@ -9,10 +9,10 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 
 ### Authentication
 
-- [x] **AUTH-01**: Release manager can sign in by supplying their Jira email and API token, which the system validates against Jira before granting access
-- [x] **AUTH-02**: All Jira reads are performed with the signed-in user's own credential, so the tool never sees tickets the user could not see in Jira
+- [ ] **AUTH-01**: Release manager can sign in by supplying their Jira email and API token, which the system validates against Jira before granting access
+- [ ] **AUTH-02**: All Jira reads are performed with the signed-in user's own credential, so the tool never sees tickets the user could not see in Jira
 - [x] **AUTH-03**: Stored Jira credentials are encrypted at rest and never returned to the client after being saved
-- [x] **AUTH-04**: Release manager can replace an expired or revoked Jira token without losing existing releases, templates or history
+- [ ] **AUTH-04**: Release manager can replace an expired or revoked Jira token without losing existing releases, templates or history
 
 ### Jira Integration
 
@@ -119,10 +119,10 @@ Which phases cover which requirements. Populated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 1 | Complete |
-| AUTH-02 | Phase 1 | Complete |
+| AUTH-01 | Phase 1 | In Progress |
+| AUTH-02 | Phase 1 | In Progress |
 | AUTH-03 | Phase 1 | Complete |
-| AUTH-04 | Phase 1 | Complete |
+| AUTH-04 | Phase 1 | In Progress |
 | JIRA-01 | Phase 1 | Complete |
 | JIRA-02 | Phase 2 | Pending |
 | JIRA-03 | Phase 2 | Pending |
@@ -165,6 +165,29 @@ Which phases cover which requirements. Populated during roadmap creation.
 - Mapped to phases: 40/40 ✓
 - Unmapped: 0 ✓
 
+### Evidence notes for Phase 1 requirements
+
+Phase 1 plans 01-01 through 01-07 are implemented and green (103 backend + 11 frontend
+tests), but three requirements were marked Complete before the evidence supported it. They
+are `In Progress` until plan **01-08** (live-Jira UAT, the phase's exit gate) is run by a
+human. Do not re-tick them on the strength of a passing test suite alone.
+
+| ID | Verified today | Still unevidenced |
+|----|----------------|-------------------|
+| AUTH-01 | Full sign-in path, failure taxonomy, and cookie session — against the `stub-jira` profile and WireMock | The defining verb is "validates **against Jira**". No credential has ever been checked against a real Jira Cloud site. |
+| AUTH-02 | The mechanism: `JiraAccessContextService.currentContext()` resolves credentials only for the authenticated principal, with no `accountId` overload and so no code path to another user's credential | The claim is about "all Jira **reads**", and there are no ticket reads in the codebase yet. It is currently vacuously true; Phase 2 is where it becomes meaningful. |
+| AUTH-04 | `PUT /api/auth/credential` revalidates and replaces the stored token; `ACCOUNT_MISMATCH` blocks a different account's token from overwriting the credential | Replacement has not been exercised against a genuinely **revoked** real token — a stub cannot model revocation faithfully. "Without losing existing releases, templates or history" is also untestable until Phases 3-5 create those. |
+
+`AUTH-03` and `JIRA-01` are genuinely Complete and need no live Jira:
+- **AUTH-03** — ciphertext at rest is proven by `EncryptedTokenConverterTest` plus
+  `JiraCredentialPersistenceIT` against a real PostgreSQL 18 container, and token-free
+  responses by `AuthControllerIT`. A real Jira token is not cryptographically different from
+  a stub one, so 01-08 only re-confirms this.
+- **JIRA-01** — configuring and reading back the Jira site was verified end-to-end against a
+  running instance, including SSRF-rejecting validation. It does not depend on Jira
+  credentials at all.
+
 ---
 *Requirements defined: 2026-07-27*
-*Last updated: 2026-07-27 after roadmap creation (7 phases, full coverage)*
+*Last updated: 2026-07-30 — corrected AUTH-01/02/04 from Complete to In Progress; live-Jira
+evidence (plan 01-08) not yet gathered*
