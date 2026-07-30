@@ -213,17 +213,74 @@ docker compose -f compose.app.yaml down            # remove containers, KEEP dat
 docker compose -f compose.app.yaml down -v         # remove containers AND data
 ```
 
-After changing backend or frontend code, rebuild:
+## Rebuilding after a code change
+
+There is **no push step for local use.** `docker build` writes the image straight into Docker
+Desktop's local image store; `docker push` exists only for sending an image to a *remote*
+registry. Docker Compose resolves `image:`/`build:` against that same local store.
+
+The one command you normally want:
 
 ```bash
 docker compose -f compose.app.yaml up --build -d app
 ```
 
-Build the image on its own:
+`--build` is the important part. **`up -d` on its own will not rebuild** — it reuses the
+existing image and you will sit there wondering why your change had no effect.
+
+Other forms:
 
 ```bash
-docker build -t release-management:0.1.0-SNAPSHOT .
+docker build -t release-management:0.1.0-SNAPSHOT .          # image only, no compose
+docker compose -f compose.app.yaml build app                 # image only, via compose
+docker compose -f compose.app.yaml up -d --build --force-recreate app   # also replace a container that would otherwise be reused
+docker build --no-cache -t release-management:0.1.0-SNAPSHOT .          # ignore the layer cache entirely
 ```
+
+> **`docker compose build` needs your env vars, even though building doesn't use them.**
+> Compose interpolates the whole file before doing anything, so the required-variable guards
+> on `RM_CREDENTIAL_KEY`/`RM_JWT_SECRET` will abort `build`, `config`, `ps` and `logs` too:
+> ```
+> error while interpolating services.app.environment.RM_CREDENTIAL_KEY:
+> required variable RM_CREDENTIAL_KEY is missing a value
+> ```
+> Fix by having a `.env` in the project directory (compose reads it automatically), or pass
+> `--env-file <path>`. Plain `docker build` never reads the compose file and so never hits this.
+
+Verify what you have:
+
+```bash
+docker images release-management --format '{{.Repository}}:{{.Tag}}  {{.ID}}  {{.CreatedSince}}'
+docker compose -f compose.app.yaml ps
+```
+
+Note the top-level image ID can change between builds even when every layer was cached —
+BuildKit attaches provenance attestations that differ per build. Judge "did my change land"
+by container behaviour or `CreatedSince`, not by the ID alone.
+
+## Pushing to a remote registry
+
+Only needed to run the image somewhere other than this machine.
+
+```bash
+# Docker Hub
+docker tag release-management:0.1.0-SNAPSHOT <user>/release-management:0.1.0-SNAPSHOT
+docker login
+docker push <user>/release-management:0.1.0-SNAPSHOT
+
+# Azure Container Registry
+az acr login --name <registry>
+docker tag release-management:0.1.0-SNAPSHOT <registry>.azurecr.io/release-management:0.1.0-SNAPSHOT
+docker push <registry>.azurecr.io/release-management:0.1.0-SNAPSHOT
+```
+
+The Dockerfile's layer split (dependencies separate from application classes) pays off here:
+a code-only change re-pushes just the small application layer, not the ~600 MB base and
+dependency layers.
+
+Before pushing anywhere real, read [Not production-ready as-is](#not-production-ready-as-is)
+— in particular that this stack runs with `SPRING_PROFILES_ACTIVE=local`, which disables the
+`Secure` cookie flag.
 
 ---
 
