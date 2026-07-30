@@ -2,7 +2,6 @@ package com.evision.releasemgmt.adapters.security;
 
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.oauth2.core.OAuth2Error;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwsHeader;
@@ -54,34 +53,54 @@ public class JwtTokenService {
         return issueWithCap(jiraAccountId, email, absoluteExpiry);
     }
 
-    public TokenPair refresh(String refreshTokenValue) {
-        Jwt jwt;
+    /**
+     * Decodes and fully validates a refresh token. Split from re-issuance so callers can
+     * apply their own checks (e.g. server-side session invalidation) on the decoded token
+     * before a new pair is minted. There is deliberately no combined
+     * decode-and-reissue method: it would be a seam that skips those checks.
+     */
+    public Jwt decodeRefreshToken(String refreshTokenValue) {
         try {
-            jwt = refreshTokenDecoder.decode(refreshTokenValue);
+            return refreshTokenDecoder.decode(refreshTokenValue);
         } catch (JwtValidationException e) {
-            boolean expired = e.getErrors().stream()
-                    .map(OAuth2Error::getDescription)
-                    .filter(description -> description != null)
-                    .anyMatch(description -> description.contains("expired")
-                            || description.contains("Session absolute expiry reached"));
-            throw new SessionRefreshException(expired
+            throw new SessionRefreshException(indicatesExpiry(e)
                     ? SessionRefreshException.Reason.SESSION_EXPIRED
                     : SessionRefreshException.Reason.INVALID_SESSION);
         } catch (JwtException e) {
             throw new SessionRefreshException(SessionRefreshException.Reason.INVALID_SESSION);
         }
+    }
 
-        Long absoluteExpEpoch = jwt.getClaim(CLAIM_ABSOLUTE_EXP);
-        if (absoluteExpEpoch == null) {
-            throw new SessionRefreshException(SessionRefreshException.Reason.INVALID_SESSION);
-        }
-        Instant absoluteExpiry = Instant.ofEpochSecond(absoluteExpEpoch);
-        if (Instant.now().isAfter(absoluteExpiry)) {
-            throw new SessionRefreshException(SessionRefreshException.Reason.SESSION_EXPIRED);
-        }
+    public TokenPair reissueFrom(Jwt refreshJwt) {
+        // decodeRefreshToken's validator chain (AbsoluteExpiryValidator) has already
+        // guaranteed absolute_exp is present and unexpired — re-checking it here would be
+        // unreachable code that can silently diverge from the validator
+        Instant absoluteExpiry = Instant.ofEpochSecond(longClaim(refreshJwt, CLAIM_ABSOLUTE_EXP));
+        return issueWithCap(refreshJwt.getSubject(), refreshJwt.getClaimAsString(CLAIM_EMAIL), absoluteExpiry);
+    }
 
-        String email = jwt.getClaimAsString(CLAIM_EMAIL);
-        return issueWithCap(jwt.getSubject(), email, absoluteExpiry);
+    /**
+     * AbsoluteExpiryValidator reports expiry through a dedicated error code. Spring's own
+     * JwtTimestampValidator only reports it in prose, so that half is matched on text and
+     * pinned by JwtTokenServiceTest#expiredRefreshTokenIsClassifiedAsSessionExpired — if a
+     * Spring upgrade rewords the message, that test fails rather than the classification
+     * silently degrading to INVALID_SESSION.
+     */
+    private static boolean indicatesExpiry(JwtValidationException e) {
+        return e.getErrors().stream().anyMatch(error ->
+                AbsoluteExpiryValidator.ERROR_CODE_ABSOLUTE_EXPIRY.equals(error.getErrorCode())
+                        || (error.getDescription() != null && error.getDescription().contains("expired")));
+    }
+
+    /**
+     * Reads a numeric claim without assuming the JSON parser's concrete box type. A direct
+     * assignment to Long would throw ClassCastException — not a JwtException, so it would
+     * escape every catch here and surface as a 500 instead of a 401 — for any parser that
+     * boxes an epoch-seconds value (which fits in an int) as Integer.
+     */
+    private static long longClaim(Jwt jwt, String name) {
+        Number value = jwt.getClaim(name);
+        return value.longValue();
     }
 
     private TokenPair issueWithCap(String jiraAccountId, String email, Instant absoluteExpiry) {

@@ -43,6 +43,23 @@ public class JiraCredentialRepositoryAdapter implements JiraCredentialRepository
         entity.setToken(apiToken);
         entity.setKeyVersion((short) activeKeyVersion);
         entity.setUpdatedAt(now);
+        // a fresh sign-in supersedes any earlier invalidation, so the new pair is accepted
+        // without depending on second-precision iat vs. invalidated-at ordering
+        entity.setSessionsInvalidatedAt(null);
         jpa.save(entity);
+    }
+
+    @Override
+    public Optional<Instant> findSessionsInvalidatedAt(String accountId) {
+        return jpa.findById(accountId).map(JiraCredentialEntity::getSessionsInvalidatedAt);
+    }
+
+    @Override
+    @Transactional
+    public void markSessionsInvalidated(String accountId, Instant at) {
+        jpa.findById(accountId).ifPresent(entity -> {
+            entity.setSessionsInvalidatedAt(at);
+            jpa.save(entity);
+        });
     }
 }

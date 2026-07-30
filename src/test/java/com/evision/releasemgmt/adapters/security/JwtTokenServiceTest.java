@@ -84,12 +84,60 @@ class JwtTokenServiceTest {
                 .isInstanceOf(JwtValidationException.class);
     }
 
+    /** JwtTokenService deliberately exposes no combined decode-and-reissue method. */
+    private TokenPair refresh(String refreshToken) {
+        return service.reissueFrom(service.decodeRefreshToken(refreshToken));
+    }
+
+    @Test
+    void expiredRefreshTokenIsClassifiedAsSessionExpired() {
+        // Pins Spring's JwtTimestampValidator wording. JwtTokenService#indicatesExpiry has to
+        // match that message as text because Spring reports plain `exp` expiry only in prose.
+        // If an upgrade rewords it, this fails here rather than silently downgrading every
+        // expired session to INVALID_SESSION and changing what the SPA tells the user.
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .subject("557058:abc-123")
+                .issuedAt(Instant.now().minusSeconds(120))
+                .expiresAt(Instant.now().minusSeconds(60))
+                .id(UUID.randomUUID().toString())
+                .claim(JwtTokenService.CLAIM_TOKEN_TYPE, JwtTokenService.TYPE_REFRESH)
+                .claim(JwtTokenService.CLAIM_EMAIL, "rm@acme.com")
+                .claim(JwtTokenService.CLAIM_ABSOLUTE_EXP, Instant.now().plusSeconds(3600).getEpochSecond())
+                .build();
+        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
+        String expiredRefreshToken = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+
+        assertThatThrownBy(() -> refresh(expiredRefreshToken))
+                .isInstanceOf(SessionRefreshException.class)
+                .extracting(ex -> ((SessionRefreshException) ex).reason())
+                .isEqualTo(SessionRefreshException.Reason.SESSION_EXPIRED);
+    }
+
+    @Test
+    void refreshTokenWithoutAbsoluteExpClaimIsInvalidNotExpired() {
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .subject("557058:abc-123")
+                .issuedAt(Instant.now())
+                .expiresAt(Instant.now().plusSeconds(60))
+                .id(UUID.randomUUID().toString())
+                .claim(JwtTokenService.CLAIM_TOKEN_TYPE, JwtTokenService.TYPE_REFRESH)
+                .claim(JwtTokenService.CLAIM_EMAIL, "rm@acme.com")
+                .build();
+        JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
+        String noCapToken = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
+
+        assertThatThrownBy(() -> refresh(noCapToken))
+                .isInstanceOf(SessionRefreshException.class)
+                .extracting(ex -> ((SessionRefreshException) ex).reason())
+                .isEqualTo(SessionRefreshException.Reason.INVALID_SESSION);
+    }
+
     @Test
     void capIsPreservedAcrossASingleRefresh() {
         // absolute_exp is carried forward unchanged by refresh(), never recomputed
         TokenPair original = service.issue("557058:abc-123", "rm@acme.com");
 
-        TokenPair refreshed = service.refresh(original.refreshToken());
+        TokenPair refreshed = refresh(original.refreshToken());
 
         assertThat(refreshed.absoluteExpiry()).isEqualTo(original.absoluteExpiry());
         Jwt originalRefreshJwt = refreshDecoder.decode(original.refreshToken());
@@ -103,9 +151,9 @@ class JwtTokenServiceTest {
         TokenPair pair = service.issue("557058:abc-123", "rm@acme.com");
         Instant originalCap = pair.absoluteExpiry();
 
-        TokenPair r1 = service.refresh(pair.refreshToken());
-        TokenPair r2 = service.refresh(r1.refreshToken());
-        TokenPair r3 = service.refresh(r2.refreshToken());
+        TokenPair r1 = refresh(pair.refreshToken());
+        TokenPair r2 = refresh(r1.refreshToken());
+        TokenPair r3 = refresh(r2.refreshToken());
 
         assertThat(r1.absoluteExpiry()).isEqualTo(originalCap);
         assertThat(r2.absoluteExpiry()).isEqualTo(originalCap);
@@ -127,7 +175,7 @@ class JwtTokenServiceTest {
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
         String expiredCapRefreshToken = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
 
-        assertThatThrownBy(() -> service.refresh(expiredCapRefreshToken))
+        assertThatThrownBy(() -> refresh(expiredCapRefreshToken))
                 .isInstanceOf(SessionRefreshException.class)
                 .extracting(ex -> ((SessionRefreshException) ex).reason())
                 .isEqualTo(SessionRefreshException.Reason.SESSION_EXPIRED);
@@ -180,7 +228,7 @@ class JwtTokenServiceTest {
 
     @Test
     void garbageStringAtRefreshThrowsInvalidSession() {
-        assertThatThrownBy(() -> service.refresh("not-a-jwt-at-all"))
+        assertThatThrownBy(() -> refresh("not-a-jwt-at-all"))
                 .isInstanceOf(SessionRefreshException.class)
                 .extracting(ex -> ((SessionRefreshException) ex).reason())
                 .isEqualTo(SessionRefreshException.Reason.INVALID_SESSION);

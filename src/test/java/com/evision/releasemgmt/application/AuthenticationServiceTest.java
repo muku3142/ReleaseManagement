@@ -121,11 +121,87 @@ class AuthenticationServiceTest {
         verify(credentialRepository).upsert("acc", "rm@acme.com", "tok-123");
     }
 
+    private static Jwt refreshJwt(String tokenValue, String subject, Instant issuedAt) {
+        return Jwt.withTokenValue(tokenValue)
+                .header("alg", "HS256")
+                .subject(subject)
+                .issuedAt(issuedAt)
+                .claim(JwtTokenService.CLAIM_TOKEN_TYPE, JwtTokenService.TYPE_REFRESH)
+                .claim(JwtTokenService.CLAIM_EMAIL, "rm@acme.com")
+                .build();
+    }
+
+    @Test
+    void logoutInvalidatesSessionsServerSideSoACapturedRefreshTokenStopsWorking() {
+        Jwt refresh = refreshJwt("refresh-jwt", "557058:abc-123", Instant.now().minusSeconds(10));
+        when(jwtTokenService.decodeRefreshToken("refresh-jwt")).thenReturn(refresh);
+
+        service.logout("refresh-jwt");
+
+        verify(credentialRepository).markSessionsInvalidated(eq("557058:abc-123"), any(Instant.class));
+    }
+
+    @Test
+    void logoutWithNoRefreshCookieIsANoOp() {
+        service.logout(null);
+        service.logout("  ");
+
+        verifyNoInteractions(credentialRepository);
+        verifyNoInteractions(jwtTokenService);
+    }
+
+    @Test
+    void logoutWithAnAlreadyInvalidTokenDoesNotFail() {
+        when(jwtTokenService.decodeRefreshToken("junk"))
+                .thenThrow(new SessionRefreshException(SessionRefreshException.Reason.INVALID_SESSION));
+
+        service.logout("junk");
+
+        verify(credentialRepository, never()).markSessionsInvalidated(any(), any());
+    }
+
+    @Test
+    void refreshIsRejectedWhenTheTokenPredatesAServerSideLogout() {
+        Instant loggedOutAt = Instant.now();
+        Jwt staleRefresh = refreshJwt("stale-refresh-jwt", "557058:abc-123", loggedOutAt.minusSeconds(60));
+        when(jwtTokenService.decodeRefreshToken("stale-refresh-jwt")).thenReturn(staleRefresh);
+        when(credentialRepository.findSessionsInvalidatedAt("557058:abc-123"))
+                .thenReturn(Optional.of(loggedOutAt));
+
+        assertThatThrownBy(() -> service.refresh("stale-refresh-jwt"))
+                .isInstanceOf(SessionRefreshException.class)
+                .extracting(ex -> ((SessionRefreshException) ex).reason())
+                .isEqualTo(SessionRefreshException.Reason.INVALID_SESSION);
+
+        verify(jwtTokenService, never()).reissueFrom(any());
+    }
+
+    @Test
+    void refreshIsAllowedWhenTheTokenPostdatesTheLastLogout() {
+        Instant loggedOutAt = Instant.now().minusSeconds(60);
+        Jwt freshRefresh = refreshJwt("fresh-refresh-jwt", "557058:abc-123", loggedOutAt.plusSeconds(30));
+        TokenPair pair = new TokenPair("new-access-jwt", "new-refresh-jwt", Instant.now().plusSeconds(1800));
+        when(jwtTokenService.decodeRefreshToken("fresh-refresh-jwt")).thenReturn(freshRefresh);
+        when(jwtTokenService.reissueFrom(freshRefresh)).thenReturn(pair);
+        when(credentialRepository.findSessionsInvalidatedAt("557058:abc-123"))
+                .thenReturn(Optional.of(loggedOutAt));
+        when(accessTokenDecoder.decode("new-access-jwt")).thenReturn(
+                Jwt.withTokenValue("new-access-jwt")
+                        .header("alg", "HS256")
+                        .subject("557058:abc-123")
+                        .claim(JwtTokenService.CLAIM_EMAIL, "rm@acme.com")
+                        .build());
+
+        assertThat(service.refresh("fresh-refresh-jwt").pair()).isEqualTo(pair);
+    }
+
     @Test
     void refreshDelegatesToJwtTokenServiceAndPreservesAbsoluteExpiry() {
         Instant absoluteExpiry = Instant.now().plusSeconds(1800);
         TokenPair pair = new TokenPair("new-access-jwt", "new-refresh-jwt", absoluteExpiry);
-        when(jwtTokenService.refresh("old-refresh-jwt")).thenReturn(pair);
+        Jwt oldRefreshJwt = refreshJwt("old-refresh-jwt", "557058:abc-123", Instant.now());
+        when(jwtTokenService.decodeRefreshToken("old-refresh-jwt")).thenReturn(oldRefreshJwt);
+        when(jwtTokenService.reissueFrom(oldRefreshJwt)).thenReturn(pair);
         Jwt decoded = Jwt.withTokenValue("new-access-jwt")
                 .header("alg", "HS256")
                 .subject("557058:abc-123")
@@ -143,9 +219,9 @@ class AuthenticationServiceTest {
 
     @Test
     void refreshPropagatesSessionRefreshExceptionReasonsUnchanged() {
-        when(jwtTokenService.refresh("invalid"))
+        when(jwtTokenService.decodeRefreshToken("invalid"))
                 .thenThrow(new SessionRefreshException(SessionRefreshException.Reason.INVALID_SESSION));
-        when(jwtTokenService.refresh("expired"))
+        when(jwtTokenService.decodeRefreshToken("expired"))
                 .thenThrow(new SessionRefreshException(SessionRefreshException.Reason.SESSION_EXPIRED));
 
         assertThatThrownBy(() -> service.refresh("invalid"))

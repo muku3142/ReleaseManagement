@@ -1,6 +1,7 @@
 package com.evision.releasemgmt.application;
 
 import com.evision.releasemgmt.adapters.security.JwtTokenService;
+import com.evision.releasemgmt.adapters.security.SessionRefreshException;
 import com.evision.releasemgmt.adapters.security.TokenPair;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
 import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
@@ -59,11 +60,44 @@ public class AuthenticationService {
     }
 
     public LoginResult refresh(String refreshTokenValue) {
-        TokenPair pair = jwtTokenService.refresh(refreshTokenValue);
+        Jwt refreshJwt = jwtTokenService.decodeRefreshToken(refreshTokenValue);
+        rejectIfSessionsInvalidated(refreshJwt);
+        TokenPair pair = jwtTokenService.reissueFrom(refreshJwt);
         Jwt accessJwt = accessTokenDecoder.decode(pair.accessToken());
         String accountId = accessJwt.getSubject();
         String email = accessJwt.getClaimAsString(JwtTokenService.CLAIM_EMAIL);
         return new LoginResult(pair, new SignedInUser(accountId, email, pair.absoluteExpiry()));
+    }
+
+    /**
+     * Ends the session server-side as well as in the browser. Without this, clearing the
+     * cookies would leave a captured refresh token usable for its full TTL and chainable up
+     * to the absolute cap — logout would be a client-side gesture, not a session teardown.
+     *
+     * <p>Reads the refresh cookie rather than the authenticated principal on purpose: the
+     * access token may already have expired while the refresh token is still live, and that
+     * is precisely the case that most needs invalidating.
+     */
+    public void logout(String refreshTokenValue) {
+        if (refreshTokenValue == null || refreshTokenValue.isBlank()) {
+            return;
+        }
+        try {
+            Jwt refreshJwt = jwtTokenService.decodeRefreshToken(refreshTokenValue);
+            credentialRepository.markSessionsInvalidated(refreshJwt.getSubject(), Instant.now());
+        } catch (SessionRefreshException e) {
+            // already invalid or expired — nothing left to invalidate
+        }
+    }
+
+    private void rejectIfSessionsInvalidated(Jwt refreshJwt) {
+        Instant issuedAt = refreshJwt.getIssuedAt();
+        Instant invalidatedAt = credentialRepository
+                .findSessionsInvalidatedAt(refreshJwt.getSubject())
+                .orElse(null);
+        if (invalidatedAt != null && issuedAt != null && issuedAt.isBefore(invalidatedAt)) {
+            throw new SessionRefreshException(SessionRefreshException.Reason.INVALID_SESSION);
+        }
     }
 
     /**

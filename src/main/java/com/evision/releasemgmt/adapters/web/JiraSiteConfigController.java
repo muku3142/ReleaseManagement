@@ -30,8 +30,9 @@ public class JiraSiteConfigController {
 
     @PutMapping
     public JiraSiteConfigResponse update(@Valid @RequestBody UpdateJiraSiteConfigRequest request, Principal principal) {
-        String actor = principal != null ? principal.getName() : "anonymous";
-        return toResponse(service.updateBaseUrl(request.baseUrl(), actor));
+        // PUT falls under SecurityConfig's /api/** authenticated rule, so Spring Security
+        // guarantees a principal by the time this runs
+        return toResponse(service.updateBaseUrl(request.baseUrl(), principal.getName()));
     }
 
     private JiraSiteConfigResponse toResponse(JiraSiteConfig config) {

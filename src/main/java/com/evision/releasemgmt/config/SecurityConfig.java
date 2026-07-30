@@ -44,7 +44,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/settings/jira-site").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/api/**").authenticated()
-                        .anyRequest().permitAll());
+                        // any further actuator endpoint must be authenticated: exposure is
+                        // config-driven, so widening management.endpoints.web.exposure.include
+                        // must not silently publish env/beans/etc.
+                        .requestMatchers("/actuator/**").authenticated()
+                        // The only surface left is the SPA — index.html, static assets and
+                        // deep links forwarded by SpaForwardingController — all of which are
+                        // GET/HEAD. Everything else denies by default, so a future
+                        // non-/api endpoint cannot become public merely by being forgotten.
+                        .requestMatchers(HttpMethod.GET, "/**").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, "/**").permitAll()
+                        .anyRequest().denyAll());
         return http.build();
     }
 }

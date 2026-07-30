@@ -76,6 +76,11 @@ public class EncryptedTokenConverter implements AttributeConverter<String, Strin
         }
         try {
             byte[] raw = Base64.getDecoder().decode(stored);
+            // a truncated column would otherwise surface as BufferUnderflowException,
+            // breaking this converter's single-exception-type contract for decrypt failures
+            if (raw.length <= 1 + IV_LENGTH) {
+                throw new IllegalStateException("Failed to decrypt credential column: envelope too short");
+            }
             ByteBuffer buffer = ByteBuffer.wrap(raw);
             buffer.get(); // stored key version — metadata only, not used for key selection in v1
             byte[] iv = new byte[IV_LENGTH];

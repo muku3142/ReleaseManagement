@@ -9,16 +9,21 @@ import java.time.Instant;
 
 public class AbsoluteExpiryValidator implements OAuth2TokenValidator<Jwt> {
 
+    /** Distinct code so callers classify absolute expiry without matching on prose. */
+    public static final String ERROR_CODE_ABSOLUTE_EXPIRY = "session_absolute_expiry";
+
     @Override
     public OAuth2TokenValidatorResult validate(Jwt jwt) {
-        Long absoluteExp = jwt.getClaim(JwtTokenService.CLAIM_ABSOLUTE_EXP);
+        // Number, not Long: epoch seconds fit in an int, so a JSON parser is free to box
+        // the value as Integer and a direct Long cast would throw ClassCastException
+        Number absoluteExp = jwt.getClaim(JwtTokenService.CLAIM_ABSOLUTE_EXP);
         if (absoluteExp == null) {
             return OAuth2TokenValidatorResult.failure(
                     new OAuth2Error("invalid_token", "Missing absolute_exp claim", null));
         }
-        if (Instant.now().isAfter(Instant.ofEpochSecond(absoluteExp))) {
+        if (Instant.now().isAfter(Instant.ofEpochSecond(absoluteExp.longValue()))) {
             return OAuth2TokenValidatorResult.failure(
-                    new OAuth2Error("invalid_token", "Session absolute expiry reached", null));
+                    new OAuth2Error(ERROR_CODE_ABSOLUTE_EXPIRY, "Session absolute expiry reached", null));
         }
         return OAuth2TokenValidatorResult.success();
     }

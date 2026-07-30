@@ -33,7 +33,18 @@ public class JiraCredentialEntity {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
+    @Column(name = "sessions_invalidated_at")
+    private Instant sessionsInvalidatedAt;
+
     public JiraCredentialEntity() {
+    }
+
+    public Instant getSessionsInvalidatedAt() {
+        return sessionsInvalidatedAt;
+    }
+
+    public void setSessionsInvalidatedAt(Instant sessionsInvalidatedAt) {
+        this.sessionsInvalidatedAt = sessionsInvalidatedAt;
     }
 
     public String getJiraAccountId() {
