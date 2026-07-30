@@ -340,8 +340,28 @@ Check `docker compose -f compose.app.yaml ps` — if `postgres` is not `healthy`
 logs. Inside the stack the app reaches the database at hostname `postgres`, not `localhost`.
 
 **Changed `RM_JIRA_DEFAULT_BASE_URL` but the app still shows the old site**
-Expected. The seeder writes only when `jira_site_config` is empty. Change the site in the UI,
-or reset with `down -v`.
+Expected, and not an env-loading problem. The seeder writes **only when `jira_site_config` is
+empty**, so once a row exists the variable is ignored no matter how many times you recreate
+the container. Confirm the distinction before chasing it:
+
+```bash
+docker exec releasemanagement-app-1 printenv RM_JIRA_DEFAULT_BASE_URL   # what the app was given
+docker exec releasemanagement-postgres-1 \
+  psql -U releasemgmt -d releasemgmt -tAc "select base_url from jira_site_config;"   # what it serves
+```
+
+If those differ, the env var arrived fine and the database simply already has a value. Three
+ways to change it:
+
+1. **Settings screen in the UI** — the intended path, and it records who changed it.
+2. **API**: `PUT /api/settings/jira-site` with `{"baseUrl":"https://<site>.atlassian.net"}`
+   (needs a session and a CSRF token).
+3. **Reset**: `docker compose -f compose.app.yaml down -v && docker compose -f compose.app.yaml up -d`
+   — discards the database, so the seeder runs again.
+
+The URL must be exactly `https://<site>.atlassian.net` with **no trailing slash**. The REST
+endpoint returns 400 `VALIDATION_FAILED` for anything else, and the seeder now fails startup
+rather than persisting a value that would build paths like `.../atlassian.net//rest/api/3/...`.
 
 **Build is slow the first time**
 It resolves the full Maven tree and downloads Node. Subsequent builds reuse the BuildKit
