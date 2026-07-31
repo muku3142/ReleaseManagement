@@ -30,6 +30,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [ ] **REL-03**: Release manager can freeze a release, which snapshots its exact ticket set at that moment
 - [ ] **REL-04**: Release manager can open any release and see its ticket set with per-ticket detail
 - [ ] **REL-05**: Release manager can list and search all releases
+- [ ] **REL-08**: Release manager can add a manual item to an open release — one not backed by a Jira ticket, such as a config change, database script or infrastructure task — carrying at minimum a title, description and category, and appearing in generated documents alongside ticket-backed items
 
 ### Template Authoring
 
@@ -39,8 +40,8 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [ ] **TMPL-04**: System validates a template when it is saved by rendering it against a sample context that includes a ticket with no linked code, and reports unknown placeholders as errors rather than silently blanking them at generation time
 - [ ] **TMPL-05**: Template rendering is bounded by an execution timeout and a collection-size limit, so no template can hang or exhaust the server
 - [ ] **TMPL-06**: Release manager can preview a template against a real selected release's actual data while editing
-- [ ] **TMPL-07**: Release manager can define a template's document chrome through structured fields — cover page on/off, cover title and subtitle, running header text, footer text, and page numbering — each accepting the same `{{ }}` placeholders as the body, so no new expression surface is introduced
-- [ ] **TMPL-08**: Release manager can upload and manage a logo image for use in document chrome, restricted to raster formats with validated type, size and dimensions
+- [ ] **TMPL-08**: Release manager can define a template's document chrome through structured fields — cover page on/off, cover title and subtitle, running header text, footer text, and page numbering — each accepting the same `{{ }}` placeholders as the body, so no new expression surface is introduced
+- [ ] **TMPL-09**: Release manager can upload and manage a logo image for use in document chrome, restricted to raster formats with validated type, size and dimensions
 
 ### Document Generation
 
@@ -73,6 +74,13 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [ ] **AUDIT-01**: Release manager can view the complete promotion history of a release, not just its current stage
 - [ ] **AUDIT-02**: Release manager can view every document generated for a release, including superseded revisions
 - [ ] **AUDIT-03**: Release and promotion history is append-only — a correction adds a new entry rather than editing or deleting an existing one
+- [ ] **AUDIT-04**: Release manager can view deployment history across all releases on one screen — filterable by environment and date range — not only per-release, so "what went to Production and when" is answerable without opening each release
+
+### Cross-cutting UX
+
+Quality attributes that apply across every screen rather than mapping to a single phase.
+
+- [ ] **UX-01**: The interface supports drag-and-drop wherever ordering or moving is the natural gesture — reordering deploy steps in a runbook, reordering template sections, and moving items into or between groupings on a release — with a keyboard-accessible equivalent for every drag interaction
 
 ## v2 Requirements
 
@@ -96,6 +104,34 @@ Deferred to future release. Tracked but not in the current roadmap.
 
 - **PROV-01**: Additional ticket-source providers (Azure DevOps Boards, GitHub Issues, GitLab) implemented against the existing provider abstraction
 - **PROV-02**: Per-application configurable environment ladders rather than one standard ladder
+
+### Analytics
+
+Deferred 2026-07-31. Jira already ships velocity, control and sprint-report charts, so building
+these duplicates a tool the team has. Scoped here so the intent is not lost, and because the
+integration cost is the real reason to defer rather than the UI cost.
+
+- **ANLY-01**: Analytics dashboard showing velocity, cycle time and scope change for a selected project and time window
+- **ANLY-02**: **Velocity** — story points completed per sprint across recent sprints, with the trend visible
+- **ANLY-03**: **Cycle time** — distribution and median time from work-started to done, computed from status-transition history rather than created/resolved dates
+- **ANLY-04**: **Scope change** — tickets added to or removed from a sprint after it started
+- **ANLY-05**: Metric definitions configurable rather than hardcoded — which field carries story points, which statuses count as work-started and done — because these differ per Jira project
+- **ANLY-06**: Graceful degradation when the data does not exist — no board, Kanban with no sprints, or no story-point field — rather than an empty or misleading chart
+
+**What this would cost, recorded now so a future decision is informed:**
+
+- **A new Jira integration surface.** Velocity and scope change need the **Agile API**
+  (`/rest/agile/1.0/board`, `/sprint`) — boards and sprints, concepts this system does not
+  otherwise model. Cycle time needs **status-transition history** from the paginated
+  `/changelog` endpoint; `expand=changelog` silently truncates around 100 entries, which is
+  already a documented project constraint.
+- **It forces the custom-field path.** Story points are a custom field
+  (`customfield_NNNNN`, varying per site), so ANLY-02 is the first requirement that genuinely
+  exercises JIRA-04's resolve-by-name mechanism. Phase 2 deliberately deferred custom fields
+  (D-02-02), so this is not free.
+- **ANLY-04 overlaps v2's REL-06.** REL-06 is scope change against a *release freeze*;
+  ANLY-04 is scope change against a *sprint start*. Related but not the same question. If both
+  are ever built, unify the underlying diff rather than writing it twice.
 
 ## Out of Scope
 
@@ -137,14 +173,15 @@ Which phases cover which requirements. Populated during roadmap creation.
 | REL-03 | Phase 3 | Pending |
 | REL-04 | Phase 3 | Pending |
 | REL-05 | Phase 3 | Pending |
+| REL-08 | Phase 3 | Pending |
 | TMPL-01 | Phase 4 | Pending |
 | TMPL-02 | Phase 4 | Pending |
 | TMPL-03 | Phase 4 | Pending |
 | TMPL-04 | Phase 4 | Pending |
 | TMPL-05 | Phase 4 | Pending |
 | TMPL-06 | Phase 4 | Pending |
-| TMPL-07 | Phase 4 | Pending |
 | TMPL-08 | Phase 4 | Pending |
+| TMPL-09 | Phase 4 | Pending |
 | DOC-01 | Phase 5 | Pending |
 | DOC-02 | Phase 5 | Pending |
 | DOC-03 | Phase 5 | Pending |
@@ -165,15 +202,17 @@ Which phases cover which requirements. Populated during roadmap creation.
 | AUDIT-01 | Phase 7 | Pending |
 | AUDIT-02 | Phase 7 | Pending |
 | AUDIT-03 | Phase 7 | Pending |
+| AUDIT-04 | Phase 7 | Pending |
+| UX-01 | Phases 2-7 (cross-cutting) | Pending |
 
 **Coverage:**
-- v1 requirements: 43 total (AUTH 4 + JIRA 6 + REL 5 + TMPL 8 + DOC 8 + ADO 5 + DEPL 4 + AUDIT 3) — was 40; TMPL-07, TMPL-08 and DOC-08 added 2026-07-31 for document chrome
-- Mapped to phases: 43/43 ✓
+- v1 requirements: 46 total (AUTH 4 + JIRA 6 + REL 6 + TMPL 8 + DOC 8 + ADO 5 + DEPL 4 + AUDIT 4 + UX 1) — was 40; added 2026-07-31: TMPL-08/TMPL-09/DOC-08 (document chrome), REL-08 (manual release items), AUDIT-04 (cross-release deployment history), UX-01 (drag-and-drop). Analytics (ANLY-01..06) was raised and deferred to v2 the same day — Jira already ships those charts.
+- Mapped to phases: 46/46 ✓ (UX-01 is cross-cutting by nature and maps to every frontend phase rather than one)
 - Unmapped: 0 ✓
 
 ### Document chrome (added 2026-07-31)
 
-TMPL-07, TMPL-08 and DOC-08 close a real gap: every earlier TMPL requirement covered only
+TMPL-08, TMPL-09 and DOC-08 close a real gap: every earlier TMPL requirement covered only
 **body content and placeholders**, and nothing specified cover pages, running headers, footers
 or page numbering.
 
@@ -186,7 +225,7 @@ Decisions taken with the release manager:
   view-model TMPL-02 already constrains.
 - **Cover page is a per-template toggle**, so no assumption is baked in about which document
   types need one.
-- **A logo can be uploaded** (TMPL-08).
+- **A logo can be uploaded** (TMPL-09).
 
 Implementation consequence worth carrying into Phase 5: **PDF and DOCX share no mechanism for
 chrome.** PDF uses CSS `@page` with `counter(page)`/`counter(pages)` via openhtmltopdf; DOCX
@@ -194,7 +233,7 @@ uses per-section header/footer parts with `PAGE`/`NUMPAGES` field codes via docx
 worded as "visually equivalent" rather than "both present" because two independent renderers
 drifting apart is the likely failure, and it needs asserting.
 
-Security note for TMPL-08: restrict uploads to **raster formats (PNG/JPEG) and reject SVG.**
+Security note for TMPL-09: restrict uploads to **raster formats (PNG/JPEG) and reject SVG.**
 SVG is XML and can carry script and external entity references; openhtmltopdf's SVG support
 would process it. Template source is already untrusted input by project constraint, and an
 uploaded image is the same class of input — validate type by content rather than by extension,
