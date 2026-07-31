@@ -39,6 +39,8 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [ ] **TMPL-04**: System validates a template when it is saved by rendering it against a sample context that includes a ticket with no linked code, and reports unknown placeholders as errors rather than silently blanking them at generation time
 - [ ] **TMPL-05**: Template rendering is bounded by an execution timeout and a collection-size limit, so no template can hang or exhaust the server
 - [ ] **TMPL-06**: Release manager can preview a template against a real selected release's actual data while editing
+- [ ] **TMPL-07**: Release manager can define a template's document chrome through structured fields — cover page on/off, cover title and subtitle, running header text, footer text, and page numbering — each accepting the same `{{ }}` placeholders as the body, so no new expression surface is introduced
+- [ ] **TMPL-08**: Release manager can upload and manage a logo image for use in document chrome, restricted to raster formats with validated type, size and dimensions
 
 ### Document Generation
 
@@ -49,6 +51,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [ ] **DOC-05**: Release manager can export any generated document as PDF
 - [ ] **DOC-06**: Release manager can export any generated document as DOCX
 - [ ] **DOC-07**: Each generated document is stored as an immutable snapshot recording the template version, content and generation timestamp, so regenerating creates a new revision instead of altering the previous one
+- [ ] **DOC-08**: Both the PDF and DOCX export of a document render that template's cover page, running header, footer and page numbering, with the two formats visually equivalent rather than merely both present
 
 ### Azure DevOps Enrichment
 
@@ -140,6 +143,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | TMPL-04 | Phase 4 | Pending |
 | TMPL-05 | Phase 4 | Pending |
 | TMPL-06 | Phase 4 | Pending |
+| TMPL-07 | Phase 4 | Pending |
+| TMPL-08 | Phase 4 | Pending |
 | DOC-01 | Phase 5 | Pending |
 | DOC-02 | Phase 5 | Pending |
 | DOC-03 | Phase 5 | Pending |
@@ -147,6 +152,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | DOC-05 | Phase 5 | Pending |
 | DOC-06 | Phase 5 | Pending |
 | DOC-07 | Phase 5 | Pending |
+| DOC-08 | Phase 5 | Pending |
 | ADO-01 | Phase 6 | Pending |
 | ADO-02 | Phase 6 | Pending |
 | ADO-03 | Phase 6 | Pending |
@@ -161,9 +167,38 @@ Which phases cover which requirements. Populated during roadmap creation.
 | AUDIT-03 | Phase 7 | Pending |
 
 **Coverage:**
-- v1 requirements: 40 total (AUTH 4 + JIRA 6 + REL 5 + TMPL 6 + DOC 7 + ADO 5 + DEPL 4 + AUDIT 3) — confirmed 2026-07-27, supersedes the "37" originally stated here
-- Mapped to phases: 40/40 ✓
+- v1 requirements: 43 total (AUTH 4 + JIRA 6 + REL 5 + TMPL 8 + DOC 8 + ADO 5 + DEPL 4 + AUDIT 3) — was 40; TMPL-07, TMPL-08 and DOC-08 added 2026-07-31 for document chrome
+- Mapped to phases: 43/43 ✓
 - Unmapped: 0 ✓
+
+### Document chrome (added 2026-07-31)
+
+TMPL-07, TMPL-08 and DOC-08 close a real gap: every earlier TMPL requirement covered only
+**body content and placeholders**, and nothing specified cover pages, running headers, footers
+or page numbering.
+
+Decisions taken with the release manager:
+
+- **Structured fields, not free-form chrome templates.** A form per template (cover on/off,
+  title, subtitle, header text, footer text, page-number toggle), each field accepting the
+  same `{{ }}` placeholders as the body. Chosen for reliable PDF/DOCX parity and because it
+  adds **no new template-injection surface** — the placeholders resolve against the same fixed
+  view-model TMPL-02 already constrains.
+- **Cover page is a per-template toggle**, so no assumption is baked in about which document
+  types need one.
+- **A logo can be uploaded** (TMPL-08).
+
+Implementation consequence worth carrying into Phase 5: **PDF and DOCX share no mechanism for
+chrome.** PDF uses CSS `@page` with `counter(page)`/`counter(pages)` via openhtmltopdf; DOCX
+uses per-section header/footer parts with `PAGE`/`NUMPAGES` field codes via docx4j. DOC-08 is
+worded as "visually equivalent" rather than "both present" because two independent renderers
+drifting apart is the likely failure, and it needs asserting.
+
+Security note for TMPL-08: restrict uploads to **raster formats (PNG/JPEG) and reject SVG.**
+SVG is XML and can carry script and external entity references; openhtmltopdf's SVG support
+would process it. Template source is already untrusted input by project constraint, and an
+uploaded image is the same class of input — validate type by content rather than by extension,
+and bound dimensions and byte size.
 
 ### Evidence notes for Phase 1 requirements
 

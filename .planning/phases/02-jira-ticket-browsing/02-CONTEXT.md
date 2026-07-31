@@ -123,9 +123,19 @@ JIRA-03 ("the complete ticket set matching a filter, with paging handled to exha
 than silently truncating at the first page") is the requirement that makes cursor pagination
 non-optional. Silent truncation is the specific failure mode to test for.
 
-## Open inputs still needed
+## Inputs supplied (2026-07-31)
 
-1. **A Jira ticket key with known ADO commits or PRs**, for capturing a real `dev-status`
-   response as a contract-test fixture.
-2. **Project key(s)** the release manager actually assembles releases from, for realistic
-   verification.
+- **Project key: `CNV`** — the project releases are assembled from. Use it for all realistic
+  verification: fix-version listing, ticket browsing, pagination-to-exhaustion.
+- **Spike fixture ticket: `CNV-2896`** — confirmed by the release manager to have an Azure
+  DevOps connection.
+  `https://evisionegypt.atlassian.net/browse/CNV-2896`
+
+  The link-discovery spike captures this ticket's real
+  `/rest/dev-status/1.0/issue/detail` response, redacts identifying values, and stores it as
+  the WireMock contract fixture. Capture the **raw response verbatim first** — the point is to
+  learn the actual shape, so do not normalise or reshape it before recording what came back.
+
+  Also record, because Phase 6 depends on all three: which `detail` branches are populated
+  (repository / branch / commit / pullrequest), the ADO organisation and repository names as
+  they appear, and whether commit and PR data arrive in one call or need follow-up requests.
