@@ -53,6 +53,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [ ] **DOC-06**: Release manager can export any generated document as DOCX
 - [ ] **DOC-07**: Each generated document is stored as an immutable snapshot recording the template version, content and generation timestamp, so regenerating creates a new revision instead of altering the previous one
 - [ ] **DOC-08**: Both the PDF and DOCX export of a document render that template's cover page, running header, footer and page numbering, with the two formats visually equivalent rather than merely both present
+- [ ] **DOC-09**: Release manager can see across all releases which of the three documents have been generated, which are **stale** relative to the release's current ticket set, and which were never generated — so outstanding release paperwork is visible without opening each release one at a time
 
 ### Azure DevOps Enrichment
 
@@ -105,33 +106,27 @@ Deferred to future release. Tracked but not in the current roadmap.
 - **PROV-01**: Additional ticket-source providers (Azure DevOps Boards, GitHub Issues, GitLab) implemented against the existing provider abstraction
 - **PROV-02**: Per-application configurable environment ladders rather than one standard ladder
 
-### Analytics
+### Analytics — dropped, not deferred
 
-Deferred 2026-07-31. Jira already ships velocity, control and sprint-report charts, so building
-these duplicates a tool the team has. Scoped here so the intent is not lost, and because the
-integration cost is the real reason to defer rather than the UI cost.
+**Dropped 2026-07-31, deliberately and with reasoning recorded**, so nobody rebuilds them later
+without revisiting this.
 
-- **ANLY-01**: Analytics dashboard showing velocity, cycle time and scope change for a selected project and time window
-- **ANLY-02**: **Velocity** — story points completed per sprint across recent sprints, with the trend visible
-- **ANLY-03**: **Cycle time** — distribution and median time from work-started to done, computed from status-transition history rather than created/resolved dates
-- **ANLY-04**: **Scope change** — tickets added to or removed from a sprint after it started
-- **ANLY-05**: Metric definitions configurable rather than hardcoded — which field carries story points, which statuses count as work-started and done — because these differ per Jira project
-- **ANLY-06**: Graceful degradation when the data does not exist — no board, Kanban with no sprints, or no story-point field — rather than an empty or misleading chart
+Velocity, cycle time and sprint scope change were briefly scoped as `ANLY-01..06` and then
+removed. Jira already ships those reports and ships them well. Rebuilding them would have cost
+a whole new Jira integration surface — the **Agile API** (`/rest/agile/1.0/board`, `/sprint`)
+for boards and sprints, plus paginated `/changelog` for status transitions, plus the
+story-point custom-field path that Phase 2 explicitly deferred (D-02-02) — to produce a worse
+version of a report the team can already open.
 
-**What this would cost, recorded now so a future decision is informed:**
+**The positioning that replaced them:** this tool sits *beside* Jira, and its dashboards must
+answer what Jira structurally **cannot** — questions about release documentation, the
+environment ladder and promotion history, none of which Jira models at all. That is `DOC-09`,
+and unlike the dropped metrics it reads entirely from this system's own database and needs no
+new Jira integration.
 
-- **A new Jira integration surface.** Velocity and scope change need the **Agile API**
-  (`/rest/agile/1.0/board`, `/sprint`) — boards and sprints, concepts this system does not
-  otherwise model. Cycle time needs **status-transition history** from the paginated
-  `/changelog` endpoint; `expand=changelog` silently truncates around 100 entries, which is
-  already a documented project constraint.
-- **It forces the custom-field path.** Story points are a custom field
-  (`customfield_NNNNN`, varying per site), so ANLY-02 is the first requirement that genuinely
-  exercises JIRA-04's resolve-by-name mechanism. Phase 2 deliberately deferred custom fields
-  (D-02-02), so this is not free.
-- **ANLY-04 overlaps v2's REL-06.** REL-06 is scope change against a *release freeze*;
-  ANLY-04 is scope change against a *sprint start*. Related but not the same question. If both
-  are ever built, unify the underlying diff rather than writing it twice.
+The one genuinely release-relevant idea from the dropped set survives as v2's **REL-06**
+(scope change against a *release freeze*, not a sprint start) — a diff Jira cannot compute,
+because it has fix versions but no freeze snapshot to diff against.
 
 ## Out of Scope
 
@@ -190,6 +185,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | DOC-06 | Phase 5 | Pending |
 | DOC-07 | Phase 5 | Pending |
 | DOC-08 | Phase 5 | Pending |
+| DOC-09 | Phase 5 | Pending |
 | ADO-01 | Phase 6 | Pending |
 | ADO-02 | Phase 6 | Pending |
 | ADO-03 | Phase 6 | Pending |
@@ -206,8 +202,8 @@ Which phases cover which requirements. Populated during roadmap creation.
 | UX-01 | Phases 2-7 (cross-cutting) | Pending |
 
 **Coverage:**
-- v1 requirements: 46 total (AUTH 4 + JIRA 6 + REL 6 + TMPL 8 + DOC 8 + ADO 5 + DEPL 4 + AUDIT 4 + UX 1) — was 40; added 2026-07-31: TMPL-08/TMPL-09/DOC-08 (document chrome), REL-08 (manual release items), AUDIT-04 (cross-release deployment history), UX-01 (drag-and-drop). Analytics (ANLY-01..06) was raised and deferred to v2 the same day — Jira already ships those charts.
-- Mapped to phases: 46/46 ✓ (UX-01 is cross-cutting by nature and maps to every frontend phase rather than one)
+- v1 requirements: 47 total (AUTH 4 + JIRA 6 + REL 6 + TMPL 8 + DOC 9 + ADO 5 + DEPL 4 + AUDIT 4 + UX 1) — was 40; added 2026-07-31: TMPL-08/TMPL-09/DOC-08 (document chrome), REL-08 (manual release items), AUDIT-04 (cross-release deployment history), UX-01 (drag-and-drop). Plus DOC-09 (cross-release documentation readiness). Analytics (ANLY-01..06) was raised and then DROPPED the same day — Jira ships those reports; this tool must answer what Jira cannot.
+- Mapped to phases: 47/47 ✓ (UX-01 is cross-cutting by nature and maps to every frontend phase rather than one)
 - Unmapped: 0 ✓
 
 ### Document chrome (added 2026-07-31)

@@ -38,6 +38,7 @@ Given a set of Jira tickets, produce accurate and consistent release documentati
 - Azure DevOps work-item mirroring — only commits and PRs are linked
 - Ingesting Azure DevOps build/pipeline run status — deferred; deployment state is recorded in this tool, not read from ADO
 - Per-application configurable environment paths — one standard ladder in v1
+- Rebuilding Jira's own agile reports — velocity, cycle time, sprint burndown, sprint scope change. This tool sits *beside* Jira, not over it: Jira ships those reports and ships them well, and rebuilding them would cost a whole new integration surface (Agile API for boards/sprints, paginated `/changelog` for transitions, the story-point custom field) to produce a worse version of something already available. **Dashboards here must answer what Jira structurally cannot** — release documentation status, environment-ladder position, promotion history — all of which live in this system's own database because Jira does not model them at all.
 
 ## Context
 
