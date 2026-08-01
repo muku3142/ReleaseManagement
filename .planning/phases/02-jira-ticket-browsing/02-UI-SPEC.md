@@ -164,4 +164,44 @@ Replaces the table area with `role="alert" data-reason={reason}` red-600 text (s
 - [ ] Dimension 5 Spacing: PASS
 - [ ] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** APPROVED by gsd-ui-checker, 2026-08-01 — 6/6 dimensions pass. Two FLAGs and one
+accessibility gap raised, all non-blocking, all folded into the binding requirements below.
+
+## Checker follow-ups — BINDING, not optional
+
+Recorded here rather than left as executor notes, because accessibility items passed along
+informally are the ones that get dropped. **UX-01 mandates keyboard accessibility**, so items
+2 and 3 are requirements, not polish.
+
+1. **Primary visual anchor (Dimension 2 FLAG).** The **ticket table is the primary visual
+   anchor** of the `/tickets` screen. The project and fix-version pickers are subordinate
+   controls that feed it. Stated explicitly so the executor does not have to infer hierarchy
+   from colour and spacing alone.
+
+2. **Row-expand button needs an accessible name (Dimension 2 FLAG).** The `▸`/`▾` expand
+   toggle is icon-only, so `aria-expanded` alone leaves it unnamed for screen-reader users.
+   It MUST carry `aria-label="Expand ticket details"` / `"Collapse ticket details"`, toggling
+   in step with `aria-expanded`. A glyph is not an accessible name.
+
+3. **Selection counter must be announced (phase-specific check 7).** The live `{n} selected`
+   indicator MUST sit in an `aria-live="polite"` region (or carry `role="status"`). Without it
+   a keyboard or screen-reader user gets no feedback at all when checking rows, while a sighted
+   user sees the count change — the exact asymmetry UX-01 exists to prevent. This is a defect,
+   not a nicety.
+
+4. **Spacing exception (Dimension 5 FLAG) — no action.** The 12px (`gap-3`/`space-y-3`) value
+   is grid-aligned (a multiple of 4) and carried forward from Phase 1's existing `AppShell` and
+   `LoginRoute` rather than newly introduced. Left as-is deliberately; fold it into the named
+   scale in a later phase only if it recurs enough to be load-bearing.
+
+## Planning input — new reason code required
+
+The pagination **safety-ceiling breach** (token-chaining hits its hard page limit) currently
+falls back to the generic `JIRA_ERROR` copy. That is a materially different situation from
+"Jira returned an error", and the generic message would send the release manager looking in the
+wrong place entirely.
+
+The planner should add a dedicated `reason` code for it — extending `JiraAuthFailureReason` and
+the `messageForReason` table, per the Phase 1 error contract — with copy that says the result
+set was too large to load completely and suggests narrowing the filter. Every other
+`JIRA-06` reason code already exists verbatim from Phase 1 and needs no new entry.
