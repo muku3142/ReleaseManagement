@@ -60,6 +60,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                     "Token belongs to a different Jira account",
                     "That API token authenticates as a different Jira account than the one you are signed in as. Sign out and sign in again with that account.",
                     "ACCOUNT_MISMATCH");
+            case RESULT_SET_TOO_LARGE -> problem(HttpStatus.UNPROCESSABLE_ENTITY,
+                    "Too many matching tickets",
+                    "This query matched too many tickets to load. Narrow your fix version or JQL filter.",
+                    "RESULT_SET_TOO_LARGE");
         };
     }
 

@@ -7,5 +7,6 @@ public enum JiraAuthFailureReason {
     JIRA_UNREACHABLE,
     JIRA_ERROR,
     SITE_NOT_CONFIGURED,
-    ACCOUNT_MISMATCH
+    ACCOUNT_MISMATCH,
+    RESULT_SET_TOO_LARGE
 }

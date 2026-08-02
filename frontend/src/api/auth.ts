@@ -68,6 +68,7 @@ const REASON_MESSAGES: Record<string, string> = {
   JIRA_RATE_LIMITED: 'Jira is rate-limiting requests. Wait a moment and try again.',
   JIRA_FORBIDDEN: 'That Jira account is not permitted to access the configured site.',
   JIRA_ERROR: 'Jira returned an unexpected error. Try again shortly.',
+  RESULT_SET_TOO_LARGE: 'This query matched too many tickets to load. Narrow your fix version or JQL filter.',
   SESSION_EXPIRED: 'Your session has ended. Sign in again.',
   INVALID_SESSION: 'Your session has ended. Sign in again.',
   UNAUTHENTICATED: 'Your session has ended. Sign in again.',

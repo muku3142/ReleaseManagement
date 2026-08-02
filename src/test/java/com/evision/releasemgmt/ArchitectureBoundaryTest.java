@@ -19,7 +19,7 @@ class ArchitectureBoundaryTest {
         ArchRule rule = noClasses()
                 .that().resideInAnyPackage("..domain..", "..ports..")
                 .should().dependOnClassesThat()
-                .resideInAnyPackage("org.springframework..", "jakarta..", "org.hibernate..", "com.fasterxml.jackson..")
+                .resideInAnyPackage("org.springframework..", "jakarta..", "org.hibernate..", "com.fasterxml.jackson..", "tools.jackson..")
                 .allowEmptyShould(true);
         rule.check(classes);
     }

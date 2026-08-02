@@ -29,6 +29,9 @@ app:
     default-base-url: ${RM_JIRA_DEFAULT_BASE_URL:https://example.atlassian.net}
     connect-timeout: PT5S
     read-timeout: PT10S
+    search:
+      page-size: 100
+      max-pages: 50
   credential:
     key: ${RM_CREDENTIAL_KEY}
     key-version: ${RM_CREDENTIAL_KEY_VERSION:1}

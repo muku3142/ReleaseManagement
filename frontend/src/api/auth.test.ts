@@ -18,6 +18,7 @@ describe('messageForReason', () => {
       'JIRA_RATE_LIMITED',
       'SITE_NOT_CONFIGURED',
       'ACCOUNT_MISMATCH',
+      'RESULT_SET_TOO_LARGE',
       'SOMETHING_UNKNOWN',
     ];
     const messages = reasons.map((reason) => messageForReason({ status: 401, reason }));
