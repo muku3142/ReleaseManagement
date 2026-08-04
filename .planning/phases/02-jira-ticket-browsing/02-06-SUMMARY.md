@@ -75,7 +75,7 @@ None.
 
 ## Known Stubs
 
-The **"Advanced: edit as JQL"** escape hatch from D-02-01 is referenced in the empty-state copy but the control itself does not exist yet — `useTicketSearch` already accepts `{mode: 'jql'}` and the backend already serves it, so only the UI affordance is missing. It is not in plan 07's scope either, so JIRA-02's third filter dimension has backend and client support but no UI. This needs a follow-up before JIRA-02 can be ticked.
+The **"Advanced: edit as JQL"** escape hatch from D-02-01 is referenced in the empty-state copy but the control itself does not exist yet — `useTicketSearch` already accepts `{mode: 'jql'}` and the backend already serves it, so only the UI affordance is missing. **Plan 07 task 2 builds it**, closing JIRA-02's third filter dimension; no follow-up outside this phase is needed.
 
 The expand-row toggle and the description/comments detail panel are plan 07's work; the table's first column is a checkbox and there is deliberately no expand column yet.
 
