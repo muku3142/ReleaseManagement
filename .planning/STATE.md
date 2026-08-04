@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 2 plan 02-04 blocked on human dev-status capture
+stopped_at: Phase 2 parked at 6/7 (02-04 deferred); starting Phase 3
 last_updated: "2026-08-04T11:00:00.000Z"
-last_activity: 2026-08-04 -- Phase 02 waves 1-5 complete; only 02-04 (human gate) remains
+last_activity: 2026-08-04 -- sprint filtering confirmed live; moving to Phase 3
 progress:
   total_phases: 7
   completed_phases: 0
@@ -25,13 +25,30 @@ See: .planning/PROJECT.md (updated 2026-07-27)
 
 ## Current Position
 
-Phase: 02 (jira-ticket-browsing) — EXECUTING (6/7 plans)
-Plan: 02-04 is the only plan left. It is `autonomous: false` — a blocking
+Phase: 02 (jira-ticket-browsing) — 6/7 plans, functionally verified live by the user
+Plan: 02-04 is DEFERRED, not done. It is `autonomous: false` — a blocking
 human-action checkpoint needing a live Jira API token to capture CNV-2896's
 dev-status response. Waves 1-5 are complete: 02-01, 02-02, 02-03, 02-05,
-02-06, 02-07.
-Status: BLOCKED on human input for 02-04
-Last activity: 2026-08-04 -- Phase 02 waves 1-5 complete (207 backend + 22 frontend tests green)
+02-06, 02-07. The user confirmed the /tickets screen works against the real
+tenant (projects, sprints, search, table) and elected to move to Phase 3 with
+02-04 outstanding.
+
+**Phase 2 is NOT formally complete.** Outstanding before it can be closed:
+- 02-04 dev-status capture (needs a human with a live token). Phase 6 cannot be
+  scoped until this resolves — that dependency is unchanged.
+- JIRA-02..07 are still `Pending` in REQUIREMENTS.md. Deliberately not ticked:
+  JIRA-03 (paging to exhaustion) is proven by WireMock only, never against a
+  >100-ticket real result set, and the evidence-notes discipline from Phase 1
+  says not to tick on a passing suite alone.
+
+Post-plan changes landed after their plans were marked complete (all recorded in
+the relevant summaries): JIRA-07 status filter, fix version made optional then
+replaced entirely by **sprint** (brings Jira's Agile API into scope, reversing
+part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
+names, table widening, and frontend tests moved to `frontend/tests/`.
+
+Status: Phase 2 parked at 6/7; moving to Phase 3 (Release Assembly)
+Last activity: 2026-08-04 -- sprint filtering confirmed working on the live tenant
 
 Progress: [████████░░] 86%
 
