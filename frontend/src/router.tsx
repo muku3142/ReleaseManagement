@@ -2,6 +2,7 @@ import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/
 import { AppShell } from './components/AppShell';
 import { DashboardRoute } from './routes/DashboardRoute';
 import { SettingsRoute } from './routes/SettingsRoute';
+import { TicketsRoute } from './routes/TicketsRoute';
 import { LoginRoute } from './routes/LoginRoute';
 import { fetchSessionOrNull } from './api/auth';
 import { queryClient } from './api/queryClient';
@@ -43,8 +44,14 @@ const settingsRoute = createRoute({
   component: SettingsRoute,
 });
 
+const ticketsRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/tickets',
+  component: TicketsRoute,
+});
+
 const routeTree = rootRoute.addChildren([
-  authenticatedRoute.addChildren([dashboardRoute, settingsRoute]),
+  authenticatedRoute.addChildren([dashboardRoute, ticketsRoute, settingsRoute]),
   loginRoute,
 ]);
 

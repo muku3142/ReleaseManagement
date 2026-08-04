@@ -40,6 +40,13 @@ export function AppShell() {
             Dashboard
           </Link>
           <Link
+            to="/tickets"
+            className="text-gray-600 hover:text-gray-900"
+            activeProps={{ className: 'font-semibold text-gray-900' }}
+          >
+            Tickets
+          </Link>
+          <Link
             to="/settings"
             className="text-gray-600 hover:text-gray-900"
             activeProps={{ className: 'font-semibold text-gray-900' }}
