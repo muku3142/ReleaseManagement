@@ -44,7 +44,7 @@ public class JiraFieldMetadataAdapter implements JiraFieldMetadataPort {
             }
             List<JiraField> fields = new ArrayList<>(body.length);
             for (JiraFieldPayload payload : body) {
-                fields.add(new JiraField(payload.id(), payload.name()));
+                fields.add(new JiraField(payload.id(), payload.name(), payload.custom()));
             }
             return fields;
         } catch (HttpClientErrorException.Unauthorized e) {

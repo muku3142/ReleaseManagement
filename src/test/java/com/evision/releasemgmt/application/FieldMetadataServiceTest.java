@@ -34,15 +34,15 @@ class FieldMetadataServiceTest {
     private FieldMetadataService service;
 
     private static final List<JiraField> SYSTEM_FIELDS = List.of(
-            new JiraField("summary", "Summary"),
-            new JiraField("issuetype", "Issue Type"),
-            new JiraField("status", "Status"),
-            new JiraField("resolution", "Resolution"),
-            new JiraField("assignee", "Assignee"),
-            new JiraField("reporter", "Reporter"),
-            new JiraField("description", "Description"),
-            new JiraField("comment", "Comment"),
-            new JiraField("fixVersions", "Fix versions"));
+            new JiraField("summary", "Summary", false),
+            new JiraField("issuetype", "Issue Type", false),
+            new JiraField("status", "Status", false),
+            new JiraField("resolution", "Resolution", false),
+            new JiraField("assignee", "Assignee", false),
+            new JiraField("reporter", "Reporter", false),
+            new JiraField("description", "Description", false),
+            new JiraField("comment", "Comment", false),
+            new JiraField("fixVersions", "Fix versions", false));
 
     @BeforeEach
     void setUp() {
@@ -76,7 +76,7 @@ class FieldMetadataServiceTest {
     @Test
     void resolutionIsCaseAndWhitespaceInsensitiveOnDisplayName() {
         stubAccess();
-        when(fieldMetadataPort.fetchAllFields(any())).thenReturn(List.of(new JiraField("fixVersions", "  fix VERSIONS  ")));
+        when(fieldMetadataPort.fetchAllFields(any())).thenReturn(List.of(new JiraField("fixVersions", "  fix VERSIONS  ", false)));
 
         Map<TicketField, String> resolved = service.resolve(Set.of(TicketField.FIX_VERSIONS));
 
@@ -97,7 +97,7 @@ class FieldMetadataServiceTest {
     @Test
     void nameAbsentFromMetadataTriggersExactlyOneRefreshThenThrows() {
         stubAccess();
-        when(fieldMetadataPort.fetchAllFields(any())).thenReturn(List.of(new JiraField("issuetype", "Issue Type")));
+        when(fieldMetadataPort.fetchAllFields(any())).thenReturn(List.of(new JiraField("issuetype", "Issue Type", false)));
 
         assertThatThrownBy(() -> service.resolve(Set.of(TicketField.SUMMARY)))
                 .isInstanceOf(JiraTicketReadException.class);
@@ -108,17 +108,17 @@ class FieldMetadataServiceTest {
     void duplicateNameNotRequestedDoesNotThrow() {
         stubAccess();
         List<JiraField> withCollision = List.of(
-                new JiraField("summary", "Summary"),
-                new JiraField("issuetype", "Issue Type"),
-                new JiraField("status", "Status"),
-                new JiraField("resolution", "Resolution"),
-                new JiraField("assignee", "Assignee"),
-                new JiraField("reporter", "Reporter"),
-                new JiraField("description", "Description"),
-                new JiraField("comment", "Comment"),
-                new JiraField("fixVersions", "Fix versions"),
-                new JiraField("customfield_10001", "Story Points"),
-                new JiraField("customfield_10002", "Story Points"));
+                new JiraField("summary", "Summary", false),
+                new JiraField("issuetype", "Issue Type", false),
+                new JiraField("status", "Status", false),
+                new JiraField("resolution", "Resolution", false),
+                new JiraField("assignee", "Assignee", false),
+                new JiraField("reporter", "Reporter", false),
+                new JiraField("description", "Description", false),
+                new JiraField("comment", "Comment", false),
+                new JiraField("fixVersions", "Fix versions", false),
+                new JiraField("customfield_10001", "Story Points", true),
+                new JiraField("customfield_10002", "Story Points", true));
         when(fieldMetadataPort.fetchAllFields(any())).thenReturn(withCollision);
 
         Map<TicketField, String> resolved = service.resolve(Set.of(TicketField.values()));
@@ -127,14 +127,70 @@ class FieldMetadataServiceTest {
     }
 
     @Test
-    void duplicateNameRequestedThrows() {
+    void systemFieldWinsWhenCustomFieldsShadowItsName() {
         stubAccess();
         List<JiraField> withCollision = List.of(
-                new JiraField("summary", "Summary"),
-                new JiraField("customfield_10099", "Summary"));
+                new JiraField("summary", "Summary", false),
+                new JiraField("customfield_10099", "Summary", true));
         when(fieldMetadataPort.fetchAllFields(any())).thenReturn(withCollision);
+
+        Map<TicketField, String> resolved = service.resolve(Set.of(TicketField.SUMMARY));
+
+        assertThat(resolved).containsEntry(TicketField.SUMMARY, "summary");
+    }
+
+    @Test
+    void resolvesTheEvisionTenantsThreeWayResolutionCollision() {
+        // Verbatim from the live tenant: 'Resolution' resolved to three ids and blocked every
+        // search with JIRA_ERROR until the system field was allowed to win.
+        stubAccess();
+        List<JiraField> tenantFields = List.of(
+                new JiraField("summary", "Summary", false),
+                new JiraField("issuetype", "Issue Type", false),
+                new JiraField("status", "Status", false),
+                new JiraField("resolution", "Resolution", false),
+                new JiraField("customfield_11864", "Resolution", true),
+                new JiraField("customfield_11863", "Resolution", true),
+                new JiraField("assignee", "Assignee", false),
+                new JiraField("reporter", "Reporter", false),
+                new JiraField("description", "Description", false),
+                new JiraField("comment", "Comment", false),
+                new JiraField("fixVersions", "Fix versions", false));
+        when(fieldMetadataPort.fetchAllFields(any())).thenReturn(tenantFields);
+
+        Map<TicketField, String> resolved = service.resolve(Set.of(TicketField.values()));
+
+        assertThat(resolved).hasSize(9);
+        assertThat(resolved).containsEntry(TicketField.RESOLUTION, "resolution");
+    }
+
+    @Test
+    void customOnlyCollisionStillRefusesToGuess() {
+        stubAccess();
+        // No system field to fall back on: this is the silent-wrong-field risk the guard exists
+        // for, and it must still fail rather than pick one.
+        List<JiraField> ambiguous = List.of(
+                new JiraField("customfield_10098", "Summary", true),
+                new JiraField("customfield_10099", "Summary", true));
+        when(fieldMetadataPort.fetchAllFields(any())).thenReturn(ambiguous);
 
         assertThatThrownBy(() -> service.resolve(Set.of(TicketField.SUMMARY)))
                 .isInstanceOf(JiraTicketReadException.class);
+    }
+
+    @Test
+    void reportsEveryUnresolvableFieldNotJustTheFirst() {
+        stubAccess();
+        // Only three of the nine names exist. The thrown failure must not stop at the first.
+        List<JiraField> sparse = List.of(
+                new JiraField("summary", "Summary", false),
+                new JiraField("issuetype", "Issue Type", false),
+                new JiraField("status", "Status", false));
+        when(fieldMetadataPort.fetchAllFields(any())).thenReturn(sparse);
+
+        assertThatThrownBy(() -> service.resolve(Set.of(TicketField.values())))
+                .isInstanceOf(JiraTicketReadException.class);
+        // One refresh attempt per missing name, then a single throw — not nine separate calls.
+        verify(fieldMetadataPort, times(7)).fetchAllFields(any());
     }
 }

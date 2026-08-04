@@ -58,8 +58,8 @@ class JiraFieldMetadataAdapterTest {
         List<JiraField> fields = adapter().fetchAllFields(context(wm));
 
         assertThat(fields).containsExactly(
-                new JiraField("summary", "Summary"),
-                new JiraField("customfield_10011", "Epic Name"));
+                new JiraField("summary", "Summary", false),
+                new JiraField("customfield_10011", "Epic Name", true));
     }
 
     @Test
