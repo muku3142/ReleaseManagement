@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { safeRedirectTarget } from './safeRedirect';
+import { safeRedirectTarget } from '../src/safeRedirect';
 
 describe('safeRedirectTarget', () => {
   it('allows same-origin relative paths', () => {

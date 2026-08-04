@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
-import { apiFetch, ApiError } from './client';
-import { clearCredentialInvalid, useCredentialInvalid } from './credentialStatus';
+import { apiFetch, ApiError } from '../../src/api/client';
+import { clearCredentialInvalid, useCredentialInvalid } from '../../src/api/credentialStatus';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {

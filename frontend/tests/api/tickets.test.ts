@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiFetch } from './client';
+import { ApiError, apiFetch } from '../../src/api/client';
 import {
   DEFAULT_STATUS_CATEGORIES,
   toSearchBody,
   type TicketSearchResponse,
-} from './tickets';
+} from '../../src/api/tickets';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {

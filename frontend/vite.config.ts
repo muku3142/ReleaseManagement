@@ -13,5 +13,7 @@ export default defineConfig({
       '/actuator': { target: 'http://localhost:8080', changeOrigin: false },
     },
   },
-  test: { environment: 'jsdom' },
+  // Tests live under tests/ rather than beside the modules they cover, so src/ stays
+  // production-only and the build never has to exclude test files.
+  test: { environment: 'jsdom', include: ['tests/**/*.test.ts?(x)'] },
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { apiFetch, ApiError } from './client';
-import { messageForReason } from './auth';
+import { apiFetch, ApiError } from '../../src/api/client';
+import { messageForReason } from '../../src/api/auth';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
