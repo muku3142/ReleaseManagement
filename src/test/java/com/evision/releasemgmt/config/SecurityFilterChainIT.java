@@ -18,6 +18,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -107,6 +108,27 @@ class SecurityFilterChainIT {
     @Test
     void actuatorHealthIsPublic() throws Exception {
         mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void ticketSearchWithoutAuthenticationIsUnauthorized() throws Exception {
+        // Full-filter-chain proof that /api/tickets/** did NOT inherit the public
+        // GET /api/settings/jira-site carve-out.
+        mockMvc.perform(post("/api/tickets/search")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"projectId\":\"10023\",\"fixVersionId\":\"10891\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.reason").value("UNAUTHENTICATED"));
+    }
+
+    @Test
+    void ticketsClientSideRouteServesIndexHtml() throws Exception {
+        // SpaForwardingController's ^(?!api|actuator)[^.]* regex must forward the new deep link,
+        // so a hard refresh on /tickets survives.
+        mockMvc.perform(get("/tickets"))
                 .andExpect(status().isOk());
     }
 }
