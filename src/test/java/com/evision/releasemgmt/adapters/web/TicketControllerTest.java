@@ -57,14 +57,14 @@ class TicketControllerTest {
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"projectId\":\"10023\",\"fixVersionId\":\"10891\"}"))
+                        .content("{\"projectId\":\"10023\",\"sprintId\":\"10891\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tickets[0].key").value("CNV-1"));
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
         verify(service).search(criteria.capture());
         assertThat(criteria.getValue().toJql())
-                .isEqualTo("project = 10023 AND fixVersion = 10891 AND statusCategory IN (\"Done\") ORDER BY key ASC");
+                .isEqualTo("project = 10023 AND sprint = 10891 AND statusCategory IN (\"Done\") ORDER BY key ASC");
     }
 
     @Test
@@ -85,7 +85,7 @@ class TicketControllerTest {
     void bothFilterModesIsRejectedBeforeAnyJiraCall() throws Exception {
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"projectId\":\"10023\",\"fixVersionId\":\"10891\",\"jql\":\"project = CNV\"}"))
+                        .content("{\"projectId\":\"10023\",\"sprintId\":\"10891\",\"jql\":\"project = CNV\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
 
@@ -105,7 +105,7 @@ class TicketControllerTest {
     void nonNumericProjectIdIsRejectedWithFieldError() throws Exception {
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"projectId\":\"CNV\",\"fixVersionId\":\"10891\"}"))
+                        .content("{\"projectId\":\"CNV\",\"sprintId\":\"10891\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.projectId").exists());
 
@@ -113,7 +113,7 @@ class TicketControllerTest {
     }
 
     @Test
-    void projectWithoutFixVersionIsAValidSearch() throws Exception {
+    void projectWithoutSprintIsAValidSearch() throws Exception {
         when(service.search(any())).thenReturn(List.of(ticket("CNV-1")));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
@@ -128,10 +128,10 @@ class TicketControllerTest {
     }
 
     @Test
-    void fixVersionWithoutProjectIsRejected() throws Exception {
+    void sprintWithoutProjectIsRejected() throws Exception {
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"fixVersionId\":\"10891\"}"))
+                        .content("{\"sprintId\":\"10891\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
 
@@ -139,10 +139,10 @@ class TicketControllerTest {
     }
 
     @Test
-    void fixVersionAlongsideRawJqlIsRejectedRatherThanSilentlyIgnored() throws Exception {
+    void sprintAlongsideRawJqlIsRejectedRatherThanSilentlyIgnored() throws Exception {
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"fixVersionId\":\"10891\",\"jql\":\"project = CNV\"}"))
+                        .content("{\"sprintId\":\"10891\",\"jql\":\"project = CNV\"}"))
                 .andExpect(status().isBadRequest());
 
         verify(service, never()).search(any());
@@ -154,7 +154,7 @@ class TicketControllerTest {
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"projectId\":\"10023\",\"fixVersionId\":\"10891\"}"))
+                        .content("{\"projectId\":\"10023\",\"sprintId\":\"10891\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tickets").isArray())
                 .andExpect(jsonPath("$.tickets").isEmpty());
@@ -167,7 +167,7 @@ class TicketControllerTest {
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"projectId\":\"10023\",\"fixVersionId\":\"10891\"}"))
+                        .content("{\"projectId\":\"10023\",\"sprintId\":\"10891\"}"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.reason").value("RESULT_SET_TOO_LARGE"));
     }
@@ -179,7 +179,7 @@ class TicketControllerTest {
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"projectId\":\"10023\",\"fixVersionId\":\"10891\"}"))
+                        .content("{\"projectId\":\"10023\",\"sprintId\":\"10891\"}"))
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.reason").value("JIRA_RATE_LIMITED"));
     }
@@ -191,7 +191,7 @@ class TicketControllerTest {
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"projectId\":\"10023\",\"fixVersionId\":\"10891\"}"))
+                        .content("{\"projectId\":\"10023\",\"sprintId\":\"10891\"}"))
                 .andExpect(status().isServiceUnavailable());
     }
 
@@ -199,7 +199,7 @@ class TicketControllerTest {
     void unauthenticatedSearchIsRejected() throws Exception {
         mockMvc.perform(post("/api/tickets/search").with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"projectId\":\"10023\",\"fixVersionId\":\"10891\"}"))
+                        .content("{\"projectId\":\"10023\",\"sprintId\":\"10891\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.reason").value("UNAUTHENTICATED"));
@@ -213,7 +213,7 @@ class TicketControllerTest {
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"projectId\":\"10023\",\"fixVersionId\":\"10891\"}"))
+                        .content("{\"projectId\":\"10023\",\"sprintId\":\"10891\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.tickets[0].resolution").isEmpty())
                 .andExpect(jsonPath("$.tickets[0].assignee").isEmpty());
@@ -225,7 +225,7 @@ class TicketControllerTest {
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"projectId\":\"10023\",\"fixVersionId\":\"10891\","
+                        .content("{\"projectId\":\"10023\",\"sprintId\":\"10891\","
                                 + "\"statusCategories\":[\"TO_DO\",\"IN_PROGRESS\"]}"))
                 .andExpect(status().isOk());
 
@@ -239,7 +239,7 @@ class TicketControllerTest {
     void unknownStatusCategoryIsRejectedBeforeAnyJiraCall() throws Exception {
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"projectId\":\"10023\",\"fixVersionId\":\"10891\","
+                        .content("{\"projectId\":\"10023\",\"sprintId\":\"10891\","
                                 + "\"statusCategories\":[\"NOPE\"]}"))
                 .andExpect(status().isBadRequest());
 

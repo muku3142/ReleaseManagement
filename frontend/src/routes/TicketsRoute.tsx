@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { useJiraProjects, useJiraVersions } from '../api/jiraProjects';
+import { useJiraProjects, useJiraSprints } from '../api/jiraProjects';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
 import {
@@ -14,7 +14,7 @@ import {
 
 export function TicketsRoute() {
   const [projectId, setProjectId] = useState('');
-  const [fixVersionId, setFixVersionId] = useState('');
+  const [sprintId, setSprintId] = useState('');
   const [statusCategories, setStatusCategories] = useState<StatusCategory[]>(DEFAULT_STATUS_CATEGORIES);
   const [loaded, setLoaded] = useState<Ticket[] | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
@@ -23,10 +23,10 @@ export function TicketsRoute() {
   const [jql, setJql] = useState('');
   // Which mode produced the current `loaded` value. Deliberately not the live jqlOpen flag,
   // which the user may have toggled since the search ran.
-  const [loadedMode, setLoadedMode] = useState<'fixVersion' | 'jql' | null>(null);
+  const [loadedMode, setLoadedMode] = useState<'project' | 'jql' | null>(null);
 
   const projects = useJiraProjects();
-  const versions = useJiraVersions(projectId);
+  const sprints = useJiraSprints(projectId);
   const search = useTicketSearch();
 
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -40,7 +40,7 @@ export function TicketsRoute() {
 
   function handleProjectChange(event: React.ChangeEvent<HTMLSelectElement>) {
     setProjectId(event.target.value);
-    setFixVersionId('');
+    setSprintId('');
   }
 
   function runSearch() {
@@ -49,14 +49,14 @@ export function TicketsRoute() {
     // VALIDATION_FAILED, and the discriminated union makes that unrepresentable here.
     const criteria: TicketSearchCriteria = usingJql
       ? { mode: 'jql', jql: jql.trim() }
-      : { mode: 'project', projectId, fixVersionId: fixVersionId || null, statusCategories };
+      : { mode: 'project', projectId, sprintId: sprintId || null, statusCategories };
     search.mutate(criteria, {
       onSuccess: (data) => {
         setLoaded(data.tickets);
         // A checkbox pointing at a ticket no longer on screen would misreport what is selected.
         setSelected(new Set());
         setExpandedKey(null);
-        setLoadedMode(usingJql ? 'jql' : 'fixVersion');
+        setLoadedMode(usingJql ? 'jql' : 'project');
       },
     });
   }
@@ -72,23 +72,22 @@ export function TicketsRoute() {
 
   const projectsProblem =
     projects.isError && projects.error instanceof ApiError ? projects.error.problem : undefined;
-  const versionsProblem =
-    versions.isError && versions.error instanceof ApiError ? versions.error.problem : undefined;
+  const sprintsProblem =
+    sprints.isError && sprints.error instanceof ApiError ? sprints.error.problem : undefined;
   const searchProblem =
     search.isError && search.error instanceof ApiError ? search.error.problem : undefined;
 
-  // A project with no Versions defined in Jira is common and must not look like a failure —
-  // the picker says so explicitly instead of sitting empty with no explanation.
-  const hasNoVersions =
-    projectId !== '' && versions.isSuccess && (versions.data?.length ?? 0) === 0;
+  // A project with no scrum board has no sprints, which is normal for a Kanban or business
+  // project — the picker says so rather than sitting empty and looking like a failed load.
+  const hasNoSprints = projectId !== '' && sprints.isSuccess && (sprints.data?.length ?? 0) === 0;
 
   const selectedProjectKey =
     projects.data?.find((p) => p.id === projectId)?.key ?? 'the selected project';
-  const selectedVersion = versions.data?.find((v) => v.id === fixVersionId)?.name;
-  const scopeDescription = selectedVersion
-    ? `${selectedProjectKey} / ${selectedVersion}`
+  const selectedSprint = sprints.data?.find((s) => s.id === sprintId)?.name;
+  const scopeDescription = selectedSprint
+    ? `${selectedProjectKey} / ${selectedSprint}`
     : selectedProjectKey;
-  // With the Done-only default, the most likely cause of an empty result is that the version's
+  // With the Done-only default, the most likely cause of an empty result is that the sprint's
   // work is not finished yet — so the message names the active status filter rather than sending
   // the release manager hunting the wrong one.
   const statusHint =
@@ -97,7 +96,9 @@ export function TicketsRoute() {
       : ` with status ${statusCategories.map((c) => STATUS_CATEGORY_LABELS[c]).join(' or ')}`;
 
   return (
-    <div className="max-w-5xl">
+    // No max-width cap: the ticket table is the point of this screen and eight columns do not
+    // fit in 5xl, which was cutting content off.
+    <div className="w-full">
       <h2 className="text-base font-semibold text-gray-900">Browse tickets</h2>
 
       {projects.isPending && <p className="mt-2 text-sm text-gray-600">Loading projects…</p>}
@@ -124,20 +125,20 @@ export function TicketsRoute() {
         </div>
 
         <div>
-          <label htmlFor="fixVersionId" className="block text-sm font-semibold text-gray-700">
-            Fix version <span className="font-normal text-gray-500">(optional)</span>
+          <label htmlFor="sprintId" className="block text-sm font-semibold text-gray-700">
+            Sprint <span className="font-normal text-gray-500">(optional)</span>
           </label>
           <select
-            id="fixVersionId"
-            value={fixVersionId}
-            onChange={(event) => setFixVersionId(event.target.value)}
-            disabled={projectId === '' || versions.isPending || search.isPending || hasNoVersions}
+            id="sprintId"
+            value={sprintId}
+            onChange={(event) => setSprintId(event.target.value)}
+            disabled={projectId === '' || sprints.isPending || search.isPending || hasNoSprints}
             className="rounded border border-gray-300 px-3 py-2 text-sm"
           >
-            <option value="">{hasNoVersions ? 'No versions in this project' : 'All fix versions'}</option>
-            {versions.data?.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
+            <option value="">{hasNoSprints ? 'No sprints in this project' : 'All sprints'}</option>
+            {sprints.data?.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.state})
               </option>
             ))}
           </select>
@@ -195,11 +196,11 @@ export function TicketsRoute() {
             value={jql}
             onChange={(event) => setJql(event.target.value)}
             disabled={search.isPending}
-            placeholder="project = CNV AND fixVersion = 2026.1"
+            placeholder="project = CNV AND sprint = 42"
             className="mt-1 w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm"
           />
           <p className="mt-1 text-sm text-gray-600">
-            While JQL is entered, the project and fix version pickers are ignored for this search.
+            While JQL is entered, the project and sprint pickers are ignored for this search.
           </p>
         </div>
       )}
@@ -209,9 +210,9 @@ export function TicketsRoute() {
           {messageForReason(projectsProblem)}
         </p>
       )}
-      {versionsProblem && (
-        <p role="alert" data-reason={versionsProblem.reason} className="mt-2 text-sm text-red-600">
-          {messageForReason(versionsProblem)}
+      {sprintsProblem && (
+        <p role="alert" data-reason={sprintsProblem.reason} className="mt-2 text-sm text-red-600">
+          {messageForReason(sprintsProblem)}
         </p>
       )}
 
@@ -222,7 +223,7 @@ export function TicketsRoute() {
             aria-hidden="true"
           />
           <p className="text-sm text-gray-600">
-            Loading tickets… this can take a few seconds for large fix versions.
+            Loading tickets… this can take a few seconds for large sprints.
           </p>
         </div>
       )}
@@ -249,7 +250,7 @@ export function TicketsRoute() {
             <p className="mt-2 text-sm text-gray-600">No tickets matched your JQL. Try a broader query.</p>
           ) : (
             <p className="mt-2 text-sm text-gray-600">
-              {`No tickets matched ${scopeDescription}${statusHint}. Try a different fix version, widen the status filter, or use Advanced: edit as JQL.`}
+              {`No tickets matched ${scopeDescription}${statusHint}. Try a different sprint, widen the status filter, or use Advanced: edit as JQL.`}
             </p>
           )}
         </div>
@@ -317,18 +318,21 @@ export function TicketsRoute() {
                         className="h-4 w-4 rounded border-gray-300 text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600"
                       />
                     </td>
-                    <td className="px-4 py-2 font-semibold text-gray-900">{ticket.key}</td>
-                    <td
-                      className="max-w-md overflow-hidden text-ellipsis whitespace-nowrap px-4 py-2 text-gray-700"
-                      title={ticket.summary}
-                    >
-                      {ticket.summary}
+                    <td className="whitespace-nowrap px-4 py-2 font-semibold text-gray-900">
+                      {ticket.key}
                     </td>
-                    <td className="px-4 py-2 text-gray-700">{ticket.issueType}</td>
-                    <td className="px-4 py-2 text-gray-700">{ticket.status}</td>
-                    <td className="px-4 py-2 text-gray-700">{ticket.resolution ?? '—'}</td>
-                    <td className="px-4 py-2 text-gray-700">{ticket.assignee ?? '—'}</td>
-                    <td className="px-4 py-2 text-gray-700">{ticket.reporter}</td>
+                    {/* Wraps rather than truncating — a release manager choosing tickets needs to
+                        read the whole summary, and an ellipsis hid exactly that. */}
+                    <td className="min-w-[18rem] px-4 py-2 text-gray-700">{ticket.summary}</td>
+                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">{ticket.issueType}</td>
+                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">{ticket.status}</td>
+                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
+                      {ticket.resolution ?? '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">
+                      {ticket.assignee ?? '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2 text-gray-700">{ticket.reporter}</td>
                     <td className="px-4 py-2">
                       <button
                         type="button"

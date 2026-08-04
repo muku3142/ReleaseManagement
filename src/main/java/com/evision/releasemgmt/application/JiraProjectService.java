@@ -1,7 +1,7 @@
 package com.evision.releasemgmt.application;
 
 import com.evision.releasemgmt.domain.jira.JiraProjectSummary;
-import com.evision.releasemgmt.domain.jira.JiraVersion;
+import com.evision.releasemgmt.domain.jira.JiraSprint;
 import com.evision.releasemgmt.ports.JiraProjectPort;
 import org.springframework.stereotype.Service;
 
@@ -22,7 +22,7 @@ public class JiraProjectService {
         return projectPort.listProjects(accessContextService.currentContext());
     }
 
-    public List<JiraVersion> listVersions(String projectId) {
-        return projectPort.listVersions(accessContextService.currentContext(), projectId);
+    public List<JiraSprint> listSprints(String projectId) {
+        return projectPort.listSprints(accessContextService.currentContext(), projectId);
     }
 }

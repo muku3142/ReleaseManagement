@@ -12,7 +12,7 @@ class TicketSearchCriteriaTest {
     @Test
     void composesIdOnlyJqlWithDoneOnlyDefaultWhenCategoriesOmitted() {
         assertThat(TicketSearchCriteria.byProject("10023", "10891", null).toJql())
-                .isEqualTo("project = 10023 AND fixVersion = 10891 AND statusCategory IN (\"Done\") ORDER BY key ASC");
+                .isEqualTo("project = 10023 AND sprint = 10891 AND statusCategory IN (\"Done\") ORDER BY key ASC");
     }
 
     @Test
@@ -31,7 +31,7 @@ class TicketSearchCriteriaTest {
         TicketSearchCriteria criteria = TicketSearchCriteria.byJql("project = CNV");
 
         assertThat(criteria.projectId()).isNull();
-        assertThat(criteria.fixVersionId()).isNull();
+        assertThat(criteria.sprintId()).isNull();
     }
 
     @Test
@@ -49,23 +49,23 @@ class TicketSearchCriteriaTest {
         String composed = TicketSearchCriteria.byProject("10023", "10891", Set.of()).toJql();
 
         assertThat(composed).doesNotContain("statusCategory");
-        assertThat(composed).isEqualTo("project = 10023 AND fixVersion = 10891 ORDER BY key ASC");
+        assertThat(composed).isEqualTo("project = 10023 AND sprint = 10891 ORDER BY key ASC");
     }
 
     @Test
-    void omitsFixVersionClauseWhenNoVersionIsSelected() {
+    void omitsSprintClauseWhenNoSprintIsSelected() {
         String composed = TicketSearchCriteria.byProject("10023", null, null).toJql();
 
-        assertThat(composed).doesNotContain("fixVersion");
+        assertThat(composed).doesNotContain("sprint");
         assertThat(composed)
                 .isEqualTo("project = 10023 AND statusCategory IN (\"Done\") ORDER BY key ASC");
     }
 
     @Test
-    void treatsBlankFixVersionAsAbsentRatherThanMatchingOnEmpty() {
+    void treatsBlankSprintAsAbsentRatherThanMatchingOnEmpty() {
         String composed = TicketSearchCriteria.byProject("10023", "   ", null).toJql();
 
-        assertThat(composed).doesNotContain("fixVersion");
+        assertThat(composed).doesNotContain("sprint");
     }
 
     @Test

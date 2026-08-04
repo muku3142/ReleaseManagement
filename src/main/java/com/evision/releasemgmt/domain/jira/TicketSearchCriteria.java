@@ -4,19 +4,19 @@ import java.util.EnumSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public record TicketSearchCriteria(String projectId, String fixVersionId, String jql,
+public record TicketSearchCriteria(String projectId, String sprintId, String jql,
                                    Set<StatusCategory> statusCategories) {
 
     // JIRA-07's default lives here, server-side, so a client that omits the field still gets
     // the Done-only set rather than every ticket ever raised on the version.
     public static final Set<StatusCategory> DEFAULT_STATUS_CATEGORIES = EnumSet.of(StatusCategory.DONE);
 
-    // fixVersionId is optional: plenty of Jira projects never define Versions at all, and a
-    // release cut from such a project must still be assemblable. A null or blank id omits the
-    // clause entirely rather than matching on an empty value.
-    public static TicketSearchCriteria byProject(String projectId, String fixVersionId,
+    // sprintId is optional: a project may have no scrum board, or the release manager may want
+    // everything in the project regardless of sprint. A null or blank id omits the clause
+    // entirely rather than matching on an empty value.
+    public static TicketSearchCriteria byProject(String projectId, String sprintId,
                                                  Set<StatusCategory> statusCategories) {
-        return new TicketSearchCriteria(projectId, fixVersionId, null,
+        return new TicketSearchCriteria(projectId, sprintId, null,
                 statusCategories == null ? DEFAULT_STATUS_CATEGORIES : statusCategories);
     }
 
@@ -32,14 +32,16 @@ public record TicketSearchCriteria(String projectId, String fixVersionId, String
         if (jql != null) {
             return jql;
         }
-        String fixVersionClause = fixVersionId == null || fixVersionId.isBlank()
+        // `sprint` is a JQL clause name Jira resolves against the Sprint field, and it accepts the
+        // numeric sprint id — so no custom-field id lookup is needed here.
+        String sprintClause = sprintId == null || sprintId.isBlank()
                 ? ""
-                : " AND fixVersion = " + fixVersionId;
+                : " AND sprint = " + sprintId;
         String statusClause = statusCategories == null || statusCategories.isEmpty()
                 ? ""
                 : " AND statusCategory IN (" + statusCategories.stream()
                         .map(category -> "\"" + category.jqlName() + "\"")
                         .collect(Collectors.joining(", ")) + ")";
-        return "project = " + projectId + fixVersionClause + statusClause + " ORDER BY key ASC";
+        return "project = " + projectId + sprintClause + statusClause + " ORDER BY key ASC";
     }
 }

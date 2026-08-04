@@ -8,7 +8,7 @@ import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
 import com.evision.releasemgmt.domain.jira.JiraProjectSummary;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
-import com.evision.releasemgmt.domain.jira.JiraVersion;
+import com.evision.releasemgmt.domain.jira.JiraSprint;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -48,13 +48,16 @@ class JiraProjectControllerTest {
     }
 
     @Test
-    void authenticatedVersionsReturnsVersions() throws Exception {
-        when(service.listVersions("10023")).thenReturn(List.of(new JiraVersion("1", "2026.1")));
+    void authenticatedSprintsReturnsSprints() throws Exception {
+        when(service.listSprints("10023"))
+                .thenReturn(List.of(new JiraSprint("32", "Sprint 2", "active")));
 
-        mockMvc.perform(get("/api/jira/projects/10023/versions")
+        mockMvc.perform(get("/api/jira/projects/10023/sprints")
                         .with(jwt().jwt(b -> b.subject("557058:abc-123").claim("token_type", "access"))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].name").value("2026.1"));
+                .andExpect(jsonPath("$[0].id").value("32"))
+                .andExpect(jsonPath("$[0].name").value("Sprint 2"))
+                .andExpect(jsonPath("$[0].state").value("active"));
     }
 
     @Test

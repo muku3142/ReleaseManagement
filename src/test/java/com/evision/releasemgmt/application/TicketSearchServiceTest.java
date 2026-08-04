@@ -77,7 +77,7 @@ class TicketSearchServiceTest {
         assertThat(fields.getValue()).containsExactlyInAnyOrder(TicketField.values());
 
         verify(ticketPort).searchAll(eq(ACCESS),
-                eq("project = 10023 AND fixVersion = 10891 AND statusCategory IN (\"Done\") ORDER BY key ASC"),
+                eq("project = 10023 AND sprint = 10891 AND statusCategory IN (\"Done\") ORDER BY key ASC"),
                 eq(FIELD_IDS));
 
         // AUTH-02 is not an afterthought in the call order: the credential is resolved before

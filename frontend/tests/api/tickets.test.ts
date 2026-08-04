@@ -22,24 +22,24 @@ describe('ticket search client', () => {
     const body = toSearchBody({
       mode: 'project',
       projectId: '10023',
-      fixVersionId: '10891',
+      sprintId: '10891',
       statusCategories: ['DONE'],
     });
 
-    expect(body).toEqual({ projectId: '10023', fixVersionId: '10891', statusCategories: ['DONE'] });
+    expect(body).toEqual({ projectId: '10023', sprintId: '10891', statusCategories: ['DONE'] });
     expect('jql' in body).toBe(false);
   });
 
-  it('omits fixVersionId entirely when no version is selected', () => {
+  it('omits sprintId entirely when no sprint is selected', () => {
     const body = toSearchBody({
       mode: 'project',
       projectId: '10023',
-      fixVersionId: null,
+      sprintId: null,
       statusCategories: ['DONE'],
     });
 
     expect(body).toEqual({ projectId: '10023', statusCategories: ['DONE'] });
-    expect('fixVersionId' in body).toBe(false);
+    expect('sprintId' in body).toBe(false);
   });
 
   it('sends only the jql field on the advanced path, with no implied status filter', () => {
@@ -55,7 +55,7 @@ describe('ticket search client', () => {
 
     const result = await apiFetch<TicketSearchResponse>('/api/tickets/search', {
       method: 'POST',
-      body: JSON.stringify({ projectId: '10023', fixVersionId: '10891' }),
+      body: JSON.stringify({ projectId: '10023', sprintId: '10891' }),
     });
 
     expect(result.tickets).toEqual([]);
@@ -69,7 +69,7 @@ describe('ticket search client', () => {
     await expect(
       apiFetch<TicketSearchResponse>('/api/tickets/search', {
         method: 'POST',
-        body: JSON.stringify({ projectId: '10023', fixVersionId: '10891' }),
+        body: JSON.stringify({ projectId: '10023', sprintId: '10891' }),
       }),
     ).rejects.toSatisfy((error) => error instanceof ApiError && error.problem.reason === 'RESULT_SET_TOO_LARGE');
   });
@@ -82,7 +82,7 @@ describe('ticket search client', () => {
     await expect(
       apiFetch<TicketSearchResponse>('/api/tickets/search', {
         method: 'POST',
-        body: JSON.stringify({ projectId: '10023', fixVersionId: '10891' }),
+        body: JSON.stringify({ projectId: '10023', sprintId: '10891' }),
       }),
     ).rejects.toSatisfy((error) => error instanceof ApiError && error.problem.reason === 'JIRA_UNREACHABLE');
   });
@@ -95,7 +95,7 @@ describe('ticket search client', () => {
     const body = toSearchBody({
       mode: 'project',
       projectId: '10023',
-      fixVersionId: '10891',
+      sprintId: '10891',
       statusCategories: [],
     });
 

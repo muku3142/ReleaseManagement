@@ -118,7 +118,7 @@ class SecurityFilterChainIT {
         mockMvc.perform(post("/api/tickets/search")
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"projectId\":\"10023\",\"fixVersionId\":\"10891\"}"))
+                        .content("{\"projectId\":\"10023\",\"sprintId\":\"10891\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.reason").value("UNAUTHENTICATED"));

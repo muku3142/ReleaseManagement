@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { apiFetch } from './client';
 
 export type JiraProject = { id: string; key: string; name: string };
-export type JiraVersion = { id: string; name: string };
+export type JiraSprint = { id: string; name: string; state: string };
 
 export const jiraProjectsQueryKey = ['jira-projects'] as const;
 
@@ -13,10 +13,10 @@ export function useJiraProjects() {
   });
 }
 
-export function useJiraVersions(projectId: string) {
+export function useJiraSprints(projectId: string) {
   return useQuery({
-    queryKey: ['jira-versions', projectId] as const,
-    queryFn: () => apiFetch<JiraVersion[]>(`/api/jira/projects/${projectId}/versions`),
+    queryKey: ['jira-sprints', projectId] as const,
+    queryFn: () => apiFetch<JiraSprint[]>(`/api/jira/projects/${projectId}/sprints`),
     enabled: projectId !== '',
   });
 }

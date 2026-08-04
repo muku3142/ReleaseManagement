@@ -1,7 +1,7 @@
 package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.web.dto.JiraProjectResponse;
-import com.evision.releasemgmt.adapters.web.dto.JiraVersionResponse;
+import com.evision.releasemgmt.adapters.web.dto.JiraSprintResponse;
 import com.evision.releasemgmt.application.JiraProjectService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,10 +27,10 @@ public class JiraProjectController {
                 .toList();
     }
 
-    @GetMapping("/{projectId}/versions")
-    public List<JiraVersionResponse> versions(@PathVariable String projectId) {
-        return service.listVersions(projectId).stream()
-                .map(v -> new JiraVersionResponse(v.id(), v.name()))
+    @GetMapping("/{projectId}/sprints")
+    public List<JiraSprintResponse> sprints(@PathVariable String projectId) {
+        return service.listSprints(projectId).stream()
+                .map(s -> new JiraSprintResponse(s.id(), s.name(), s.state()))
                 .toList();
     }
 }

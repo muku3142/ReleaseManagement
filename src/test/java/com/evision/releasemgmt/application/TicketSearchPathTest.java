@@ -114,7 +114,7 @@ class TicketSearchPathTest {
     }
 
     @Test
-    void selectingAFixVersionAddsItsClauseAndStillResolvesFields(WireMockRuntimeInfo wm) {
+    void selectingASprintAddsItsClauseAndStillResolvesFields(WireMockRuntimeInfo wm) {
         stubFor(get(urlEqualTo("/rest/api/3/field")).willReturn(okJson(TENANT_FIELDS)));
         stubFor(post(urlEqualTo("/rest/api/3/search/jql")).willReturn(okJson("{\"issues\":[]}")));
 
@@ -127,6 +127,6 @@ class TicketSearchPathTest {
         // "fixVersions" also appears in this body as a requested field id, so a bare
         // "does it mention fixVersion" check would be meaningless here.
         verify(postRequestedFor(urlEqualTo("/rest/api/3/search/jql")).withRequestBody(containing(
-                "project = 10023 AND fixVersion = 10891 AND statusCategory IN (\\\"Done\\\") ORDER BY key ASC")));
+                "project = 10023 AND sprint = 10891 AND statusCategory IN (\\\"Done\\\") ORDER BY key ASC")));
     }
 }

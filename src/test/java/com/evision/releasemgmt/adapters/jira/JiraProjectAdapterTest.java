@@ -4,7 +4,7 @@ import com.evision.releasemgmt.domain.auth.JiraAccessContext;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
 import com.evision.releasemgmt.domain.jira.JiraProjectSummary;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
-import com.evision.releasemgmt.domain.jira.JiraVersion;
+import com.evision.releasemgmt.domain.jira.JiraSprint;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import org.junit.jupiter.api.Test;
@@ -95,22 +95,60 @@ class JiraProjectAdapterTest {
     }
 
     @Test
-    void versionsCallReturnsBareArrayMappedInOrder(WireMockRuntimeInfo wm) {
-        stubFor(get(urlEqualTo("/rest/api/3/project/10023/versions")).willReturn(okJson(
-                "[{\"id\":\"1\",\"name\":\"2026.1\"},{\"id\":\"2\",\"name\":\"2026.2\"}]")));
+    void sprintsAreReadPerScrumBoardAndReturnedNewestFirst(WireMockRuntimeInfo wm) {
+        stubFor(get(urlPathEqualTo("/rest/agile/1.0/board")).willReturn(okJson(
+                "{\"startAt\":0,\"maxResults\":50,\"total\":1,\"isLast\":true,"
+                        + "\"values\":[{\"id\":7,\"name\":\"CNV board\",\"type\":\"scrum\"}]}")));
+        stubFor(get(urlPathEqualTo("/rest/agile/1.0/board/7/sprint")).willReturn(okJson(
+                "{\"startAt\":0,\"maxResults\":50,\"total\":2,\"isLast\":true,\"values\":["
+                        + "{\"id\":31,\"name\":\"Sprint 1\",\"state\":\"closed\",\"startDate\":\"2026-01-05T09:00:00.000Z\"},"
+                        + "{\"id\":32,\"name\":\"Sprint 2\",\"state\":\"active\",\"startDate\":\"2026-02-02T09:00:00.000Z\"}]}")));
 
-        List<JiraVersion> versions = adapter(wm).listVersions(context(wm), "10023");
+        List<JiraSprint> sprints = adapter(wm).listSprints(context(wm), "10023");
 
-        assertThat(versions).containsExactly(new JiraVersion("1", "2026.1"), new JiraVersion("2", "2026.2"));
+        assertThat(sprints).containsExactly(
+                new JiraSprint("32", "Sprint 2", "active"),
+                new JiraSprint("31", "Sprint 1", "closed"));
+        // Only active and closed are asked for: a future sprint has nothing shippable in it.
+        verify(getRequestedFor(urlPathEqualTo("/rest/agile/1.0/board/7/sprint"))
+                .withQueryParam("state", equalTo("active,closed")));
     }
 
     @Test
-    void versionsCallReturningEmptyArrayYieldsEmptyList(WireMockRuntimeInfo wm) {
-        stubFor(get(urlEqualTo("/rest/api/3/project/10023/versions")).willReturn(okJson("[]")));
+    void kanbanBoardsAreNeverAskedForSprints(WireMockRuntimeInfo wm) {
+        // The Agile API rejects the sprint endpoint on a kanban board, so it must not be called.
+        stubFor(get(urlPathEqualTo("/rest/agile/1.0/board")).willReturn(okJson(
+                "{\"startAt\":0,\"maxResults\":50,\"total\":1,\"isLast\":true,"
+                        + "\"values\":[{\"id\":9,\"name\":\"Support board\",\"type\":\"kanban\"}]}")));
 
-        List<JiraVersion> versions = adapter(wm).listVersions(context(wm), "10023");
+        List<JiraSprint> sprints = adapter(wm).listSprints(context(wm), "10023");
 
-        assertThat(versions).isEmpty();
+        assertThat(sprints).isEmpty();
+        verify(0, getRequestedFor(urlPathEqualTo("/rest/agile/1.0/board/9/sprint")));
+    }
+
+    @Test
+    void theSameSprintReachableFromTwoBoardsIsReturnedOnce(WireMockRuntimeInfo wm) {
+        stubFor(get(urlPathEqualTo("/rest/agile/1.0/board")).willReturn(okJson(
+                "{\"startAt\":0,\"maxResults\":50,\"total\":2,\"isLast\":true,"
+                        + "\"values\":[{\"id\":7,\"name\":\"A\",\"type\":\"scrum\"},"
+                        + "{\"id\":8,\"name\":\"B\",\"type\":\"scrum\"}]}")));
+        String samePage = "{\"startAt\":0,\"maxResults\":50,\"total\":1,\"isLast\":true,\"values\":["
+                + "{\"id\":31,\"name\":\"Sprint 1\",\"state\":\"closed\",\"startDate\":\"2026-01-05T09:00:00.000Z\"}]}";
+        stubFor(get(urlPathEqualTo("/rest/agile/1.0/board/7/sprint")).willReturn(okJson(samePage)));
+        stubFor(get(urlPathEqualTo("/rest/agile/1.0/board/8/sprint")).willReturn(okJson(samePage)));
+
+        List<JiraSprint> sprints = adapter(wm).listSprints(context(wm), "10023");
+
+        assertThat(sprints).containsExactly(new JiraSprint("31", "Sprint 1", "closed"));
+    }
+
+    @Test
+    void projectWithNoBoardsYieldsNoSprints(WireMockRuntimeInfo wm) {
+        stubFor(get(urlPathEqualTo("/rest/agile/1.0/board")).willReturn(okJson(
+                "{\"startAt\":0,\"maxResults\":50,\"total\":0,\"isLast\":true,\"values\":[]}")));
+
+        assertThat(adapter(wm).listSprints(context(wm), "10023")).isEmpty();
     }
 
     @Test

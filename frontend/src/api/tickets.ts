@@ -32,8 +32,9 @@ export type TicketSearchCriteria =
   | {
       mode: 'project';
       projectId: string;
-      // Optional: many Jira projects never define Versions, and those still need to be browsable.
-      fixVersionId: string | null;
+      // Optional: a project may have no scrum board, or the release manager may want the whole
+      // project regardless of sprint.
+      sprintId: string | null;
       statusCategories: StatusCategory[];
     }
   | { mode: 'jql'; jql: string };
@@ -44,14 +45,14 @@ export type TicketSearchResponse = { tickets: Ticket[] };
 // narrowed to exactly one shape here rather than sending optional fields and hoping.
 // statusCategories is sent only on the picker path — on the JQL path the backend forwards the
 // query verbatim, so sending it would imply a filter that is not actually applied.
-// fixVersionId is omitted entirely when absent rather than sent as null.
+// sprintId is omitted entirely when absent rather than sent as null.
 export function toSearchBody(criteria: TicketSearchCriteria): Record<string, unknown> {
   if (criteria.mode === 'jql') {
     return { jql: criteria.jql };
   }
   return {
     projectId: criteria.projectId,
-    ...(criteria.fixVersionId ? { fixVersionId: criteria.fixVersionId } : {}),
+    ...(criteria.sprintId ? { sprintId: criteria.sprintId } : {}),
     statusCategories: criteria.statusCategories,
   };
 }
