@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useJiraProjects, useJiraVersions } from '../api/jiraProjects';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
@@ -16,10 +16,20 @@ export function TicketsRoute() {
   const [fixVersionId, setFixVersionId] = useState('');
   const [statusCategories, setStatusCategories] = useState<StatusCategory[]>(DEFAULT_STATUS_CATEGORIES);
   const [loaded, setLoaded] = useState<Ticket[] | null>(null);
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
 
   const projects = useJiraProjects();
   const versions = useJiraVersions(projectId);
   const search = useTicketSearch();
+
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const allSelected = loaded !== null && loaded.length > 0 && selected.size === loaded.length;
+  const someSelected = selected.size > 0 && !allSelected;
+
+  // indeterminate is a DOM property, not an HTML attribute, so it cannot be set as a JSX prop.
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected;
+  }, [someSelected]);
 
   function handleProjectChange(event: React.ChangeEvent<HTMLSelectElement>) {
     setProjectId(event.target.value);
@@ -29,8 +39,23 @@ export function TicketsRoute() {
   function runSearch() {
     search.mutate(
       { mode: 'fixVersion', projectId, fixVersionId, statusCategories },
-      { onSuccess: (data) => setLoaded(data.tickets) },
+      {
+        onSuccess: (data) => {
+          setLoaded(data.tickets);
+          // A checkbox pointing at a ticket no longer on screen would misreport what is selected.
+          setSelected(new Set());
+        },
+      },
     );
+  }
+
+  function toggle(key: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   const projectsProblem =
@@ -179,12 +204,31 @@ export function TicketsRoute() {
         </div>
       )}
 
+      {loaded !== null && loaded.length > 0 && (
+        <p role="status" aria-live="polite" className="mt-6 text-sm font-semibold text-blue-600">
+          {selected.size} selected
+        </p>
+      )}
+
       {!search.isPending && loaded !== null && loaded.length > 0 && (
         <div className="mt-6 overflow-x-auto rounded border border-gray-200 bg-white">
           <table className="min-w-full text-sm">
             <thead className="border-b border-gray-200">
               <tr>
-                <th scope="col" className="px-4 py-2 text-left"></th>
+                <th scope="col" className="px-4 py-2 text-left">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={() =>
+                      setSelected(
+                        allSelected ? new Set() : new Set((loaded ?? []).map((t) => t.key)),
+                      )
+                    }
+                    aria-label="Select all loaded tickets"
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600"
+                  />
+                </th>
                 <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
                   Key
                 </th>
@@ -211,7 +255,15 @@ export function TicketsRoute() {
             <tbody>
               {loaded.map((ticket) => (
                 <tr key={ticket.key} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2"></td>
+                  <td className="px-4 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(ticket.key)}
+                      onChange={() => toggle(ticket.key)}
+                      aria-label={`Select ticket ${ticket.key}`}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600"
+                    />
+                  </td>
                   <td className="px-4 py-2 font-semibold text-gray-900">{ticket.key}</td>
                   <td
                     className="max-w-md overflow-hidden text-ellipsis whitespace-nowrap px-4 py-2 text-gray-700"
