@@ -11,7 +11,7 @@ dependency-graph:
     - "02-03: FieldMetadataService.resolve, JiraTicketPort.searchAll, TicketDetail, TicketField"
   provides:
     - "domain/jira/StatusCategory: TO_DO / IN_PROGRESS / DONE with their Jira JQL names"
-    - "domain/jira/TicketSearchCriteria: byFixVersion / byJql factories + toJql() composition, DEFAULT_STATUS_CATEGORIES = {DONE}"
+    - "domain/jira/TicketSearchCriteria: byProject / byJql factories + toJql() composition, DEFAULT_STATUS_CATEGORIES = {DONE}"
     - "application/TicketSearchService: credential + field resolution + port delegation"
     - "POST /api/tickets/search returning {\"tickets\": [...]}"
     - "dto/TicketSearchRequest with the XOR filter-mode rule and numeric-id format rules"
@@ -79,6 +79,16 @@ Wires wave 2's machinery into one endpoint: `POST /api/tickets/search` takes eit
 ## Deviations from Plan
 
 The plan was amended before execution to add the JIRA-07 status filter (committed as `425937b`), which added `StatusCategory.java`, a fourth component on `TicketSearchCriteria`, a fourth field on `TicketSearchRequest`, and four tests (2 criteria + 2 controller). Implementation then followed the amended plan exactly.
+
+## Superseded After Execution (2026-08-04, commit `822dcd4`)
+
+**Fix version became optional at the user's request**, after a live run showed the picker sitting empty for a project with no Jira Versions defined — which left `Load tickets` permanently disabled with no route forward but the JQL hatch. Changes to this plan's artifacts:
+
+- `TicketSearchCriteria.byFixVersion(...)` is renamed **`byProject(...)`**; a null or blank `fixVersionId` omits the `fixVersion` JQL clause instead of matching an empty value.
+- `TicketSearchRequest.isExactlyOneFilterMode()` now requires only `projectId` for picker mode, and additionally rejects a `fixVersionId` supplied with no project or alongside raw JQL — neither has a meaningful reading, and both were previously accepted or silently ignored.
+- Three criteria tests and three controller tests added; the former `halfFilledPickerIsRejected` is replaced by `projectWithoutFixVersionIsAValidSearch`.
+
+Backend total moved 207 → **212**.
 
 ## Issues Encountered
 

@@ -69,6 +69,11 @@ The slice the phase exists for: pick a project and fix version, click **Load tic
 2. **One acceptance criterion in the amended plan was corrected during execution.** It required `DEFAULT_STATUS_CATEGORIES` to appear exactly once in `TicketsRoute.tsx`, which is unachievable while importing the constant — an import plus a `useState` seed is two occurrences. Corrected to `2` in the plan; the intent (the default comes from the shared constant, never a local literal) is unchanged and satisfied.
 3. **Counter visibility tightened beyond the plan** (`e5565d4`). The plan guarded the counter on `loaded !== null && loaded.length > 0`, but the table is additionally guarded on `!search.isPending`. During a re-search that left a stale count on screen with no rows to explain it. Added `!search.isPending` to the counter so it hides with its table.
 
+## Superseded After Execution (2026-08-04, commits `822dcd4`, `567d03b`)
+
+1. **Fix version became optional** at the user's request, after a live run against the real tenant showed the picker empty for a project with no Jira Versions defined. `TicketSearchCriteria`'s picker variant is renamed `mode: 'project'` with `fixVersionId: string | null`, `toSearchBody` omits the field entirely when absent, `Load tickets` enables on a project alone, the label reads "Fix version (optional)", and the placeholder becomes "All fix versions" — or "No versions in this project" when Jira returned none, so an empty dropdown no longer looks like a failed load. The empty-state copy uses a `scopeDescription` that degrades to just the project key when no version is selected. One test added (`omits fixVersionId entirely when no version is selected`); frontend total 22 → 23.
+2. **Tests moved out of `src/`** into a mirrored `frontend/tests/` tree at the user's request, so `src/` is production-only. `vite.config.ts` gained an explicit `test.include`, and `tsconfig.json` includes `tests` so they are still typechecked. `frontend/src/api/tickets.test.ts` is now `frontend/tests/api/tickets.test.ts`.
+
 ## Issues Encountered
 
 None.
