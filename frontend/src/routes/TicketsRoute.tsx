@@ -204,7 +204,7 @@ export function TicketsRoute() {
         </div>
       )}
 
-      {loaded !== null && loaded.length > 0 && (
+      {!search.isPending && loaded !== null && loaded.length > 0 && (
         <p role="status" aria-live="polite" className="mt-6 text-sm font-semibold text-blue-600">
           {selected.size} selected
         </p>
