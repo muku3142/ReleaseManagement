@@ -220,6 +220,29 @@ Both follow the same shape: title (Heading), body (Body, 14px/400), two buttons 
 
 **Approval:** pending
 
+## Checker follow-ups — BINDING, not optional
+
+Recorded here rather than left as executor notes, matching 02-UI-SPEC.md's convention — a
+primary-visual-anchor call left implicit is exactly the kind of thing that gets dropped
+between spec and implementation.
+
+1. **Primary visual anchor, `/releases` (Dimension 2 FLAG).** The **release table is the
+   primary visual anchor** of the release library screen. The search input (state 2) is a
+   subordinate control that filters it — same relationship Phase 2 established between the
+   `/tickets` filter bar and its ticket table. Stated explicitly so the executor does not size
+   or weight the search bar as if it were the page's focal element.
+
+2. **Primary visual anchor, `/releases/$releaseId` (Dimension 2 FLAG).** The **item sections
+   (Tickets, then Manual items) are the primary visual anchor** of the release detail screen —
+   this is the screen's reason to exist per REL-04 ("see its ticket set with per-ticket
+   detail"). The header block (name, version, status badge, meta row) and the action row
+   (Refresh / Freeze / Delete) are subordinate framing: they orient the release manager and
+   expose lifecycle actions, but they are not what the release manager came to read. The
+   add-result banner, when present, is transient and lower-weight than both. Concretely: the
+   item sections get the visually heaviest treatment (bordered white table surfaces sitting on
+   the `gray-50` canvas, same as Phase 2's ticket table), while the header stays a plain text
+   block with no competing card/border treatment of its own.
+
 ## Planning input — new reason codes required
 
 Extending `JiraAuthFailureReason`-equivalent taxonomy for release-specific failures (per Phase 1's `ProblemDetail`/`reason` error contract — do not invent a parallel scheme):
