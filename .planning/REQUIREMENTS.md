@@ -22,6 +22,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [ ] **JIRA-04**: Release manager sees the fields the tool needs even on Jira instances with differing custom-field configurations, because custom fields are resolved by name through field metadata rather than hardcoded IDs
 - [ ] **JIRA-05**: Jira rich-text fields arrive as Atlassian Document Format and are rendered as readable text suitable for inclusion in generated documents
 - [ ] **JIRA-06**: Release manager gets a clear, actionable error when Jira is unreachable, rate-limits the request, or rejects the credential — distinguishable from "no results"
+- [ ] **JIRA-07**: Release manager can filter candidate tickets by status category (To Do / In Progress / Done), with only Done tickets shown by default
 
 ### Release Assembly
 
@@ -163,6 +164,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | JIRA-04 | Phase 2 | Pending |
 | JIRA-05 | Phase 2 | Pending |
 | JIRA-06 | Phase 2 | Pending |
+| JIRA-07 | Phase 2 | Pending |
 | REL-01 | Phase 3 | Pending |
 | REL-02 | Phase 3 | Pending |
 | REL-03 | Phase 3 | Pending |
