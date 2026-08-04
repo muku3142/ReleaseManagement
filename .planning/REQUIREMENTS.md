@@ -17,7 +17,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 ### Jira Integration
 
 - [x] **JIRA-01**: Release manager can configure which Jira Cloud site the system reads from
-- [ ] **JIRA-02**: Release manager can browse candidate tickets filtered by project, fix version, and JQL — fix version is optional, since many Jira projects define no Versions at all
+- [ ] **JIRA-02**: Release manager can browse candidate tickets filtered by project, sprint, and JQL — sprint is optional (a project may have no scrum board). Superseded 2026-08-04: originally "project, fix version, and JQL"; sprint replaced fix version because releases here are scoped by sprint. Fix-version filtering was removed entirely, so this now requires Jira's Agile API — see the PROJECT.md note reversing that exclusion
 - [ ] **JIRA-03**: Release manager sees the complete ticket set matching a filter, with paging handled to exhaustion rather than silently truncating at the first page
 - [ ] **JIRA-04**: Release manager sees the fields the tool needs even on Jira instances with differing custom-field configurations, because custom fields are resolved by name through field metadata rather than hardcoded IDs
 - [ ] **JIRA-05**: Jira rich-text fields arrive as Atlassian Document Format and are rendered as readable text suitable for inclusion in generated documents
