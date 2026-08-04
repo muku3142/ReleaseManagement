@@ -9,6 +9,7 @@ import {
   useTicketSearch,
   type StatusCategory,
   type Ticket,
+  type TicketSearchCriteria,
 } from '../api/tickets';
 
 export function TicketsRoute() {
@@ -18,6 +19,11 @@ export function TicketsRoute() {
   const [loaded, setLoaded] = useState<Ticket[] | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [jqlOpen, setJqlOpen] = useState(false);
+  const [jql, setJql] = useState('');
+  // Which mode produced the current `loaded` value. Deliberately not the live jqlOpen flag,
+  // which the user may have toggled since the search ran.
+  const [loadedMode, setLoadedMode] = useState<'fixVersion' | 'jql' | null>(null);
 
   const projects = useJiraProjects();
   const versions = useJiraVersions(projectId);
@@ -38,17 +44,21 @@ export function TicketsRoute() {
   }
 
   function runSearch() {
-    search.mutate(
-      { mode: 'fixVersion', projectId, fixVersionId, statusCategories },
-      {
-        onSuccess: (data) => {
-          setLoaded(data.tickets);
-          // A checkbox pointing at a ticket no longer on screen would misreport what is selected.
-          setSelected(new Set());
-          setExpandedKey(null);
-        },
+    const usingJql = jqlOpen && jql.trim() !== '';
+    // Exactly one mode is ever sent: the backend rejects a body carrying both with
+    // VALIDATION_FAILED, and the discriminated union makes that unrepresentable here.
+    const criteria: TicketSearchCriteria = usingJql
+      ? { mode: 'jql', jql: jql.trim() }
+      : { mode: 'fixVersion', projectId, fixVersionId, statusCategories };
+    search.mutate(criteria, {
+      onSuccess: (data) => {
+        setLoaded(data.tickets);
+        // A checkbox pointing at a ticket no longer on screen would misreport what is selected.
+        setSelected(new Set());
+        setExpandedKey(null);
+        setLoadedMode(usingJql ? 'jql' : 'fixVersion');
       },
-    );
+    });
   }
 
   function toggle(key: string) {
@@ -150,12 +160,45 @@ export function TicketsRoute() {
         <button
           type="button"
           onClick={runSearch}
-          disabled={projectId === '' || fixVersionId === '' || search.isPending}
+          disabled={
+            search.isPending ||
+            (jqlOpen && jql.trim() !== '' ? false : projectId === '' || fixVersionId === '')
+          }
           className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           Load tickets
         </button>
       </div>
+
+      <button
+        type="button"
+        onClick={() => setJqlOpen((open) => !open)}
+        aria-expanded={jqlOpen}
+        className="mt-3 text-sm text-blue-600 underline"
+      >
+        Advanced: edit as JQL
+      </button>
+
+      {jqlOpen && (
+        <div className="mt-2">
+          <label htmlFor="jql" className="block text-sm font-semibold text-gray-700">
+            JQL
+          </label>
+          <textarea
+            id="jql"
+            rows={3}
+            maxLength={2000}
+            value={jql}
+            onChange={(event) => setJql(event.target.value)}
+            disabled={search.isPending}
+            placeholder="project = CNV AND fixVersion = 2026.1"
+            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 font-mono text-sm"
+          />
+          <p className="mt-1 text-sm text-gray-600">
+            While JQL is entered, the project and fix version pickers are ignored for this search.
+          </p>
+        </div>
+      )}
 
       {projectsProblem && (
         <p role="alert" data-reason={projectsProblem.reason} className="mt-2 text-sm text-red-600">
@@ -198,11 +241,13 @@ export function TicketsRoute() {
       {!search.isPending && !searchProblem && loaded !== null && loaded.length === 0 && (
         <div className="mt-6 rounded bg-gray-50 p-6 text-center">
           <p className="text-base font-semibold text-gray-900">No tickets found</p>
-          <p className="mt-2 text-sm text-gray-600">
-            No tickets matched {selectedProjectKey} / {selectedVersionName}
-            {statusHint}. Try a different fix version, widen the status filter, or use Advanced:
-            edit as JQL.
-          </p>
+          {loadedMode === 'jql' ? (
+            <p className="mt-2 text-sm text-gray-600">No tickets matched your JQL. Try a broader query.</p>
+          ) : (
+            <p className="mt-2 text-sm text-gray-600">
+              {`No tickets matched ${selectedProjectKey} / ${selectedVersionName}${statusHint}. Try a different fix version, widen the status filter, or use Advanced: edit as JQL.`}
+            </p>
+          )}
         </div>
       )}
 
