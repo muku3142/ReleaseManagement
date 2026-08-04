@@ -128,6 +128,43 @@ class JiraProjectAdapterTest {
     }
 
     @Test
+    void teamManagedSimpleBoardsAreAskedForSprints(WireMockRuntimeInfo wm) {
+        // Team-managed (next-gen) projects report their board as type "simple", not "scrum".
+        // Filtering to "scrum" alone hid the sprints of every such project.
+        stubFor(get(urlPathEqualTo("/rest/agile/1.0/board")).willReturn(okJson(
+                "{\"startAt\":0,\"maxResults\":50,\"total\":1,\"isLast\":true,"
+                        + "\"values\":[{\"id\":12,\"name\":\"CNV board\",\"type\":\"simple\"}]}")));
+        stubFor(get(urlPathEqualTo("/rest/agile/1.0/board/12/sprint")).willReturn(okJson(
+                "{\"startAt\":0,\"maxResults\":50,\"total\":1,\"isLast\":true,\"values\":["
+                        + "{\"id\":44,\"name\":\"CNV Sprint 9\",\"state\":\"active\","
+                        + "\"startDate\":\"2026-07-20T09:00:00.000Z\"}]}")));
+
+        List<JiraSprint> sprints = adapter(wm).listSprints(context(wm), "11688");
+
+        assertThat(sprints).containsExactly(new JiraSprint("44", "CNV Sprint 9", "active"));
+    }
+
+    @Test
+    void aBoardThatDoesNotSupportSprintsIsSkippedRatherThanFailingThePicker(WireMockRuntimeInfo wm) {
+        // A "simple" board may be Kanban-style, which answers 400. One such board must not take
+        // the whole picker down alongside a sibling board that does have sprints.
+        stubFor(get(urlPathEqualTo("/rest/agile/1.0/board")).willReturn(okJson(
+                "{\"startAt\":0,\"maxResults\":50,\"total\":2,\"isLast\":true,"
+                        + "\"values\":[{\"id\":12,\"name\":\"Kanban-style\",\"type\":\"simple\"},"
+                        + "{\"id\":13,\"name\":\"Scrum-style\",\"type\":\"simple\"}]}")));
+        stubFor(get(urlPathEqualTo("/rest/agile/1.0/board/12/sprint"))
+                .willReturn(aResponse().withStatus(400)));
+        stubFor(get(urlPathEqualTo("/rest/agile/1.0/board/13/sprint")).willReturn(okJson(
+                "{\"startAt\":0,\"maxResults\":50,\"total\":1,\"isLast\":true,\"values\":["
+                        + "{\"id\":44,\"name\":\"Sprint 9\",\"state\":\"active\","
+                        + "\"startDate\":\"2026-07-20T09:00:00.000Z\"}]}")));
+
+        List<JiraSprint> sprints = adapter(wm).listSprints(context(wm), "11688");
+
+        assertThat(sprints).containsExactly(new JiraSprint("44", "Sprint 9", "active"));
+    }
+
+    @Test
     void theSameSprintReachableFromTwoBoardsIsReturnedOnce(WireMockRuntimeInfo wm) {
         stubFor(get(urlPathEqualTo("/rest/agile/1.0/board")).willReturn(okJson(
                 "{\"startAt\":0,\"maxResults\":50,\"total\":2,\"isLast\":true,"

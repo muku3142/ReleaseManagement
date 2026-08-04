@@ -6,6 +6,8 @@ import com.evision.releasemgmt.domain.jira.JiraProjectSummary;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
 import com.evision.releasemgmt.domain.jira.JiraSprint;
 import com.evision.releasemgmt.ports.JiraProjectPort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -25,6 +27,8 @@ import java.util.Set;
 
 @Component
 public class JiraProjectAdapter implements JiraProjectPort {
+
+    private static final Logger log = LoggerFactory.getLogger(JiraProjectAdapter.class);
 
     private static final int MAX_PROJECT_SEARCH_PAGES = 50;
     private static final int PROJECT_SEARCH_PAGE_SIZE = 50;
@@ -88,7 +92,7 @@ public class JiraProjectAdapter implements JiraProjectPort {
         try {
             List<JiraSprintPayload> collected = new ArrayList<>();
             Set<Long> seenSprintIds = new HashSet<>();
-            for (Long boardId : scrumBoardIds(access, projectId)) {
+            for (Long boardId : sprintCapableBoardIds(access, projectId)) {
                 for (JiraSprintPayload sprint : sprintsOnBoard(access, boardId)) {
                     // A sprint is reachable from more than one board, so the same sprint can come
                     // back twice when a project has several boards.
@@ -107,6 +111,11 @@ public class JiraProjectAdapter implements JiraProjectPort {
             for (JiraSprintPayload payload : collected) {
                 sprints.add(new JiraSprint(String.valueOf(payload.id()), payload.name(), payload.state()));
             }
+            if (sprints.isEmpty()) {
+                // An empty picker is indistinguishable from a broken one in the UI, so say which
+                // it was here.
+                log.info("No active or closed sprints found for project {}", projectId);
+            }
             return sprints;
         } catch (HttpClientErrorException.Unauthorized e) {
             throw new JiraTicketReadException(JiraAuthFailureReason.INVALID_CREDENTIALS);
@@ -123,9 +132,12 @@ public class JiraProjectAdapter implements JiraProjectPort {
         }
     }
 
-    // Only scrum boards are asked for sprints: the Agile API rejects the sprint endpoint on a
-    // kanban board, and filtering by board type here avoids provoking that error at all.
-    private List<Long> scrumBoardIds(JiraAccessContext access, String projectId) {
+    // Board types are scrum, kanban and simple. Only kanban is skipped, because it definitively
+    // has no sprints. "simple" is what team-managed (next-gen) projects report and it may be
+    // either Scrum- or Kanban-style with no way to tell from the board payload, so it must be
+    // asked rather than assumed sprintless — filtering to "scrum" alone silently hid the sprints
+    // of every team-managed project.
+    private List<Long> sprintCapableBoardIds(JiraAccessContext access, String projectId) {
         List<Long> boardIds = new ArrayList<>();
         int startAt = 0;
         for (int page = 0; page < MAX_AGILE_PAGES; page++) {
@@ -138,9 +150,13 @@ public class JiraProjectAdapter implements JiraProjectPort {
                     .body(JiraBoardPage.class);
             List<JiraBoardPayload> values = body == null || body.values() == null ? List.of() : body.values();
             for (JiraBoardPayload board : values) {
-                if (board.id() != null && "scrum".equalsIgnoreCase(board.type())) {
+                if (board.id() != null && !"kanban".equalsIgnoreCase(board.type())) {
                     boardIds.add(board.id());
                 }
+            }
+            if (log.isDebugEnabled()) {
+                log.debug("Project {} board page at {}: {} board(s) {}", projectId, startAt, values.size(),
+                        values.stream().map(b -> b.id() + ":" + b.type()).toList());
             }
             if (values.isEmpty() || Boolean.TRUE.equals(body.isLast())) {
                 return boardIds;
@@ -151,6 +167,18 @@ public class JiraProjectAdapter implements JiraProjectPort {
     }
 
     private List<JiraSprintPayload> sprintsOnBoard(JiraAccessContext access, Long boardId) {
+        try {
+            return sprintPages(access, boardId);
+        } catch (HttpClientErrorException.BadRequest | HttpClientErrorException.NotFound e) {
+            // A board that does not support sprints answers 400 (and a deleted one 404). Since a
+            // "simple" board's style is not discoverable up front, this is the only way to tell —
+            // and one such board must not fail the whole picker.
+            log.debug("Board {} does not support sprints, skipping", boardId);
+            return List.of();
+        }
+    }
+
+    private List<JiraSprintPayload> sprintPages(JiraAccessContext access, Long boardId) {
         List<JiraSprintPayload> sprints = new ArrayList<>();
         int startAt = 0;
         for (int page = 0; page < MAX_AGILE_PAGES; page++) {
