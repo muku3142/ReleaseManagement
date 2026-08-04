@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useJiraProjects, useJiraVersions } from '../api/jiraProjects';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
@@ -17,6 +17,7 @@ export function TicketsRoute() {
   const [statusCategories, setStatusCategories] = useState<StatusCategory[]>(DEFAULT_STATUS_CATEGORIES);
   const [loaded, setLoaded] = useState<Ticket[] | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
   const projects = useJiraProjects();
   const versions = useJiraVersions(projectId);
@@ -44,6 +45,7 @@ export function TicketsRoute() {
           setLoaded(data.tickets);
           // A checkbox pointing at a ticket no longer on screen would misreport what is selected.
           setSelected(new Set());
+          setExpandedKey(null);
         },
       },
     );
@@ -250,33 +252,82 @@ export function TicketsRoute() {
                 <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
                   Reporter
                 </th>
+                <th scope="col" className="px-4 py-2" />
               </tr>
             </thead>
             <tbody>
               {loaded.map((ticket) => (
-                <tr key={ticket.key} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(ticket.key)}
-                      onChange={() => toggle(ticket.key)}
-                      aria-label={`Select ticket ${ticket.key}`}
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600"
-                    />
-                  </td>
-                  <td className="px-4 py-2 font-semibold text-gray-900">{ticket.key}</td>
-                  <td
-                    className="max-w-md overflow-hidden text-ellipsis whitespace-nowrap px-4 py-2 text-gray-700"
-                    title={ticket.summary}
-                  >
-                    {ticket.summary}
-                  </td>
-                  <td className="px-4 py-2 text-gray-700">{ticket.issueType}</td>
-                  <td className="px-4 py-2 text-gray-700">{ticket.status}</td>
-                  <td className="px-4 py-2 text-gray-700">{ticket.resolution ?? '—'}</td>
-                  <td className="px-4 py-2 text-gray-700">{ticket.assignee ?? '—'}</td>
-                  <td className="px-4 py-2 text-gray-700">{ticket.reporter}</td>
-                </tr>
+                <Fragment key={ticket.key}>
+                  <tr className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="px-4 py-2">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(ticket.key)}
+                        onChange={() => toggle(ticket.key)}
+                        aria-label={`Select ticket ${ticket.key}`}
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus-visible:ring-2 focus-visible:ring-blue-600"
+                      />
+                    </td>
+                    <td className="px-4 py-2 font-semibold text-gray-900">{ticket.key}</td>
+                    <td
+                      className="max-w-md overflow-hidden text-ellipsis whitespace-nowrap px-4 py-2 text-gray-700"
+                      title={ticket.summary}
+                    >
+                      {ticket.summary}
+                    </td>
+                    <td className="px-4 py-2 text-gray-700">{ticket.issueType}</td>
+                    <td className="px-4 py-2 text-gray-700">{ticket.status}</td>
+                    <td className="px-4 py-2 text-gray-700">{ticket.resolution ?? '—'}</td>
+                    <td className="px-4 py-2 text-gray-700">{ticket.assignee ?? '—'}</td>
+                    <td className="px-4 py-2 text-gray-700">{ticket.reporter}</td>
+                    <td className="px-4 py-2">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedKey(expandedKey === ticket.key ? null : ticket.key)}
+                        aria-expanded={expandedKey === ticket.key}
+                        aria-label={
+                          expandedKey === ticket.key ? 'Collapse ticket details' : 'Expand ticket details'
+                        }
+                        className="rounded px-2 text-sm text-gray-600 hover:text-gray-900 focus-visible:ring-2 focus-visible:ring-blue-600"
+                      >
+                        {expandedKey === ticket.key ? '▾' : '▸'}
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedKey === ticket.key && (
+                    <tr>
+                      <td colSpan={9} className="px-4 pb-4">
+                        <div className="max-h-80 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-4">
+                          <h3 className="text-sm font-semibold text-gray-900">Description</h3>
+                          <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
+                            {ticket.description || 'No description.'}
+                          </p>
+
+                          <h3 className="mt-4 text-sm font-semibold text-gray-900">
+                            Comments
+                            {ticket.commentTotal > ticket.comments.length
+                              ? ` (showing ${ticket.comments.length} of ${ticket.commentTotal})`
+                              : ''}
+                          </h3>
+                          {ticket.comments.length === 0 ? (
+                            <p className="mt-2 text-sm text-gray-600">No comments.</p>
+                          ) : (
+                            <ul className="mt-2 space-y-3">
+                              {ticket.comments.map((comment, index) => (
+                                <li
+                                  key={index}
+                                  className="whitespace-pre-wrap border-l-2 border-gray-200 pl-3 text-sm text-gray-700"
+                                >
+                                  {comment}
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
