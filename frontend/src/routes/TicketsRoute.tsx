@@ -49,7 +49,7 @@ export function TicketsRoute() {
     // VALIDATION_FAILED, and the discriminated union makes that unrepresentable here.
     const criteria: TicketSearchCriteria = usingJql
       ? { mode: 'jql', jql: jql.trim() }
-      : { mode: 'fixVersion', projectId, fixVersionId, statusCategories };
+      : { mode: 'project', projectId, fixVersionId: fixVersionId || null, statusCategories };
     search.mutate(criteria, {
       onSuccess: (data) => {
         setLoaded(data.tickets);
@@ -77,10 +77,17 @@ export function TicketsRoute() {
   const searchProblem =
     search.isError && search.error instanceof ApiError ? search.error.problem : undefined;
 
+  // A project with no Versions defined in Jira is common and must not look like a failure —
+  // the picker says so explicitly instead of sitting empty with no explanation.
+  const hasNoVersions =
+    projectId !== '' && versions.isSuccess && (versions.data?.length ?? 0) === 0;
+
   const selectedProjectKey =
     projects.data?.find((p) => p.id === projectId)?.key ?? 'the selected project';
-  const selectedVersionName =
-    versions.data?.find((v) => v.id === fixVersionId)?.name ?? 'the selected fix version';
+  const selectedVersion = versions.data?.find((v) => v.id === fixVersionId)?.name;
+  const scopeDescription = selectedVersion
+    ? `${selectedProjectKey} / ${selectedVersion}`
+    : selectedProjectKey;
   // With the Done-only default, the most likely cause of an empty result is that the version's
   // work is not finished yet — so the message names the active status filter rather than sending
   // the release manager hunting the wrong one.
@@ -118,16 +125,16 @@ export function TicketsRoute() {
 
         <div>
           <label htmlFor="fixVersionId" className="block text-sm font-semibold text-gray-700">
-            Fix version
+            Fix version <span className="font-normal text-gray-500">(optional)</span>
           </label>
           <select
             id="fixVersionId"
             value={fixVersionId}
             onChange={(event) => setFixVersionId(event.target.value)}
-            disabled={projectId === '' || versions.isPending || search.isPending}
+            disabled={projectId === '' || versions.isPending || search.isPending || hasNoVersions}
             className="rounded border border-gray-300 px-3 py-2 text-sm"
           >
-            <option value="">Select a fix version…</option>
+            <option value="">{hasNoVersions ? 'No versions in this project' : 'All fix versions'}</option>
             {versions.data?.map((v) => (
               <option key={v.id} value={v.id}>
                 {v.name}
@@ -160,10 +167,7 @@ export function TicketsRoute() {
         <button
           type="button"
           onClick={runSearch}
-          disabled={
-            search.isPending ||
-            (jqlOpen && jql.trim() !== '' ? false : projectId === '' || fixVersionId === '')
-          }
+          disabled={search.isPending || (jqlOpen && jql.trim() !== '' ? false : projectId === '')}
           className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         >
           Load tickets
@@ -245,7 +249,7 @@ export function TicketsRoute() {
             <p className="mt-2 text-sm text-gray-600">No tickets matched your JQL. Try a broader query.</p>
           ) : (
             <p className="mt-2 text-sm text-gray-600">
-              {`No tickets matched ${selectedProjectKey} / ${selectedVersionName}${statusHint}. Try a different fix version, widen the status filter, or use Advanced: edit as JQL.`}
+              {`No tickets matched ${scopeDescription}${statusHint}. Try a different fix version, widen the status filter, or use Advanced: edit as JQL.`}
             </p>
           )}
         </div>

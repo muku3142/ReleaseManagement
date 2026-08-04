@@ -113,11 +113,39 @@ class TicketControllerTest {
     }
 
     @Test
-    void halfFilledPickerIsRejected() throws Exception {
+    void projectWithoutFixVersionIsAValidSearch() throws Exception {
+        when(service.search(any())).thenReturn(List.of(ticket("CNV-1")));
+
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"projectId\":\"10023\"}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
+        verify(service).search(criteria.capture());
+        assertThat(criteria.getValue().toJql())
+                .isEqualTo("project = 10023 AND statusCategory IN (\"Done\") ORDER BY key ASC");
+    }
+
+    @Test
+    void fixVersionWithoutProjectIsRejected() throws Exception {
+        mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fixVersionId\":\"10891\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
+
+        verify(service, never()).search(any());
+    }
+
+    @Test
+    void fixVersionAlongsideRawJqlIsRejectedRatherThanSilentlyIgnored() throws Exception {
+        mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"fixVersionId\":\"10891\",\"jql\":\"project = CNV\"}"))
                 .andExpect(status().isBadRequest());
+
+        verify(service, never()).search(any());
     }
 
     @Test

@@ -19,10 +19,13 @@ public record TicketSearchRequest(
 
         Set<StatusCategory> statusCategories) {
 
-    @AssertTrue(message = "supply either projectId and fixVersionId, or jql - not both")
+    @AssertTrue(message = "supply either projectId (fixVersionId optional), or jql - not both")
     public boolean isExactlyOneFilterMode() {
-        boolean picker = projectId != null && fixVersionId != null;
+        boolean picker = projectId != null;
         boolean advanced = jql != null && !jql.isBlank();
-        return picker ^ advanced;
+        // A fix version without a project is meaningless, and one alongside raw JQL would be
+        // silently ignored — reject both rather than guessing what was meant.
+        boolean orphanFixVersion = fixVersionId != null && projectId == null;
+        return (picker ^ advanced) && !orphanFixVersion;
     }
 }

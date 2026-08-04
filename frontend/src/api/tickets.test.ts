@@ -18,9 +18,9 @@ describe('ticket search client', () => {
     vi.restoreAllMocks();
   });
 
-  it('sends only the picker fields on the fixVersion path', () => {
+  it('sends only the picker fields on the project path', () => {
     const body = toSearchBody({
-      mode: 'fixVersion',
+      mode: 'project',
       projectId: '10023',
       fixVersionId: '10891',
       statusCategories: ['DONE'],
@@ -28,6 +28,18 @@ describe('ticket search client', () => {
 
     expect(body).toEqual({ projectId: '10023', fixVersionId: '10891', statusCategories: ['DONE'] });
     expect('jql' in body).toBe(false);
+  });
+
+  it('omits fixVersionId entirely when no version is selected', () => {
+    const body = toSearchBody({
+      mode: 'project',
+      projectId: '10023',
+      fixVersionId: null,
+      statusCategories: ['DONE'],
+    });
+
+    expect(body).toEqual({ projectId: '10023', statusCategories: ['DONE'] });
+    expect('fixVersionId' in body).toBe(false);
   });
 
   it('sends only the jql field on the advanced path, with no implied status filter', () => {
@@ -81,7 +93,7 @@ describe('ticket search client', () => {
 
   it('preserves an explicitly empty status set rather than dropping it', () => {
     const body = toSearchBody({
-      mode: 'fixVersion',
+      mode: 'project',
       projectId: '10023',
       fixVersionId: '10891',
       statusCategories: [],

@@ -11,7 +11,7 @@ class TicketSearchCriteriaTest {
 
     @Test
     void composesIdOnlyJqlWithDoneOnlyDefaultWhenCategoriesOmitted() {
-        assertThat(TicketSearchCriteria.byFixVersion("10023", "10891", null).toJql())
+        assertThat(TicketSearchCriteria.byProject("10023", "10891", null).toJql())
                 .isEqualTo("project = 10023 AND fixVersion = 10891 AND statusCategory IN (\"Done\") ORDER BY key ASC");
     }
 
@@ -37,7 +37,7 @@ class TicketSearchCriteriaTest {
     @Test
     void composesExplicitlyRequestedStatusCategories() {
         String composed = TicketSearchCriteria
-                .byFixVersion("10023", "10891", EnumSet.of(StatusCategory.TO_DO, StatusCategory.IN_PROGRESS))
+                .byProject("10023", "10891", EnumSet.of(StatusCategory.TO_DO, StatusCategory.IN_PROGRESS))
                 .toJql();
 
         assertThat(composed).contains("statusCategory IN (\"To Do\", \"In Progress\")");
@@ -46,16 +46,39 @@ class TicketSearchCriteriaTest {
 
     @Test
     void emptyCategorySetMeansEveryStatusSoNoClauseIsComposed() {
-        String composed = TicketSearchCriteria.byFixVersion("10023", "10891", Set.of()).toJql();
+        String composed = TicketSearchCriteria.byProject("10023", "10891", Set.of()).toJql();
 
         assertThat(composed).doesNotContain("statusCategory");
         assertThat(composed).isEqualTo("project = 10023 AND fixVersion = 10891 ORDER BY key ASC");
     }
 
     @Test
+    void omitsFixVersionClauseWhenNoVersionIsSelected() {
+        String composed = TicketSearchCriteria.byProject("10023", null, null).toJql();
+
+        assertThat(composed).doesNotContain("fixVersion");
+        assertThat(composed)
+                .isEqualTo("project = 10023 AND statusCategory IN (\"Done\") ORDER BY key ASC");
+    }
+
+    @Test
+    void treatsBlankFixVersionAsAbsentRatherThanMatchingOnEmpty() {
+        String composed = TicketSearchCriteria.byProject("10023", "   ", null).toJql();
+
+        assertThat(composed).doesNotContain("fixVersion");
+    }
+
+    @Test
+    void projectOnlyWithEveryStatusComposesTheBroadestQuery() {
+        String composed = TicketSearchCriteria.byProject("10023", null, Set.of()).toJql();
+
+        assertThat(composed).isEqualTo("project = 10023 ORDER BY key ASC");
+    }
+
+    @Test
     void statusClauseAlwaysPrecedesOrderBy() {
         String composed = TicketSearchCriteria
-                .byFixVersion("10023", "10891", EnumSet.allOf(StatusCategory.class))
+                .byProject("10023", "10891", EnumSet.allOf(StatusCategory.class))
                 .toJql();
 
         assertThat(composed).endsWith("ORDER BY key ASC");

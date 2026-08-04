@@ -11,8 +11,11 @@ public record TicketSearchCriteria(String projectId, String fixVersionId, String
     // the Done-only set rather than every ticket ever raised on the version.
     public static final Set<StatusCategory> DEFAULT_STATUS_CATEGORIES = EnumSet.of(StatusCategory.DONE);
 
-    public static TicketSearchCriteria byFixVersion(String projectId, String fixVersionId,
-                                                    Set<StatusCategory> statusCategories) {
+    // fixVersionId is optional: plenty of Jira projects never define Versions at all, and a
+    // release cut from such a project must still be assemblable. A null or blank id omits the
+    // clause entirely rather than matching on an empty value.
+    public static TicketSearchCriteria byProject(String projectId, String fixVersionId,
+                                                 Set<StatusCategory> statusCategories) {
         return new TicketSearchCriteria(projectId, fixVersionId, null,
                 statusCategories == null ? DEFAULT_STATUS_CATEGORIES : statusCategories);
     }
@@ -29,12 +32,14 @@ public record TicketSearchCriteria(String projectId, String fixVersionId, String
         if (jql != null) {
             return jql;
         }
+        String fixVersionClause = fixVersionId == null || fixVersionId.isBlank()
+                ? ""
+                : " AND fixVersion = " + fixVersionId;
         String statusClause = statusCategories == null || statusCategories.isEmpty()
                 ? ""
                 : " AND statusCategory IN (" + statusCategories.stream()
                         .map(category -> "\"" + category.jqlName() + "\"")
                         .collect(Collectors.joining(", ")) + ")";
-        return "project = " + projectId + " AND fixVersion = " + fixVersionId
-                + statusClause + " ORDER BY key ASC";
+        return "project = " + projectId + fixVersionClause + statusClause + " ORDER BY key ASC";
     }
 }

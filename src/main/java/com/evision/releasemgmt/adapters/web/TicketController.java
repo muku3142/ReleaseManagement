@@ -26,7 +26,7 @@ public class TicketController {
     public TicketSearchResponse search(@Valid @RequestBody TicketSearchRequest request) {
         TicketSearchCriteria criteria = request.jql() != null && !request.jql().isBlank()
                 ? TicketSearchCriteria.byJql(request.jql())
-                : TicketSearchCriteria.byFixVersion(request.projectId(), request.fixVersionId(),
+                : TicketSearchCriteria.byProject(request.projectId(), request.fixVersionId(),
                         request.statusCategories());
         return new TicketSearchResponse(
                 service.search(criteria).stream().map(TicketController::toResponse).toList());

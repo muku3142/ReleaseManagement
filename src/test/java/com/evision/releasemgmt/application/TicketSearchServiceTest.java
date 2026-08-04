@@ -69,7 +69,7 @@ class TicketSearchServiceTest {
         when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
         when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(List.of());
 
-        service.search(TicketSearchCriteria.byFixVersion("10023", "10891", null));
+        service.search(TicketSearchCriteria.byProject("10023", "10891", null));
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Set<TicketField>> fields = ArgumentCaptor.forClass(Set.class);
@@ -105,7 +105,7 @@ class TicketSearchServiceTest {
         when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
         when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(fromPort);
 
-        List<TicketDetail> result = service.search(TicketSearchCriteria.byFixVersion("10023", "10891", null));
+        List<TicketDetail> result = service.search(TicketSearchCriteria.byProject("10023", "10891", null));
 
         assertThat(result).containsExactlyElementsOf(fromPort);
     }
@@ -115,7 +115,7 @@ class TicketSearchServiceTest {
         when(accessContextService.currentContext())
                 .thenThrow(new JiraAuthenticationException(JiraAuthFailureReason.INVALID_CREDENTIALS));
 
-        assertThatThrownBy(() -> service.search(TicketSearchCriteria.byFixVersion("10023", "10891", null)))
+        assertThatThrownBy(() -> service.search(TicketSearchCriteria.byProject("10023", "10891", null)))
                 .isInstanceOf(JiraAuthenticationException.class)
                 .hasMessage(JiraAuthFailureReason.INVALID_CREDENTIALS.name());
 
@@ -128,7 +128,7 @@ class TicketSearchServiceTest {
         when(fieldMetadataService.resolve(any()))
                 .thenThrow(new JiraTicketReadException(JiraAuthFailureReason.JIRA_ERROR));
 
-        assertThatThrownBy(() -> service.search(TicketSearchCriteria.byFixVersion("10023", "10891", null)))
+        assertThatThrownBy(() -> service.search(TicketSearchCriteria.byProject("10023", "10891", null)))
                 .isInstanceOf(JiraTicketReadException.class);
 
         verify(ticketPort, never()).searchAll(any(), anyString(), any());
