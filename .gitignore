@@ -5,3 +5,7 @@ frontend/dist/
 *.log
 .idea/
 .mvn/wrapper/maven-wrapper.jar
+
+# Raw dev-status spike captures: real repository, branch and author names, staged
+# outside src/ on purpose and deleted once redacted fixtures are produced (plan 02-04).
+.planning/phases/*/spike-capture/
