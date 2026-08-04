@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 2 parked at 6/7 (02-04 deferred); starting Phase 3
-last_updated: "2026-08-04T11:00:00.000Z"
-last_activity: 2026-08-04 -- sprint filtering confirmed live; moving to Phase 3
+status: Phase 2 parked at 6/7; moving to Phase 3 (Release Assembly)
+stopped_at: Phase 3 context gathered
+last_updated: "2026-08-04T10:48:00.123Z"
+last_activity: 2026-08-04 -- sprint filtering confirmed working on the live tenant
 progress:
   total_phases: 7
   completed_phases: 0
@@ -34,8 +34,10 @@ tenant (projects, sprints, search, table) and elected to move to Phase 3 with
 02-04 outstanding.
 
 **Phase 2 is NOT formally complete.** Outstanding before it can be closed:
+
 - 02-04 dev-status capture (needs a human with a live token). Phase 6 cannot be
   scoped until this resolves — that dependency is unchanged.
+
 - JIRA-02..07 are still `Pending` in REQUIREMENTS.md. Deliberately not ticked:
   JIRA-03 (paging to exhaustion) is proven by WireMock only, never against a
   >100-ticket real result set, and the evidence-notes discipline from Phase 1
@@ -116,6 +118,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-01T16:10:31.087Z
-Stopped at: Phase 2 UI-SPEC approved
-Resume file: .planning/phases/02-jira-ticket-browsing/02-UI-SPEC.md
+Last session: 2026-08-04T10:48:00.117Z
+Stopped at: Phase 3 context gathered
+Resume file: .planning/phases/03-release-assembly/03-CONTEXT.md
