@@ -1,16 +1,27 @@
 import { Fragment, useState } from 'react';
-import { Link, useParams } from '@tanstack/react-router';
+import { Link, useParams, useSearch } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
 import { MANUAL_ITEM_CATEGORY_LABELS, useRelease } from '../api/releases';
+
+// D-03-13: idempotent add, honest feedback - never phrased as a warning, because a duplicate
+// add is a success, not a partial failure.
+function addResultMessage(added: number, alreadyPresent: number, name: string, version: string) {
+  if (alreadyPresent === 0) return `${added} ticket(s) added to ${name} ${version}.`;
+  if (added === 0) return `All ${alreadyPresent} selected tickets were already on this release.`;
+  return `${added} added, ${alreadyPresent} already on this release.`;
+}
 
 export function ReleaseDetailRoute() {
   // The pathless authenticated layout route is registered with id: 'authenticated' (no `path`),
   // so TanStack Router's generated route-id space prefixes every child with /authenticated even
   // though the actual URL (and `to=` navigation) has no such segment.
   const { releaseId } = useParams({ from: '/authenticated/releases/$releaseId' });
+  const { added, alreadyPresent } = useSearch({ from: '/authenticated/releases/$releaseId' });
   const release = useRelease(releaseId);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const showBanner = !bannerDismissed && added !== undefined && alreadyPresent !== undefined;
 
   const problem = release.isError && release.error instanceof ApiError ? release.error.problem : undefined;
 
@@ -96,6 +107,23 @@ export function ReleaseDetailRoute() {
           </p>
         )}
       </div>
+
+      {showBanner && (
+        <div
+          role="status"
+          className="mt-4 flex items-start justify-between rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900"
+        >
+          <p>{addResultMessage(added, alreadyPresent, data.name, data.version)}</p>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => setBannerDismissed(true)}
+            className="ml-3 rounded px-2 text-blue-900 focus-visible:ring-2 focus-visible:ring-blue-600"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {noItems ? (
         <div className="mt-6 rounded bg-gray-50 p-6 text-center">

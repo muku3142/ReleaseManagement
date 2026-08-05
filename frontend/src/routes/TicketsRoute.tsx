@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { useJiraProjects, useJiraSprints } from '../api/jiraProjects';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
+import { AddToReleaseDialog } from '../components/AddToReleaseDialog';
 import {
   DEFAULT_STATUS_CATEGORIES,
   STATUS_CATEGORIES,
@@ -21,6 +22,7 @@ export function TicketsRoute() {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [jqlOpen, setJqlOpen] = useState(false);
   const [jql, setJql] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
   // Which mode produced the current `loaded` value. Deliberately not the live jqlOpen flag,
   // which the user may have toggled since the search ran.
   const [loadedMode, setLoadedMode] = useState<'project' | 'jql' | null>(null);
@@ -83,6 +85,9 @@ export function TicketsRoute() {
 
   const selectedProjectKey =
     projects.data?.find((p) => p.id === projectId)?.key ?? 'the selected project';
+  // D-03-05: the release's advisory project key defaults to the project being browsed. Null when
+  // the search ran from raw JQL, where there is no single browsed project.
+  const browsedProjectKey = projects.data?.find((p) => p.id === projectId)?.key ?? null;
   const selectedSprint = sprints.data?.find((s) => s.id === sprintId)?.name;
   const scopeDescription = selectedSprint
     ? `${selectedProjectKey} / ${selectedSprint}`
@@ -257,9 +262,20 @@ export function TicketsRoute() {
       )}
 
       {!search.isPending && loaded !== null && loaded.length > 0 && (
-        <p role="status" aria-live="polite" className="mt-6 text-sm font-semibold text-blue-600">
-          {selected.size} selected
-        </p>
+        <div className="mt-6 flex items-center gap-3">
+          <p role="status" aria-live="polite" className="text-sm font-semibold text-blue-600">
+            {selected.size} selected
+          </p>
+          {selected.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Add to release
+            </button>
+          )}
+        </div>
       )}
 
       {!search.isPending && loaded !== null && loaded.length > 0 && (
@@ -386,6 +402,13 @@ export function TicketsRoute() {
           </table>
         </div>
       )}
+
+      <AddToReleaseDialog
+        open={pickerOpen}
+        ticketKeys={[...selected]}
+        jiraProjectKey={browsedProjectKey}
+        onClose={() => setPickerOpen(false)}
+      />
     </div>
   );
 }
