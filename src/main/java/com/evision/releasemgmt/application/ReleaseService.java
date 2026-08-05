@@ -1,28 +1,58 @@
 package com.evision.releasemgmt.application;
 
+import com.evision.releasemgmt.domain.jira.TicketDetail;
+import com.evision.releasemgmt.domain.jira.TicketSearchCriteria;
+import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.Release;
+import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 public class ReleaseService {
 
-    private final ReleaseRepository repository;
+    // A Jira issue key is <PROJECT>-<number>. Anything else never reaches the JQL string: a key
+    // is the one value on this path that is composed into a query rather than bound, so it is
+    // validated at the sink as well as at the REST boundary.
+    private static final Pattern TICKET_KEY = Pattern.compile("^[A-Z][A-Z0-9]*-[0-9]+$");
 
-    public ReleaseService(ReleaseRepository repository) {
+    // Jira's /search/jql has a practical URL/body limit and a release can hold hundreds of items,
+    // so refresh fetches in chunks rather than one enormous key list.
+    private static final int FETCH_BATCH_SIZE = 100;
+
+    private final ReleaseRepository repository;
+    private final TicketSearchService ticketSearchService;
+
+    public ReleaseService(ReleaseRepository repository, TicketSearchService ticketSearchService) {
         this.repository = repository;
+        this.ticketSearchService = ticketSearchService;
     }
 
     public Release create(String name, String version, String jiraProjectKey, String actor) {
+        return createWithTickets(name, version, jiraProjectKey, List.of(), actor).release();
+    }
+
+    public AddTicketsResult createWithTickets(String name, String version, String jiraProjectKey,
+                                              List<String> ticketKeys, String actor) {
+        Instant now = Instant.now();
+        List<String> requested = distinct(ticketKeys);
+        List<ReleaseItem> items = fetchTickets(requested).stream()
+                .map(ticket -> new ReleaseItem(ticket, now))
+                .toList();
         Release release = Release.create(name.trim(), version.trim(), blankToNull(jiraProjectKey),
-                actor, Instant.now());
-        return repository.create(release, List.of());
+                actor, now);
+        Release created = repository.create(release, items);
+        return new AddTicketsResult(created, items.size(), 0);
     }
 
     public Release get(UUID id) {
@@ -31,6 +61,45 @@ public class ReleaseService {
 
     public List<ReleaseSummary> search(String query) {
         return repository.search(query == null ? "" : query.trim());
+    }
+
+    public AddTicketsResult addTickets(UUID releaseId, List<String> ticketKeys) {
+        Release release = get(releaseId);
+        release.requireOpen();
+
+        List<String> requested = distinct(ticketKeys);
+        Set<String> present = Set.copyOf(repository.findTicketKeys(releaseId));
+        List<String> toFetch = requested.stream().filter(key -> !present.contains(key)).toList();
+        int alreadyPresent = requested.size() - toFetch.size();
+
+        if (toFetch.isEmpty()) {
+            // D-03-13: a bulk push whose whole selection is already on the release is a success,
+            // not a 409. The counts let the UI say so honestly.
+            return new AddTicketsResult(release, 0, alreadyPresent);
+        }
+
+        Instant now = Instant.now();
+        List<ReleaseItem> items = fetchTickets(toFetch).stream()
+                .map(ticket -> new ReleaseItem(ticket, now))
+                .toList();
+        Release updated = items.isEmpty() ? release : repository.addItems(releaseId, items);
+        return new AddTicketsResult(updated, items.size(), alreadyPresent);
+    }
+
+    public Release removeTicket(UUID releaseId, String ticketKey) {
+        get(releaseId).requireOpen();          // REL-02: removal only while OPEN
+        return repository.removeItem(releaseId, ticketKey);
+    }
+
+    public Release refresh(UUID releaseId) {
+        Release release = get(releaseId);
+        release.requireOpen();                 // freeze is simply the point after which this is refused
+        List<String> keys = repository.findTicketKeys(releaseId);
+        Instant now = Instant.now();
+        List<ReleaseItem> refreshed = fetchTickets(keys).stream()
+                .map(ticket -> new ReleaseItem(ticket, now))
+                .toList();
+        return repository.replaceItemSnapshots(releaseId, refreshed, now);
     }
 
     public Release freeze(UUID id, String actor) {
@@ -45,6 +114,24 @@ public class ReleaseService {
         // record and deletion must be refused.
         get(id).requireOpen();
         repository.delete(id);
+    }
+
+    private List<TicketDetail> fetchTickets(List<String> keys) {
+        List<String> safe = keys.stream().filter(k -> k != null && TICKET_KEY.matcher(k).matches()).toList();
+        if (safe.isEmpty()) {
+            return List.of();
+        }
+        List<TicketDetail> all = new ArrayList<>();
+        for (int start = 0; start < safe.size(); start += FETCH_BATCH_SIZE) {
+            List<String> batch = safe.subList(start, Math.min(start + FETCH_BATCH_SIZE, safe.size()));
+            String jql = "key in (" + String.join(", ", batch) + ") ORDER BY key ASC";
+            all.addAll(ticketSearchService.search(TicketSearchCriteria.byJql(jql)));
+        }
+        return all;
+    }
+
+    private static List<String> distinct(List<String> keys) {
+        return keys == null ? List.of() : keys.stream().filter(Objects::nonNull).distinct().toList();
     }
 
     private static String blankToNull(String value) {

@@ -5,7 +5,10 @@ import com.evision.releasemgmt.adapters.security.ProblemDetailAuthenticationEntr
 import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
+import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
+import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
+import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemCategory;
 import com.evision.releasemgmt.domain.release.Release;
@@ -28,6 +31,8 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -70,18 +75,20 @@ class ReleaseControllerTest {
     @Test
     void createReturns201AndRecordsTheAuthenticatedPrincipalAsActor() throws Exception {
         UUID id = UUID.randomUUID();
-        when(service.create(any(), any(), any(), any())).thenReturn(release(id, ReleaseStatus.OPEN));
+        when(service.createWithTickets(any(), any(), any(), any(), any()))
+                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 0, 0));
 
         mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Sprint 42\",\"version\":\"2026.08\",\"jiraProjectKey\":\"CNV\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.name").value("Sprint 42"))
-                .andExpect(jsonPath("$.version").value("2026.08"))
-                .andExpect(jsonPath("$.status").value("OPEN"));
+                .andExpect(jsonPath("$.release.name").value("Sprint 42"))
+                .andExpect(jsonPath("$.release.version").value("2026.08"))
+                .andExpect(jsonPath("$.release.status").value("OPEN"));
 
         ArgumentCaptor<String> actor = ArgumentCaptor.forClass(String.class);
-        verify(service).create(eq("Sprint 42"), eq("2026.08"), eq("CNV"), actor.capture());
+        verify(service).createWithTickets(eq("Sprint 42"), eq("2026.08"), eq("CNV"), any(),
+                actor.capture());
         assertThat(actor.getValue()).isEqualTo("557058:abc-123");
     }
 
@@ -94,7 +101,7 @@ class ReleaseControllerTest {
                 .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.fieldErrors.name").exists());
 
-        verify(service, never()).create(any(), any(), any(), any());
+        verify(service, never()).createWithTickets(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -106,7 +113,7 @@ class ReleaseControllerTest {
                 .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"))
                 .andExpect(jsonPath("$.fieldErrors.version").exists());
 
-        verify(service, never()).create(any(), any(), any(), any());
+        verify(service, never()).createWithTickets(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -118,12 +125,13 @@ class ReleaseControllerTest {
                         .content("{\"name\":\"" + overlongName + "\",\"version\":\"1.0\"}"))
                 .andExpect(status().isBadRequest());
 
-        verify(service, never()).create(any(), any(), any(), any());
+        verify(service, never()).createWithTickets(any(), any(), any(), any(), any());
     }
 
     @Test
     void duplicateNameAndVersionMapsTo409ReleaseDuplicate() throws Exception {
-        when(service.create(any(), any(), any(), any())).thenThrow(new ReleaseDuplicateException());
+        when(service.createWithTickets(any(), any(), any(), any(), any()))
+                .thenThrow(new ReleaseDuplicateException());
 
         mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -135,12 +143,41 @@ class ReleaseControllerTest {
     @Test
     void nonSemverVersionIsAccepted() throws Exception {
         UUID id = UUID.randomUUID();
-        when(service.create(any(), any(), any(), any())).thenReturn(release(id, ReleaseStatus.OPEN));
+        when(service.createWithTickets(any(), any(), any(), any(), any()))
+                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 0, 0));
 
         mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"Hotfix\",\"version\":\"Sprint 42\"}"))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    void createWithTicketKeysReturnsAddedCount() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.createWithTickets(any(), any(), any(), any(), any()))
+                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 2, 0));
+
+        mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Sprint 42\",\"version\":\"2026.08\",\"jiraProjectKey\":\"CNV\","
+                                + "\"ticketKeys\":[\"CNV-1\",\"CNV-2\"]}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.added").value(2))
+                .andExpect(jsonPath("$.alreadyPresent").value(0))
+                .andExpect(jsonPath("$.release.id").exists());
+    }
+
+    @Test
+    void createWithAMalformedTicketKeyIsRejectedBeforeAnyServiceCall() throws Exception {
+        mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Sprint 42\",\"version\":\"2026.08\","
+                                + "\"ticketKeys\":[\"not a key\"]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
+
+        verify(service, never()).createWithTickets(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -222,6 +259,113 @@ class ReleaseControllerTest {
     }
 
     @Test
+    void addTicketsReturnsBothCounts() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.addTickets(eq(id), any()))
+                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 1, 1));
+
+        mockMvc.perform(post("/api/releases/{id}/items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticketKeys\":[\"CNV-1\",\"CNV-2\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.added").value(1))
+                .andExpect(jsonPath("$.alreadyPresent").value(1));
+    }
+
+    @Test
+    void addTicketsWithAnEmptyListIsRejected() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/releases/{id}/items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticketKeys\":[]}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void addTicketsWithMoreThanFiveHundredKeysIsRejected() throws Exception {
+        UUID id = UUID.randomUUID();
+        String keys = IntStream.rangeClosed(1, 501).mapToObj(i -> "\"CNV-" + i + "\"")
+                .collect(Collectors.joining(","));
+
+        mockMvc.perform(post("/api/releases/{id}/items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticketKeys\":[" + keys + "]}"))
+                .andExpect(status().isBadRequest());
+
+        verify(service, never()).addTickets(any(), any());
+    }
+
+    @Test
+    void addTicketsToAFrozenReleaseMapsTo409ReleaseFrozen() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.addTickets(eq(id), any())).thenThrow(new ReleaseFrozenException());
+
+        mockMvc.perform(post("/api/releases/{id}/items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticketKeys\":[\"CNV-1\"]}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.reason").value("RELEASE_FROZEN"));
+    }
+
+    @Test
+    void aJiraFailureDuringAddSurfacesAsItsExistingProblemDetail() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.addTickets(eq(id), any()))
+                .thenThrow(new JiraTicketReadException(JiraAuthFailureReason.JIRA_UNREACHABLE));
+
+        mockMvc.perform(post("/api/releases/{id}/items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticketKeys\":[\"CNV-1\"]}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.reason").value("JIRA_UNREACHABLE"));
+    }
+
+    @Test
+    void unauthenticatedAddIsRejected() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/releases/{id}/items", id).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticketKeys\":[\"CNV-1\"]}"))
+                .andExpect(status().isUnauthorized());
+
+        verify(service, never()).addTickets(any(), any());
+    }
+
+    @Test
+    void removeTicketReturnsTheUpdatedRelease() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.removeTicket(id, "CNV-1")).thenReturn(release(id, ReleaseStatus.OPEN));
+
+        mockMvc.perform(delete("/api/releases/{id}/items/CNV-1", id).with(csrf()).with(authenticated()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void refreshReturnsTheReleaseWithLastRefreshedAt() throws Exception {
+        UUID id = UUID.randomUUID();
+        Release refreshed = new Release(id, "Sprint 42", "2026.08", ReleaseStatus.OPEN, "CNV",
+                Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null,
+                Instant.parse("2026-08-05T09:00:00Z"), List.of(), List.of());
+        when(service.refresh(id)).thenReturn(refreshed);
+
+        mockMvc.perform(post("/api/releases/{id}/refresh", id).with(csrf()).with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lastRefreshedAt").exists());
+    }
+
+    @Test
+    void refreshOnAFrozenReleaseMapsTo409ReleaseFrozen() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.refresh(id)).thenThrow(new ReleaseFrozenException());
+
+        mockMvc.perform(post("/api/releases/{id}/refresh", id).with(csrf()).with(authenticated()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.reason").value("RELEASE_FROZEN"));
+    }
+
+    @Test
     void freezeReturnsTheFrozenReleaseAndRecordsTheActor() throws Exception {
         UUID id = UUID.randomUUID();
         when(service.freeze(eq(id), any())).thenReturn(release(id, ReleaseStatus.FROZEN));
@@ -290,6 +434,6 @@ class ReleaseControllerTest {
                         .content("{\"name\":\"Sprint 42\",\"version\":\"2026.08\"}"))
                 .andExpect(status().isUnauthorized());
 
-        verify(service, never()).create(any(), any(), any(), any());
+        verify(service, never()).createWithTickets(any(), any(), any(), any(), any());
     }
 }

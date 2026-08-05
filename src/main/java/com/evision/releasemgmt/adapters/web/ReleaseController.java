@@ -1,12 +1,15 @@
 package com.evision.releasemgmt.adapters.web;
 
+import com.evision.releasemgmt.adapters.web.dto.AddTicketsRequest;
 import com.evision.releasemgmt.adapters.web.dto.CreateReleaseRequest;
 import com.evision.releasemgmt.adapters.web.dto.ManualItemResponse;
+import com.evision.releasemgmt.adapters.web.dto.ReleaseAddResultResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseItemResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseSearchResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseSummaryResponse;
 import com.evision.releasemgmt.application.ReleaseService;
+import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
@@ -24,6 +27,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Principal;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -38,10 +42,13 @@ public class ReleaseController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public ReleaseResponse create(@Valid @RequestBody CreateReleaseRequest request, Principal principal) {
+    public ReleaseAddResultResponse create(@Valid @RequestBody CreateReleaseRequest request,
+                                           Principal principal) {
         // Every /api/** path is authenticated() in SecurityConfig, so Spring Security guarantees a
         // principal here; its name is the Jira accountId recorded as the actor (D-03-12).
-        return toResponse(service.create(request.name(), request.version(), request.jiraProjectKey(),
+        return toAddResult(service.createWithTickets(request.name(), request.version(),
+                request.jiraProjectKey(),
+                request.ticketKeys() == null ? List.of() : request.ticketKeys(),
                 principal.getName()));
     }
 
@@ -56,6 +63,22 @@ public class ReleaseController {
         return toResponse(service.get(releaseId));
     }
 
+    @PostMapping("/{releaseId}/items")
+    public ReleaseAddResultResponse addTickets(@PathVariable UUID releaseId,
+                                               @Valid @RequestBody AddTicketsRequest request) {
+        return toAddResult(service.addTickets(releaseId, request.ticketKeys()));
+    }
+
+    @DeleteMapping("/{releaseId}/items/{ticketKey}")
+    public ReleaseResponse removeTicket(@PathVariable UUID releaseId, @PathVariable String ticketKey) {
+        return toResponse(service.removeTicket(releaseId, ticketKey));
+    }
+
+    @PostMapping("/{releaseId}/refresh")
+    public ReleaseResponse refresh(@PathVariable UUID releaseId) {
+        return toResponse(service.refresh(releaseId));
+    }
+
     @PostMapping("/{releaseId}/freeze")
     public ReleaseResponse freeze(@PathVariable UUID releaseId, Principal principal) {
         return toResponse(service.freeze(releaseId, principal.getName()));
@@ -65,6 +88,11 @@ public class ReleaseController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID releaseId) {
         service.delete(releaseId);
+    }
+
+    private static ReleaseAddResultResponse toAddResult(AddTicketsResult result) {
+        return new ReleaseAddResultResponse(toResponse(result.release()), result.added(),
+                result.alreadyPresent());
     }
 
     private static ReleaseResponse toResponse(Release release) {
