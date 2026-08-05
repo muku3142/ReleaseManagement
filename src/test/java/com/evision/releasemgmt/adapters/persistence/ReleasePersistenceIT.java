@@ -5,6 +5,7 @@ import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemCategory;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
+import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
@@ -20,6 +21,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -176,6 +178,51 @@ class ReleasePersistenceIT {
 
         assertThat(repository.findById(release.id())).isEmpty();
         assertThat(repository.search("")).extracting(ReleaseSummary::id).doesNotContain(release.id());
+    }
+
+    // The service's requireOpen() runs against a snapshot read in an earlier transaction, with a
+    // paginated Jira call in between, so it cannot be what enforces the one-way door. These two
+    // call the repository directly - exactly what a concurrent freeze leaves the service doing.
+    @Test
+    void aFrozenReleaseRefusesEveryMutationAtThePersistenceBoundary() {
+        Release release = Release.create("Frozen Guard", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(item("CNV-1")));
+        UUID id = release.id();
+        repository.freeze(id, "rm@acme.com", Instant.now());
+        ManualItem note = ManualItem.create("Note", "desc", ManualItemCategory.OTHER, Instant.now());
+
+        assertThatThrownBy(() -> repository.addItems(id, List.of(item("CNV-2"))))
+                .isInstanceOf(ReleaseFrozenException.class);
+        assertThatThrownBy(() -> repository.removeItem(id, "CNV-1"))
+                .isInstanceOf(ReleaseFrozenException.class);
+        assertThatThrownBy(() -> repository.replaceItemSnapshots(id, List.of(item("CNV-1")), Instant.now()))
+                .isInstanceOf(ReleaseFrozenException.class);
+        assertThatThrownBy(() -> repository.addManualItem(id, note))
+                .isInstanceOf(ReleaseFrozenException.class);
+        assertThatThrownBy(() -> repository.removeManualItem(id, note.id()))
+                .isInstanceOf(ReleaseFrozenException.class);
+        assertThatThrownBy(() -> repository.delete(id))
+                .isInstanceOf(ReleaseFrozenException.class);
+
+        Release loaded = repository.findById(id).orElseThrow();
+        assertThat(loaded.items()).extracting(ReleaseItem::ticketKey).containsExactly("CNV-1");
+        assertThat(loaded.manualItems()).isEmpty();
+        assertThat(loaded.lastRefreshedAt()).isNull();
+    }
+
+    @Test
+    void freezingAnAlreadyFrozenReleaseIsRefusedAndKeepsTheOriginalActorAndTimestamp() {
+        Release release = Release.create("Double Freeze", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of());
+        Instant frozenAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        repository.freeze(release.id(), "rm@acme.com", frozenAt);
+
+        assertThatThrownBy(() -> repository.freeze(release.id(), "someone.else@acme.com", Instant.now()))
+                .isInstanceOf(ReleaseFrozenException.class);
+
+        Release loaded = repository.findById(release.id()).orElseThrow();
+        assertThat(loaded.frozenBy()).isEqualTo("rm@acme.com");
+        assertThat(loaded.frozenAt()).isEqualTo(frozenAt);
     }
 
     @Test

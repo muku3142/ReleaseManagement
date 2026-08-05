@@ -2,11 +2,14 @@ package com.evision.releasemgmt.adapters.persistence.repository;
 
 import com.evision.releasemgmt.adapters.persistence.entity.ReleaseEntity;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ReleaseJpaRepository extends JpaRepository<ReleaseEntity, UUID> {
@@ -36,6 +39,13 @@ public interface ReleaseJpaRepository extends JpaRepository<ReleaseEntity, UUID>
              ORDER BY r.created_at DESC
             """, nativeQuery = true)
     List<ReleaseSummaryRow> search(@Param("query") String query);
+
+    // SELECT ... FOR UPDATE. D-03-10: freeze is a one-way door, so every mutation re-reads the
+    // status under a row lock inside its own transaction. Without the lock a freeze committed
+    // between the read and the write would still slip past the check.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM ReleaseEntity r WHERE r.id = :id")
+    Optional<ReleaseEntity> findByIdForUpdate(@Param("id") UUID id);
 
     // Only OPEN releases are valid targets for the Add-to-release picker (D-03-02).
     List<ReleaseEntity> findByStatusOrderByCreatedAtDesc(ReleaseStatus status);
