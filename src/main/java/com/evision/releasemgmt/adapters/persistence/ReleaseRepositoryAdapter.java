@@ -61,7 +61,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
 
     @Override
     public List<ReleaseSummary> search(String query) {
-        return jpa.search(query).stream().map(ReleaseRepositoryAdapter::toSummary).toList();
+        return jpa.search(escapeLikeWildcards(query)).stream().map(ReleaseRepositoryAdapter::toSummary).toList();
     }
 
     @Override
@@ -150,6 +150,13 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
 
     private Release load(UUID id) {
         return findById(id).orElseThrow(ReleaseNotFoundException::new);
+    }
+
+    // The bound :query parameter can never alter SQL structure, but a literal '%' or '_' in it
+    // still acts as an ILIKE wildcard once concatenated into the pattern. Escaping with Postgres'
+    // default backslash escape character keeps the search box's own wildcard characters literal.
+    private static String escapeLikeWildcards(String query) {
+        return query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     private void insertItems(UUID releaseId, List<ReleaseItem> items) {
