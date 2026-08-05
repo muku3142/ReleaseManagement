@@ -1,8 +1,21 @@
 import { Fragment, useState } from 'react';
-import { Link, useParams, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
-import { MANUAL_ITEM_CATEGORY_LABELS, useRelease } from '../api/releases';
+import {
+  MANUAL_ITEM_CATEGORIES,
+  MANUAL_ITEM_CATEGORY_LABELS,
+  useAddManualItem,
+  useDeleteRelease,
+  useFreezeRelease,
+  useRefreshRelease,
+  useRelease,
+  useRemoveManualItem,
+  useRemoveTicketItem,
+  useUpdateManualItem,
+  type ManualItemCategory,
+} from '../api/releases';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 // D-03-13: idempotent add, honest feedback - never phrased as a warning, because a duplicate
 // add is a success, not a partial failure.
@@ -18,10 +31,37 @@ export function ReleaseDetailRoute() {
   // though the actual URL (and `to=` navigation) has no such segment.
   const { releaseId } = useParams({ from: '/authenticated/releases/$releaseId' });
   const { added, alreadyPresent } = useSearch({ from: '/authenticated/releases/$releaseId' });
+  const navigate = useNavigate();
   const release = useRelease(releaseId);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const showBanner = !bannerDismissed && added !== undefined && alreadyPresent !== undefined;
+
+  const refresh = useRefreshRelease();
+  const freeze = useFreezeRelease();
+  const remove = useDeleteRelease();
+  const [confirming, setConfirming] = useState<'freeze' | 'delete' | null>(null);
+  const busy = refresh.isPending || freeze.isPending || remove.isPending;
+
+  const removeTicket = useRemoveTicketItem();
+  const addManualItem = useAddManualItem();
+  const updateManualItem = useUpdateManualItem();
+  const removeManualItem = useRemoveManualItem();
+  const [formOpen, setFormOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState<ManualItemCategory>('OTHER');
+
+  const actionProblem =
+    (refresh.isError && refresh.error instanceof ApiError && refresh.error.problem) ||
+    (freeze.isError && freeze.error instanceof ApiError && freeze.error.problem) ||
+    (remove.isError && remove.error instanceof ApiError && remove.error.problem) ||
+    (removeTicket.isError && removeTicket.error instanceof ApiError && removeTicket.error.problem) ||
+    (addManualItem.isError && addManualItem.error instanceof ApiError && addManualItem.error.problem) ||
+    (updateManualItem.isError && updateManualItem.error instanceof ApiError && updateManualItem.error.problem) ||
+    (removeManualItem.isError && removeManualItem.error instanceof ApiError && removeManualItem.error.problem) ||
+    undefined;
 
   const problem = release.isError && release.error instanceof ApiError ? release.error.problem : undefined;
 
@@ -71,7 +111,49 @@ export function ReleaseDetailRoute() {
   if (!data) return null;
 
   const isFrozen = data.status === 'FROZEN';
+  const isOpen = data.status === 'OPEN';
   const noItems = data.items.length === 0 && data.manualItems.length === 0;
+
+  const saving = addManualItem.isPending || updateManualItem.isPending;
+  const manualItemProblem =
+    (addManualItem.isError && addManualItem.error instanceof ApiError && addManualItem.error.problem) ||
+    (updateManualItem.isError && updateManualItem.error instanceof ApiError && updateManualItem.error.problem) ||
+    undefined;
+  const titleError =
+    manualItemProblem?.reason === 'VALIDATION_FAILED' ? manualItemProblem.fieldErrors?.title : undefined;
+
+  function resetManualItemForm() {
+    setTitle('');
+    setDescription('');
+    setCategory('OTHER');
+    setEditingId(null);
+    setFormOpen(false);
+  }
+
+  function startEditingManualItem(item: { id: string; title: string; description: string; category: ManualItemCategory }) {
+    setEditingId(item.id);
+    setTitle(item.title);
+    setDescription(item.description);
+    setCategory(item.category);
+    setFormOpen(true);
+  }
+
+  const currentReleaseId = data.id;
+
+  function handleManualItemSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (editingId) {
+      updateManualItem.mutate(
+        { releaseId: currentReleaseId, manualItemId: editingId, title: title.trim(), description, category },
+        { onSuccess: resetManualItemForm },
+      );
+    } else {
+      addManualItem.mutate(
+        { releaseId: currentReleaseId, title: title.trim(), description, category },
+        { onSuccess: resetManualItemForm },
+      );
+    }
+  }
 
   return (
     <div className="w-full">
@@ -101,12 +183,80 @@ export function ReleaseDetailRoute() {
           )}
         </div>
 
+        {isOpen && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => refresh.mutate(data.id)}
+              disabled={busy}
+              className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 disabled:opacity-50"
+            >
+              Refresh from Jira
+            </button>
+            {refresh.isPending && (
+              <span className="flex items-center gap-2 text-sm text-gray-600">
+                <span
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"
+                  aria-hidden="true"
+                />
+                Refreshing…
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setConfirming('freeze')}
+              disabled={busy}
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              Freeze release
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming('delete')}
+              disabled={busy}
+              className="rounded border border-red-600 px-4 py-2 text-sm font-semibold text-red-600 disabled:opacity-50"
+            >
+              Delete release
+            </button>
+          </div>
+        )}
+
+        {actionProblem && (
+          <p role="alert" data-reason={actionProblem.reason} className="mt-2 text-sm text-red-600">
+            {messageForReason(actionProblem)}
+          </p>
+        )}
+
         {isFrozen && (
           <p className="mt-4 rounded bg-gray-100 p-3 text-sm text-gray-700">
             This release is frozen. Its ticket set is locked and cannot be changed.
           </p>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirming === 'freeze'}
+        title={`Freeze ${data.name} ${data.version}?`}
+        body="Freezing locks the ticket set and manual items exactly as they are now. You cannot add, remove, or refresh items afterward, and there is no way to unfreeze. If scope changes later, create a new release."
+        confirmLabel="Freeze release"
+        confirmClassName="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        pending={freeze.isPending}
+        onConfirm={() => freeze.mutate(data.id, { onSuccess: () => setConfirming(null) })}
+        onCancel={() => setConfirming(null)}
+      />
+
+      <ConfirmDialog
+        open={confirming === 'delete'}
+        title={`Delete ${data.name} ${data.version}?`}
+        body="This permanently deletes the release and its items. This cannot be undone."
+        confirmLabel="Delete release"
+        confirmClassName="rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        pending={remove.isPending}
+        onConfirm={() =>
+          remove.mutate(data.id, { onSuccess: () => navigate({ to: '/releases' }) })
+        }
+        onCancel={() => setConfirming(null)}
+      />
 
       {showBanner && (
         <div
@@ -167,6 +317,7 @@ export function ReleaseDetailRoute() {
                     Reporter
                   </th>
                   <th scope="col" className="px-4 py-2" />
+                  {isOpen && <th scope="col" className="px-4 py-2" />}
                 </tr>
               </thead>
               <tbody>
@@ -193,10 +344,23 @@ export function ReleaseDetailRoute() {
                           {expandedKey === item.key ? '▾' : '▸'}
                         </button>
                       </td>
+                      {isOpen && (
+                        <td className="px-4 py-2">
+                          <button
+                            type="button"
+                            onClick={() => removeTicket.mutate({ releaseId: data.id, ticketKey: item.key })}
+                            disabled={removeTicket.isPending}
+                            aria-label={`Remove ticket ${item.key}`}
+                            className="text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                          >
+                            Remove
+                          </button>
+                        </td>
+                      )}
                     </tr>
                     {expandedKey === item.key && (
                       <tr>
-                        <td colSpan={8} className="px-4 pb-4">
+                        <td colSpan={isOpen ? 9 : 8} className="px-4 pb-4">
                           <div className="max-h-80 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-4">
                             <h3 className="text-sm font-semibold text-gray-900">Description</h3>
                             <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
@@ -249,6 +413,7 @@ export function ReleaseDetailRoute() {
                   <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
                     Description
                   </th>
+                  {isOpen && <th scope="col" className="px-4 py-2" />}
                 </tr>
               </thead>
               <tbody>
@@ -264,12 +429,107 @@ export function ReleaseDetailRoute() {
                     >
                       {item.description}
                     </td>
+                    {isOpen && (
+                      <td className="whitespace-nowrap px-4 py-2">
+                        <button
+                          type="button"
+                          onClick={() => startEditingManualItem(item)}
+                          className="mr-3 text-sm text-gray-600 hover:text-gray-900"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeManualItem.mutate({ releaseId: data.id, manualItemId: item.id })}
+                          disabled={removeManualItem.isPending}
+                          aria-label={`Remove manual item ${item.title}`}
+                          className="text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </>
+      )}
+
+      {isOpen && (
+        <button
+          type="button"
+          onClick={() => {
+            setFormOpen((open) => !open);
+            setEditingId(null);
+          }}
+          aria-expanded={formOpen}
+          className="mt-3 text-sm text-blue-600 underline"
+        >
+          + Add manual item
+        </button>
+      )}
+
+      {formOpen && (
+        <form onSubmit={handleManualItemSubmit} className="mt-2 space-y-3">
+          <div>
+            <label htmlFor="manualTitle" className="block text-sm font-semibold text-gray-700">
+              Title
+            </label>
+            <input
+              id="manualTitle"
+              type="text"
+              required
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={200}
+              className="mt-1 rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+            {titleError && (
+              <p role="alert" className="mt-1 text-sm text-red-600">
+                {titleError}
+              </p>
+            )}
+          </div>
+          <div>
+            <label htmlFor="manualDescription" className="block text-sm font-semibold text-gray-700">
+              Description
+            </label>
+            <textarea
+              id="manualDescription"
+              rows={3}
+              maxLength={5000}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label htmlFor="manualCategory" className="block text-sm font-semibold text-gray-700">
+              Category
+            </label>
+            <select
+              id="manualCategory"
+              value={category}
+              onChange={(e) => setCategory(e.target.value as ManualItemCategory)}
+              className="mt-1 rounded border border-gray-300 px-3 py-2 text-sm"
+            >
+              {MANUAL_ITEM_CATEGORIES.map((value) => (
+                <option key={value} value={value}>
+                  {MANUAL_ITEM_CATEGORY_LABELS[value]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button
+            type="submit"
+            disabled={saving || title.trim() === ''}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {editingId ? 'Save changes' : 'Add item'}
+          </button>
+        </form>
       )}
     </div>
   );
