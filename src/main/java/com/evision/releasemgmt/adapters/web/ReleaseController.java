@@ -2,6 +2,7 @@ package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.web.dto.AddTicketsRequest;
 import com.evision.releasemgmt.adapters.web.dto.CreateReleaseRequest;
+import com.evision.releasemgmt.adapters.web.dto.ManualItemRequest;
 import com.evision.releasemgmt.adapters.web.dto.ManualItemResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseAddResultResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseItemResponse;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -88,6 +90,28 @@ public class ReleaseController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID releaseId) {
         service.delete(releaseId);
+    }
+
+    @PostMapping("/{releaseId}/manual-items")
+    @ResponseStatus(HttpStatus.CREATED)
+    public ReleaseResponse addManualItem(@PathVariable UUID releaseId,
+                                         @Valid @RequestBody ManualItemRequest request) {
+        return toResponse(service.addManualItem(releaseId, request.title(), request.description(),
+                request.category()));
+    }
+
+    @PutMapping("/{releaseId}/manual-items/{manualItemId}")
+    public ReleaseResponse updateManualItem(@PathVariable UUID releaseId,
+                                            @PathVariable UUID manualItemId,
+                                            @Valid @RequestBody ManualItemRequest request) {
+        return toResponse(service.updateManualItem(releaseId, manualItemId, request.title(),
+                request.description(), request.category()));
+    }
+
+    @DeleteMapping("/{releaseId}/manual-items/{manualItemId}")
+    public ReleaseResponse removeManualItem(@PathVariable UUID releaseId,
+                                            @PathVariable UUID manualItemId) {
+        return toResponse(service.removeManualItem(releaseId, manualItemId));
     }
 
     private static ReleaseAddResultResponse toAddResult(AddTicketsResult result) {

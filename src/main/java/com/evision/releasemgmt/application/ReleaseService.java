@@ -3,6 +3,8 @@ package com.evision.releasemgmt.application;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.jira.TicketSearchCriteria;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
+import com.evision.releasemgmt.domain.release.ManualItem;
+import com.evision.releasemgmt.domain.release.ManualItemCategory;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
@@ -114,6 +116,34 @@ public class ReleaseService {
         // record and deletion must be refused.
         get(id).requireOpen();
         repository.delete(id);
+    }
+
+    public Release addManualItem(UUID releaseId, String title, String description,
+                                 ManualItemCategory category) {
+        get(releaseId).requireOpen();
+        ManualItem item = ManualItem.create(title.trim(), nullToEmpty(description), category,
+                Instant.now());
+        return repository.addManualItem(releaseId, item);
+    }
+
+    public Release updateManualItem(UUID releaseId, UUID manualItemId, String title,
+                                    String description, ManualItemCategory category) {
+        get(releaseId).requireOpen();
+        // addedAt is carried by the stored row and deliberately not overwritten here - editing an
+        // item does not change when it joined the release. The adapter's updateManualItem only
+        // copies title, description and category across.
+        ManualItem item = new ManualItem(manualItemId, title.trim(), nullToEmpty(description),
+                category, null);
+        return repository.updateManualItem(releaseId, item);
+    }
+
+    public Release removeManualItem(UUID releaseId, UUID manualItemId) {
+        get(releaseId).requireOpen();
+        return repository.removeManualItem(releaseId, manualItemId);
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private List<TicketDetail> fetchTickets(List<String> keys) {
