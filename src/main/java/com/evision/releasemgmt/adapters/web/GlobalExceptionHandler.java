@@ -3,6 +3,9 @@ package com.evision.releasemgmt.adapters.web;
 import com.evision.releasemgmt.adapters.security.SessionRefreshException;
 import com.evision.releasemgmt.application.JiraSiteConfigService.JiraSiteNotConfiguredException;
 import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
+import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
+import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
+import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -13,6 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.util.LinkedHashMap;
@@ -65,6 +69,31 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                     "This query matched too many tickets to load. Narrow your fix version or JQL filter.",
                     "RESULT_SET_TOO_LARGE");
         };
+    }
+
+    @ExceptionHandler(ReleaseNotFoundException.class)
+    public ProblemDetail handleReleaseNotFound(ReleaseNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Release not found",
+                "This release doesn't exist or has been deleted.", "RELEASE_NOT_FOUND");
+    }
+
+    @ExceptionHandler(ReleaseFrozenException.class)
+    public ProblemDetail handleReleaseFrozen(ReleaseFrozenException ex) {
+        return problem(HttpStatus.CONFLICT, "Release frozen",
+                "This release is frozen and can no longer be changed.", "RELEASE_FROZEN");
+    }
+
+    @ExceptionHandler(ReleaseDuplicateException.class)
+    public ProblemDetail handleReleaseDuplicate(ReleaseDuplicateException ex) {
+        return problem(HttpStatus.CONFLICT, "Duplicate release",
+                "A release with this name and version already exists. Choose a different name or version.",
+                "RELEASE_DUPLICATE");
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Malformed path parameter",
+                "A value in the request path was not of the expected type.", "VALIDATION_FAILED");
     }
 
     @ExceptionHandler(SessionRefreshException.class)
