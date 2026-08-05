@@ -141,3 +141,84 @@ export function useAddTicketsToRelease() {
 export function openReleases(releases: ReleaseSummary[]): ReleaseSummary[] {
   return releases.filter((r) => r.status === 'OPEN');
 }
+
+// Shared success handling for every mutation that returns the whole Release - the backend
+// returns it precisely so no follow-up read is needed.
+function useReleaseMutation<TVars>(request: (vars: TVars) => Promise<Release>) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: request,
+    onSuccess: (release) => {
+      queryClient.setQueryData(releaseQueryKey(release.id), release);
+      queryClient.invalidateQueries({ queryKey: ['releases'] });
+    },
+  });
+}
+
+export function useRefreshRelease() {
+  return useReleaseMutation((releaseId: string) =>
+    apiFetch<Release>(`/api/releases/${releaseId}/refresh`, { method: 'POST' }),
+  );
+}
+
+// D-03-10: freeze is one-way. No reverse mutation exists or should be added here.
+export function useFreezeRelease() {
+  return useReleaseMutation((releaseId: string) =>
+    apiFetch<Release>(`/api/releases/${releaseId}/freeze`, { method: 'POST' }),
+  );
+}
+
+export function useRemoveTicketItem() {
+  return useReleaseMutation((vars: { releaseId: string; ticketKey: string }) =>
+    apiFetch<Release>(`/api/releases/${vars.releaseId}/items/${encodeURIComponent(vars.ticketKey)}`, {
+      method: 'DELETE',
+    }),
+  );
+}
+
+export function useAddManualItem() {
+  return useReleaseMutation(
+    (vars: { releaseId: string; title: string; description: string; category: ManualItemCategory }) =>
+      apiFetch<Release>(`/api/releases/${vars.releaseId}/manual-items`, {
+        method: 'POST',
+        body: JSON.stringify({ title: vars.title, description: vars.description, category: vars.category }),
+      }),
+  );
+}
+
+export function useUpdateManualItem() {
+  return useReleaseMutation(
+    (vars: {
+      releaseId: string;
+      manualItemId: string;
+      title: string;
+      description: string;
+      category: ManualItemCategory;
+    }) =>
+      apiFetch<Release>(`/api/releases/${vars.releaseId}/manual-items/${vars.manualItemId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ title: vars.title, description: vars.description, category: vars.category }),
+      }),
+  );
+}
+
+export function useRemoveManualItem() {
+  return useReleaseMutation((vars: { releaseId: string; manualItemId: string }) =>
+    apiFetch<Release>(`/api/releases/${vars.releaseId}/manual-items/${vars.manualItemId}`, {
+      method: 'DELETE',
+    }),
+  );
+}
+
+// DELETE /api/releases/{id} returns 204 with no body, so this is the one mutation that cannot
+// reuse useReleaseMutation.
+export function useDeleteRelease() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (releaseId: string) => apiFetch<void>(`/api/releases/${releaseId}`, { method: 'DELETE' }),
+    onSuccess: (_data, releaseId) => {
+      queryClient.removeQueries({ queryKey: releaseQueryKey(releaseId) });
+      queryClient.invalidateQueries({ queryKey: ['releases'] });
+    },
+  });
+}
