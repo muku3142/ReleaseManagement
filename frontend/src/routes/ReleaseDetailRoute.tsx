@@ -1,8 +1,15 @@
 import { Fragment, useState } from 'react';
-import { Link, useParams, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
-import { MANUAL_ITEM_CATEGORY_LABELS, useRelease } from '../api/releases';
+import {
+  MANUAL_ITEM_CATEGORY_LABELS,
+  useDeleteRelease,
+  useFreezeRelease,
+  useRefreshRelease,
+  useRelease,
+} from '../api/releases';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 
 // D-03-13: idempotent add, honest feedback - never phrased as a warning, because a duplicate
 // add is a success, not a partial failure.
@@ -18,10 +25,22 @@ export function ReleaseDetailRoute() {
   // though the actual URL (and `to=` navigation) has no such segment.
   const { releaseId } = useParams({ from: '/authenticated/releases/$releaseId' });
   const { added, alreadyPresent } = useSearch({ from: '/authenticated/releases/$releaseId' });
+  const navigate = useNavigate();
   const release = useRelease(releaseId);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const showBanner = !bannerDismissed && added !== undefined && alreadyPresent !== undefined;
+
+  const refresh = useRefreshRelease();
+  const freeze = useFreezeRelease();
+  const remove = useDeleteRelease();
+  const [confirming, setConfirming] = useState<'freeze' | 'delete' | null>(null);
+  const busy = refresh.isPending || freeze.isPending || remove.isPending;
+  const actionProblem =
+    (refresh.isError && refresh.error instanceof ApiError && refresh.error.problem) ||
+    (freeze.isError && freeze.error instanceof ApiError && freeze.error.problem) ||
+    (remove.isError && remove.error instanceof ApiError && remove.error.problem) ||
+    undefined;
 
   const problem = release.isError && release.error instanceof ApiError ? release.error.problem : undefined;
 
@@ -71,6 +90,7 @@ export function ReleaseDetailRoute() {
   if (!data) return null;
 
   const isFrozen = data.status === 'FROZEN';
+  const isOpen = data.status === 'OPEN';
   const noItems = data.items.length === 0 && data.manualItems.length === 0;
 
   return (
@@ -101,12 +121,80 @@ export function ReleaseDetailRoute() {
           )}
         </div>
 
+        {isOpen && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => refresh.mutate(data.id)}
+              disabled={busy}
+              className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 disabled:opacity-50"
+            >
+              Refresh from Jira
+            </button>
+            {refresh.isPending && (
+              <span className="flex items-center gap-2 text-sm text-gray-600">
+                <span
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"
+                  aria-hidden="true"
+                />
+                Refreshing…
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => setConfirming('freeze')}
+              disabled={busy}
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              Freeze release
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming('delete')}
+              disabled={busy}
+              className="rounded border border-red-600 px-4 py-2 text-sm font-semibold text-red-600 disabled:opacity-50"
+            >
+              Delete release
+            </button>
+          </div>
+        )}
+
+        {actionProblem && (
+          <p role="alert" data-reason={actionProblem.reason} className="mt-2 text-sm text-red-600">
+            {messageForReason(actionProblem)}
+          </p>
+        )}
+
         {isFrozen && (
           <p className="mt-4 rounded bg-gray-100 p-3 text-sm text-gray-700">
             This release is frozen. Its ticket set is locked and cannot be changed.
           </p>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirming === 'freeze'}
+        title={`Freeze ${data.name} ${data.version}?`}
+        body="Freezing locks the ticket set and manual items exactly as they are now. You cannot add, remove, or refresh items afterward, and there is no way to unfreeze. If scope changes later, create a new release."
+        confirmLabel="Freeze release"
+        confirmClassName="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        pending={freeze.isPending}
+        onConfirm={() => freeze.mutate(data.id, { onSuccess: () => setConfirming(null) })}
+        onCancel={() => setConfirming(null)}
+      />
+
+      <ConfirmDialog
+        open={confirming === 'delete'}
+        title={`Delete ${data.name} ${data.version}?`}
+        body="This permanently deletes the release and its items. This cannot be undone."
+        confirmLabel="Delete release"
+        confirmClassName="rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        pending={remove.isPending}
+        onConfirm={() =>
+          remove.mutate(data.id, { onSuccess: () => navigate({ to: '/releases' }) })
+        }
+        onCancel={() => setConfirming(null)}
+      />
 
       {showBanner && (
         <div
