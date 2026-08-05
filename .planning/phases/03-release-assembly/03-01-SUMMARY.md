@@ -125,3 +125,7 @@ None - no external service configuration required.
 ---
 *Phase: 03-release-assembly*
 *Completed: 2026-08-05*
+
+## Self-Check: PASSED
+
+All key created files verified present on disk (V3 migration, domain/release package, ReleaseRepository port, JsonStringListConverter, three JPA entities, converter test, this SUMMARY). All four task/summary commits (e0d3638, 04724ce, a3b4c40, 7a2b6e3) verified present in git log.
