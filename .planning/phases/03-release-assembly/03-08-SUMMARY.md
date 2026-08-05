@@ -147,3 +147,16 @@ None - no external service configuration required.
 ---
 *Phase: 03-release-assembly*
 *Completed: 2026-08-06*
+
+## Self-Check: PASSED
+
+All four key files verified present on disk (`ConfirmDialog.tsx`, `ReleaseDetailRoute.tsx`,
+`releases.ts`, `releases.test.ts`, plus this `SUMMARY.md`). `ConfirmDialog.tsx` is 52 lines
+(exceeds the 40-line minimum); `ReleaseDetailRoute.tsx` is 536 lines (exceeds the 240-line
+minimum). All four commits (`f6075b8`, `5523216`, `d2bc005`, `7c0b51f`) verified present in
+`git log --oneline --all`. Full `npm run lint`, `npm test` (49 passed across 5 files), and
+`npm run build` reran synchronously in the foreground immediately before writing this summary:
+all three exit 0. All plan-specified acceptance-criteria grep gates reverified passing on the
+final file state, including the D-03-10 no-unfreeze gates on both `releases.ts` and
+`ReleaseDetailRoute.tsx`, the `<form`-free `ConfirmDialog.tsx`, and the zero-drag/reorder/
+ticket-search/`dangerouslySetInnerHTML`/hand-written-option gates on `ReleaseDetailRoute.tsx`.
