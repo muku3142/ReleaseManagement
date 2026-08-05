@@ -107,3 +107,7 @@ None - no external service configuration required. (A running Docker daemon is r
 ---
 *Phase: 03-release-assembly*
 *Completed: 2026-08-05*
+
+## Self-Check: PASSED
+
+All six key created files verified present on disk (four repository/projection files, the adapter, and the IT). All four task/summary commits (9682c26, a3d9c5f, 9da26a6, 04b1142) verified present in `git log --oneline --all`. Full `mvn -o test` run synchronously in the foreground: 241 tests, 0 failures, 0 errors, `BUILD SUCCESS` (Docker was available; `ReleasePersistenceIT`'s 13 assertions ran against a real PostgreSQL 18 Testcontainer, not skipped).
