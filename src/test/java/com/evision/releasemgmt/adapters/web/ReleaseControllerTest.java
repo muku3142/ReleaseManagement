@@ -45,6 +45,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -435,5 +436,168 @@ class ReleaseControllerTest {
                 .andExpect(status().isUnauthorized());
 
         verify(service, never()).createWithTickets(any(), any(), any(), any(), any());
+    }
+
+    private static Release releaseWithManualItem(UUID id, ManualItemCategory category) {
+        ManualItem manual = new ManualItem(UUID.randomUUID(), "Rebuild search index",
+                "Run scripts/reindex.sh on each node", category, Instant.parse("2026-08-04T09:31:00Z"));
+        return new Release(id, "Sprint 42", "2026.08", ReleaseStatus.OPEN, "CNV",
+                Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null, null,
+                List.of(), List.of(manual));
+    }
+
+    @Test
+    void addManualItemReturns201AndTheUpdatedRelease() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.addManualItem(eq(id), any(), any(), any()))
+                .thenReturn(releaseWithManualItem(id, ManualItemCategory.DATABASE_SCRIPT));
+
+        mockMvc.perform(post("/api/releases/{id}/manual-items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Rebuild search index\","
+                                + "\"description\":\"Run scripts/reindex.sh on each node\","
+                                + "\"category\":\"DATABASE_SCRIPT\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.manualItems[0].category").value("DATABASE_SCRIPT"));
+    }
+
+    @Test
+    void addManualItemWithABlankTitleIsRejected() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/releases/{id}/manual-items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"  \",\"description\":\"desc\",\"category\":\"OTHER\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.fieldErrors.title").exists());
+
+        verify(service, never()).addManualItem(any(), any(), any(), any());
+    }
+
+    @Test
+    void addManualItemWithAnUnknownCategoryIsRejected() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/releases/{id}/manual-items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Title\",\"description\":\"desc\","
+                                + "\"category\":\"SOMETHING_ELSE\"}"))
+                .andExpect(status().is4xxClientError());
+
+        verify(service, never()).addManualItem(any(), any(), any(), any());
+    }
+
+    @Test
+    void addManualItemWithNoCategoryIsRejected() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/releases/{id}/manual-items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Title\",\"description\":\"desc\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void addManualItemWithAnOverlongDescriptionIsRejected() throws Exception {
+        UUID id = UUID.randomUUID();
+        String overlongDescription = "a".repeat(5001);
+
+        mockMvc.perform(post("/api/releases/{id}/manual-items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Title\",\"description\":\"" + overlongDescription + "\","
+                                + "\"category\":\"OTHER\"}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void addManualItemWithNoDescriptionIsAccepted() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.addManualItem(eq(id), any(), any(), any()))
+                .thenReturn(releaseWithManualItem(id, ManualItemCategory.OTHER));
+
+        mockMvc.perform(post("/api/releases/{id}/manual-items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Title\",\"category\":\"OTHER\"}"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void updateManualItemReturnsTheUpdatedRelease() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        when(service.updateManualItem(eq(id), eq(itemId), any(), any(), any()))
+                .thenReturn(releaseWithManualItem(id, ManualItemCategory.INFRASTRUCTURE));
+
+        mockMvc.perform(put("/api/releases/{id}/manual-items/{itemId}", id, itemId)
+                        .with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Updated title\",\"description\":\"Updated description\","
+                                + "\"category\":\"INFRASTRUCTURE\"}"))
+                .andExpect(status().isOk());
+
+        verify(service).updateManualItem(eq(id), eq(itemId), any(), any(), any());
+    }
+
+    @Test
+    void removeManualItemReturnsTheUpdatedRelease() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        when(service.removeManualItem(id, itemId)).thenReturn(release(id, ReleaseStatus.OPEN));
+
+        mockMvc.perform(delete("/api/releases/{id}/manual-items/{itemId}", id, itemId)
+                        .with(csrf()).with(authenticated()))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void manualItemWritesOnAFrozenReleaseMapTo409ReleaseFrozen() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID itemId = UUID.randomUUID();
+        when(service.addManualItem(any(), any(), any(), any())).thenThrow(new ReleaseFrozenException());
+        when(service.updateManualItem(any(), any(), any(), any(), any())).thenThrow(new ReleaseFrozenException());
+        org.mockito.Mockito.doThrow(new ReleaseFrozenException()).when(service).removeManualItem(any(), any());
+
+        mockMvc.perform(post("/api/releases/{id}/manual-items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Title\",\"category\":\"OTHER\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.reason").value("RELEASE_FROZEN"));
+
+        mockMvc.perform(put("/api/releases/{id}/manual-items/{itemId}", id, itemId)
+                        .with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Title\",\"category\":\"OTHER\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.reason").value("RELEASE_FROZEN"));
+
+        mockMvc.perform(delete("/api/releases/{id}/manual-items/{itemId}", id, itemId)
+                        .with(csrf()).with(authenticated()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.reason").value("RELEASE_FROZEN"));
+    }
+
+    @Test
+    void manualItemWriteOnAnUnknownReleaseMapsTo404() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.addManualItem(any(), any(), any(), any())).thenThrow(new ReleaseNotFoundException());
+
+        mockMvc.perform(post("/api/releases/{id}/manual-items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Title\",\"category\":\"OTHER\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.reason").value("RELEASE_NOT_FOUND"));
+    }
+
+    @Test
+    void unauthenticatedManualItemWriteIsRejected() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/releases/{id}/manual-items", id).with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Title\",\"category\":\"OTHER\"}"))
+                .andExpect(status().isUnauthorized());
+
+        verify(service, never()).addManualItem(any(), any(), any(), any());
     }
 }
