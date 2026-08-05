@@ -80,6 +80,9 @@ export function AddToReleaseDialog(props: {
     );
   }
 
+  const addProblem =
+    addTickets.isError && addTickets.error instanceof ApiError ? addTickets.error.problem : undefined;
+
   const createProblem =
     createRelease.isError && createRelease.error instanceof ApiError
       ? createRelease.error.problem
@@ -88,6 +91,14 @@ export function AddToReleaseDialog(props: {
     createProblem?.reason === 'VALIDATION_FAILED' ? createProblem.fieldErrors?.name : undefined;
   const versionError =
     createProblem?.reason === 'VALIDATION_FAILED' ? createProblem.fieldErrors?.version : undefined;
+  // RELEASE_DUPLICATE has its own copy below, and a name/version field error is rendered against
+  // its own input. Everything else - a ticketKeys[n] violation, JIRA_UNREACHABLE, a frozen target
+  // - would otherwise be swallowed.
+  const showCreateProblem =
+    createProblem !== undefined &&
+    createProblem.reason !== 'RELEASE_DUPLICATE' &&
+    nameError === undefined &&
+    versionError === undefined;
 
   return (
     <dialog
@@ -161,6 +172,12 @@ export function AddToReleaseDialog(props: {
         </div>
       )}
 
+      {addProblem && (
+        <p role="alert" data-reason={addProblem.reason} className="mt-2 text-sm text-red-600">
+          {messageForReason(addProblem)}
+        </p>
+      )}
+
       <button
         type="button"
         onClick={() => setFormOpenState((open) => !open)}
@@ -204,6 +221,11 @@ export function AddToReleaseDialog(props: {
           {createProblem?.reason === 'RELEASE_DUPLICATE' && (
             <p role="alert" data-reason="RELEASE_DUPLICATE" className="mt-2 text-sm text-red-600">
               {`A release named '${name}' version '${version}' already exists. Choose a different name or version.`}
+            </p>
+          )}
+          {showCreateProblem && (
+            <p role="alert" data-reason={createProblem.reason} className="mt-2 text-sm text-red-600">
+              {messageForReason(createProblem)}
             </p>
           )}
 
