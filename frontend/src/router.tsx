@@ -61,6 +61,10 @@ const releasesRoute = createRoute({
 const releaseDetailRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/releases/$releaseId',
+  validateSearch: (search: Record<string, unknown>): { added?: number; alreadyPresent?: number } => ({
+    added: typeof search.added === 'number' ? search.added : undefined,
+    alreadyPresent: typeof search.alreadyPresent === 'number' ? search.alreadyPresent : undefined,
+  }),
   component: ReleaseDetailRoute,
 });
 

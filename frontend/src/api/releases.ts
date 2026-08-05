@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from './client';
 
 export type ReleaseStatus = 'OPEN' | 'FROZEN';
@@ -87,4 +87,57 @@ export function useRelease(releaseId: string) {
     // RELEASE_NOT_FOUND message the UI spec requires.
     retry: false,
   });
+}
+
+export type ReleaseAddResult = { release: Release; added: number; alreadyPresent: number };
+
+export type CreateReleaseInput = {
+  name: string;
+  version: string;
+  jiraProjectKey: string | null;
+  ticketKeys: string[];
+};
+
+// D-03-02: one request creates the release and adds the selection, so a failed add can never
+// leave an orphan empty release behind. There is deliberately no create-then-add client path.
+export function useCreateRelease() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateReleaseInput) =>
+      apiFetch<ReleaseAddResult>('/api/releases', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: input.name,
+          version: input.version,
+          ...(input.jiraProjectKey ? { jiraProjectKey: input.jiraProjectKey } : {}),
+          ticketKeys: input.ticketKeys,
+        }),
+      }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(releaseQueryKey(result.release.id), result.release);
+      queryClient.invalidateQueries({ queryKey: ['releases'] });
+    },
+  });
+}
+
+export function useAddTicketsToRelease() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (vars: { releaseId: string; ticketKeys: string[] }) =>
+      apiFetch<ReleaseAddResult>(`/api/releases/${vars.releaseId}/items`, {
+        method: 'POST',
+        body: JSON.stringify({ ticketKeys: vars.ticketKeys }),
+      }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(releaseQueryKey(result.release.id), result.release);
+      queryClient.invalidateQueries({ queryKey: ['releases'] });
+    },
+  });
+}
+
+// D-03-02: a frozen release is not a valid target. The server returns releases newest-first, so
+// the most recently created one - the likeliest target of the current push - is already at the
+// top and no client-side sort is applied.
+export function openReleases(releases: ReleaseSummary[]): ReleaseSummary[] {
+  return releases.filter((r) => r.status === 'OPEN');
 }

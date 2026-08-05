@@ -4,11 +4,14 @@ import { messageForReason } from '../../src/api/auth';
 import {
   MANUAL_ITEM_CATEGORIES,
   MANUAL_ITEM_CATEGORY_LABELS,
+  openReleases,
   releaseQueryKey,
   releaseSearchPath,
   releasesQueryKey,
   type Release,
+  type ReleaseAddResult,
   type ReleaseSearchResponse,
+  type ReleaseSummary,
 } from '../../src/api/releases';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -96,5 +99,108 @@ describe('releases API client', () => {
     const result = await apiFetch<ReleaseSearchResponse>(releaseSearchPath(''));
 
     expect(result.releases).toEqual([]);
+  });
+
+  function summary(overrides: Partial<ReleaseSummary>): ReleaseSummary {
+    return {
+      id: '1',
+      name: 'R1',
+      version: '1.0',
+      status: 'OPEN',
+      jiraProjectKey: null,
+      createdAt: '2026-08-05T00:00:00Z',
+      createdBy: 'user@example.com',
+      frozenAt: null,
+      frozenBy: null,
+      lastRefreshedAt: null,
+      itemCount: 0,
+      ...overrides,
+    };
+  }
+
+  it('openReleases keeps only OPEN entries and preserves their incoming order', () => {
+    const open1 = summary({ id: '1', status: 'OPEN' });
+    const frozen = summary({ id: '2', status: 'FROZEN' });
+    const open2 = summary({ id: '3', status: 'OPEN' });
+
+    expect(openReleases([open1, frozen, open2])).toEqual([open1, open2]);
+  });
+
+  it('resolves a mocked 201 on POST /api/releases to { release, added, alreadyPresent }', async () => {
+    const release: Release = { ...summary({ id: '1' }), items: [], manualItems: [] };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(201, { release, added: 2, alreadyPresent: 0 }),
+    );
+
+    const result = await apiFetch<ReleaseAddResult>('/api/releases', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'R1', version: '1.0', ticketKeys: ['CNV-1', 'CNV-2'] }),
+    });
+
+    expect(result).toEqual({ release, added: 2, alreadyPresent: 0 });
+  });
+
+  it('rejects with an ApiError whose problem.reason is RELEASE_DUPLICATE on a mocked 409', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(409, { status: 409, reason: 'RELEASE_DUPLICATE' }),
+    );
+
+    await expect(
+      apiFetch<ReleaseAddResult>('/api/releases', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'R1', version: '1.0', ticketKeys: [] }),
+      }),
+    ).rejects.toSatisfy(
+      (error) => error instanceof ApiError && error.problem.reason === 'RELEASE_DUPLICATE',
+    );
+  });
+
+  it('rejects with an ApiError carrying problem.fieldErrors.name on a mocked 400', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(400, {
+        status: 400,
+        reason: 'VALIDATION_FAILED',
+        fieldErrors: { name: 'must not be blank' },
+      }),
+    );
+
+    await expect(
+      apiFetch<ReleaseAddResult>('/api/releases', {
+        method: 'POST',
+        body: JSON.stringify({ name: '', version: '1.0', ticketKeys: [] }),
+      }),
+    ).rejects.toSatisfy(
+      (error) =>
+        error instanceof ApiError && error.problem.fieldErrors?.name === 'must not be blank',
+    );
+  });
+
+  it('resolves a mocked 200 on POST /api/releases/{id}/items with both counts, including the all-duplicate case as a success', async () => {
+    const release: Release = { ...summary({ id: '1' }), items: [], manualItems: [] };
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(200, { release, added: 0, alreadyPresent: 3 }),
+    );
+
+    const result = await apiFetch<ReleaseAddResult>('/api/releases/1/items', {
+      method: 'POST',
+      body: JSON.stringify({ ticketKeys: ['CNV-1', 'CNV-2', 'CNV-3'] }),
+    });
+
+    expect(result).toEqual({ release, added: 0, alreadyPresent: 3 });
+  });
+
+  it('rejects with an ApiError whose problem.reason is RELEASE_FROZEN on the items endpoint', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse(409, { status: 409, reason: 'RELEASE_FROZEN' }),
+    );
+
+    await expect(
+      apiFetch<ReleaseAddResult>('/api/releases/1/items', {
+        method: 'POST',
+        body: JSON.stringify({ ticketKeys: ['CNV-1'] }),
+      }),
+    ).rejects.toSatisfy(
+      (error) => error instanceof ApiError && error.problem.reason === 'RELEASE_FROZEN',
+    );
   });
 });
