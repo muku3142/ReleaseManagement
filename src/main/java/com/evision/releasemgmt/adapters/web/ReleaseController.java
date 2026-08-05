@@ -116,7 +116,7 @@ public class ReleaseController {
 
     private static ReleaseAddResultResponse toAddResult(AddTicketsResult result) {
         return new ReleaseAddResultResponse(toResponse(result.release()), result.added(),
-                result.alreadyPresent());
+                result.alreadyPresent(), result.notFound());
     }
 
     private static ReleaseResponse toResponse(Release release) {

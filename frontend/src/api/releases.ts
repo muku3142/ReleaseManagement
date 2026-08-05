@@ -89,7 +89,14 @@ export function useRelease(releaseId: string) {
   });
 }
 
-export type ReleaseAddResult = { release: Release; added: number; alreadyPresent: number };
+// notFound: requested keys Jira did not return. Without it a 3-ticket push that resolved one
+// ticket reads as a plain "1 ticket(s) added" success (D-03-13).
+export type ReleaseAddResult = {
+  release: Release;
+  added: number;
+  alreadyPresent: number;
+  notFound: number;
+};
 
 export type CreateReleaseInput = {
   name: string;

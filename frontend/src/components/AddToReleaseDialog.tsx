@@ -63,7 +63,11 @@ export function AddToReleaseDialog(props: {
     navigate({
       to: '/releases/$releaseId',
       params: { releaseId: result.release.id },
-      search: { added: result.added, alreadyPresent: result.alreadyPresent },
+      search: {
+        added: result.added,
+        alreadyPresent: result.alreadyPresent,
+        notFound: result.notFound,
+      },
     });
   }
 

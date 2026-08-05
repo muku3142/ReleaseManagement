@@ -77,7 +77,7 @@ class ReleaseControllerTest {
     void createReturns201AndRecordsTheAuthenticatedPrincipalAsActor() throws Exception {
         UUID id = UUID.randomUUID();
         when(service.createWithTickets(any(), any(), any(), any(), any()))
-                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 0, 0));
+                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 0, 0, 0));
 
         mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -145,7 +145,7 @@ class ReleaseControllerTest {
     void nonSemverVersionIsAccepted() throws Exception {
         UUID id = UUID.randomUUID();
         when(service.createWithTickets(any(), any(), any(), any(), any()))
-                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 0, 0));
+                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 0, 0, 0));
 
         mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -157,7 +157,7 @@ class ReleaseControllerTest {
     void createWithTicketKeysReturnsAddedCount() throws Exception {
         UUID id = UUID.randomUUID();
         when(service.createWithTickets(any(), any(), any(), any(), any()))
-                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 2, 0));
+                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 2, 0, 0));
 
         mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -260,17 +260,18 @@ class ReleaseControllerTest {
     }
 
     @Test
-    void addTicketsReturnsBothCounts() throws Exception {
+    void addTicketsReturnsEveryCountIncludingTheKeysJiraDidNotReturn() throws Exception {
         UUID id = UUID.randomUUID();
         when(service.addTickets(eq(id), any()))
-                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 1, 1));
+                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 1, 1, 2));
 
         mockMvc.perform(post("/api/releases/{id}/items", id).with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"ticketKeys\":[\"CNV-1\",\"CNV-2\"]}"))
+                        .content("{\"ticketKeys\":[\"CNV-1\",\"CNV-2\",\"CNV-3\",\"CNV-4\"]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.added").value(1))
-                .andExpect(jsonPath("$.alreadyPresent").value(1));
+                .andExpect(jsonPath("$.alreadyPresent").value(1))
+                .andExpect(jsonPath("$.notFound").value(2));
     }
 
     @Test

@@ -129,7 +129,7 @@ class ReleaseServiceTicketsTest {
     }
 
     @Test
-    void aKeyJiraDoesNotReturnIsSimplyNotAdded() {
+    void aKeyJiraDoesNotReturnIsCountedAsNotFoundRatherThanVanishing() {
         UUID id = UUID.randomUUID();
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         when(repository.findTicketKeys(id)).thenReturn(List.of());
@@ -139,10 +139,51 @@ class ReleaseServiceTicketsTest {
         AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2"));
 
         assertThat(result.added()).isEqualTo(1);
+        assertThat(result.notFound()).isEqualTo(1);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ReleaseItem>> itemsCaptor = ArgumentCaptor.forClass(List.class);
         verify(repository).addItems(eq(id), itemsCaptor.capture());
         assertThat(itemsCaptor.getValue()).hasSize(1);
+    }
+
+    @Test
+    void aKeyRejectedByTheIssueKeyPatternIsCountedAsNotFound() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of());
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
+        when(repository.addItems(eq(id), any())).thenReturn(release(id, ReleaseStatus.OPEN));
+
+        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "not a key"));
+
+        assertThat(result.added()).isEqualTo(1);
+        assertThat(result.notFound()).isEqualTo(1);
+    }
+
+    @Test
+    void everyRequestedKeyLandsInExactlyOneCount() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-2")));
+        when(repository.addItems(eq(id), any())).thenReturn(release(id, ReleaseStatus.OPEN));
+
+        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2", "CNV-3"));
+
+        assertThat(result.added() + result.alreadyPresent() + result.notFound()).isEqualTo(3);
+        assertThat(result.notFound()).isEqualTo(1);
+    }
+
+    @Test
+    void createWithTicketsCountsTheKeysJiraDidNotReturnAsNotFound() {
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
+        when(repository.create(any(), any())).thenReturn(release(UUID.randomUUID(), ReleaseStatus.OPEN));
+
+        AddTicketsResult result = service.createWithTickets("Sprint 42", "2026.08", "CNV",
+                List.of("CNV-1", "CNV-2"), "557058:abc-123");
+
+        assertThat(result.added()).isEqualTo(1);
+        assertThat(result.notFound()).isEqualTo(1);
     }
 
     @Test

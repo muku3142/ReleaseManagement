@@ -54,7 +54,7 @@ public class ReleaseService {
         Release release = Release.create(name.trim(), version.trim(), blankToNull(jiraProjectKey),
                 actor, now);
         Release created = repository.create(release, items);
-        return new AddTicketsResult(created, items.size(), 0);
+        return new AddTicketsResult(created, items.size(), 0, requested.size() - items.size());
     }
 
     public Release get(UUID id) {
@@ -77,7 +77,7 @@ public class ReleaseService {
         if (toFetch.isEmpty()) {
             // D-03-13: a bulk push whose whole selection is already on the release is a success,
             // not a 409. The counts let the UI say so honestly.
-            return new AddTicketsResult(release, 0, alreadyPresent);
+            return new AddTicketsResult(release, 0, alreadyPresent, 0);
         }
 
         Instant now = Instant.now();
@@ -85,7 +85,7 @@ public class ReleaseService {
                 .map(ticket -> new ReleaseItem(ticket, now))
                 .toList();
         Release updated = items.isEmpty() ? release : repository.addItems(releaseId, items);
-        return new AddTicketsResult(updated, items.size(), alreadyPresent);
+        return new AddTicketsResult(updated, items.size(), alreadyPresent, toFetch.size() - items.size());
     }
 
     public Release removeTicket(UUID releaseId, String ticketKey) {

@@ -18,8 +18,18 @@ import {
 import { ConfirmDialog } from '../components/ConfirmDialog';
 
 // D-03-13: idempotent add, honest feedback - never phrased as a warning, because a duplicate
-// add is a success, not a partial failure.
-function addResultMessage(added: number, alreadyPresent: number, name: string, version: string) {
+// add is a success, not a partial failure. A key Jira did not return is neither added nor
+// already present, so it gets its own clause rather than being silently absorbed into "added".
+export function addResultMessage(
+  added: number,
+  alreadyPresent: number,
+  notFound: number,
+  name: string,
+  version: string,
+) {
+  if (notFound > 0) {
+    return `${added} added, ${alreadyPresent} already on this release, ${notFound} not found in Jira.`;
+  }
   if (alreadyPresent === 0) return `${added} ticket(s) added to ${name} ${version}.`;
   if (added === 0) return `All ${alreadyPresent} selected tickets were already on this release.`;
   return `${added} added, ${alreadyPresent} already on this release.`;
@@ -30,7 +40,9 @@ export function ReleaseDetailRoute() {
   // so TanStack Router's generated route-id space prefixes every child with /authenticated even
   // though the actual URL (and `to=` navigation) has no such segment.
   const { releaseId } = useParams({ from: '/authenticated/releases/$releaseId' });
-  const { added, alreadyPresent } = useSearch({ from: '/authenticated/releases/$releaseId' });
+  const { added, alreadyPresent, notFound } = useSearch({
+    from: '/authenticated/releases/$releaseId',
+  });
   const navigate = useNavigate();
   const release = useRelease(releaseId);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -263,7 +275,7 @@ export function ReleaseDetailRoute() {
           role="status"
           className="mt-4 flex items-start justify-between rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900"
         >
-          <p>{addResultMessage(added, alreadyPresent, data.name, data.version)}</p>
+          <p>{addResultMessage(added, alreadyPresent, notFound ?? 0, data.name, data.version)}</p>
           <button
             type="button"
             aria-label="Dismiss"
