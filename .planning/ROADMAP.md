@@ -155,7 +155,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 |-------|----------------|--------|-----------|
 | 1. Foundation & Authentication | 7/8 | In Progress|  |
 | 2. Jira Ticket Browsing | 6/7 | In Progress|  |
-| 3. Release Assembly | 0/TBD | Not started | - |
+| 3. Release Assembly | 0/8 | Planned    |  |
 | 4. Template Authoring | 0/TBD | Not started | - |
 | 5. Document Generation | 0/TBD | Not started | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
