@@ -47,6 +47,13 @@ export function AppShell() {
             Tickets
           </Link>
           <Link
+            to="/releases"
+            className="text-gray-600 hover:text-gray-900"
+            activeProps={{ className: 'font-semibold text-gray-900' }}
+          >
+            Releases
+          </Link>
+          <Link
             to="/settings"
             className="text-gray-600 hover:text-gray-900"
             activeProps={{ className: 'font-semibold text-gray-900' }}

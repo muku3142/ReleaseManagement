@@ -3,6 +3,8 @@ import { AppShell } from './components/AppShell';
 import { DashboardRoute } from './routes/DashboardRoute';
 import { SettingsRoute } from './routes/SettingsRoute';
 import { TicketsRoute } from './routes/TicketsRoute';
+import { ReleasesRoute } from './routes/ReleasesRoute';
+import { ReleaseDetailRoute } from './routes/ReleaseDetailRoute';
 import { LoginRoute } from './routes/LoginRoute';
 import { fetchSessionOrNull } from './api/auth';
 import { queryClient } from './api/queryClient';
@@ -50,8 +52,20 @@ const ticketsRoute = createRoute({
   component: TicketsRoute,
 });
 
+const releasesRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/releases',
+  component: ReleasesRoute,
+});
+
+const releaseDetailRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/releases/$releaseId',
+  component: ReleaseDetailRoute,
+});
+
 const routeTree = rootRoute.addChildren([
-  authenticatedRoute.addChildren([dashboardRoute, ticketsRoute, settingsRoute]),
+  authenticatedRoute.addChildren([dashboardRoute, ticketsRoute, releasesRoute, releaseDetailRoute, settingsRoute]),
   loginRoute,
 ]);
 
