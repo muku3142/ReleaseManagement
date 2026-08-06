@@ -134,6 +134,18 @@ class ReleasePersistenceIT {
     }
 
     @Test
+    void addItemsIgnoresAKeyAlreadyOnTheReleaseRatherThanViolatingTheUniqueConstraint() {
+        Release release = Release.create("Concurrent Add", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(item("CNV-1")));
+
+        repository.addItems(release.id(), List.of(item("CNV-1"), item("CNV-2")));
+
+        assertThat(repository.findById(release.id()).orElseThrow().items())
+                .extracting(ReleaseItem::ticketKey)
+                .containsExactly("CNV-1", "CNV-2");
+    }
+
+    @Test
     void removeItemDeletesOnlyThatTicket() {
         Release release = Release.create("Remove Item", "1.0", "CNV", "rm@acme.com", Instant.now());
         repository.create(release, List.of(item("CNV-1"), item("CNV-2")));

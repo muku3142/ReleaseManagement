@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -76,7 +77,11 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     @Transactional
     public Release addItems(UUID releaseId, List<ReleaseItem> items) {
         lockOpen(releaseId);
-        insertItems(releaseId, items);
+        // The lock means the key set cannot change beneath this read, so filtering here is what
+        // stops two concurrent adds of the same key from surfacing
+        // release_ticket_item_key_unique as a 500.
+        Set<String> present = Set.copyOf(findTicketKeys(releaseId));
+        insertItems(releaseId, items.stream().filter(i -> !present.contains(i.ticketKey())).toList());
         return load(releaseId);
     }
 

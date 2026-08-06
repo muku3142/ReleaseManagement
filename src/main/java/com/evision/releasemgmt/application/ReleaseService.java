@@ -78,11 +78,17 @@ public class ReleaseService {
         }
 
         Instant now = Instant.now();
-        List<ReleaseItem> items = fetchTickets(toFetch).stream()
+        // De-duplicated against the keys Jira returned, not the ones requested: an issue moved
+        // between projects is requested as OLD-1 and comes back as NEW-5, so filtering the
+        // request alone would insert a key already on the release and trip the unique constraint.
+        List<TicketDetail> fetched = fetchTickets(toFetch);
+        List<ReleaseItem> items = fetched.stream()
+                .filter(ticket -> !present.contains(ticket.key()))
                 .map(ticket -> new ReleaseItem(ticket, now))
                 .toList();
         Release updated = items.isEmpty() ? release : repository.addItems(releaseId, items);
-        return new AddTicketsResult(updated, items.size(), alreadyPresent, toFetch.size() - items.size());
+        return new AddTicketsResult(updated, items.size(),
+                alreadyPresent + (fetched.size() - items.size()), toFetch.size() - fetched.size());
     }
 
     public Release removeTicket(UUID releaseId, String ticketKey) {

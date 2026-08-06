@@ -161,6 +161,23 @@ class ReleaseServiceTicketsTest {
         assertThat(result.notFound()).isEqualTo(1);
     }
 
+    // An issue moved between projects is requested as OLD-1 and comes back as NEW-5. Filtering the
+    // request alone let NEW-5 through to an insert that violates release_ticket_item_key_unique.
+    @Test
+    void aRequestedKeyThatResolvesToAnIssueAlreadyOnTheReleaseIsNotInsertedAgain() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("NEW-5"));
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("NEW-5")));
+
+        AddTicketsResult result = service.addTickets(id, List.of("OLD-1"));
+
+        verify(repository, never()).addItems(any(), any());
+        assertThat(result.added()).isEqualTo(0);
+        assertThat(result.alreadyPresent()).isEqualTo(1);
+        assertThat(result.notFound()).isEqualTo(0);
+    }
+
     @Test
     void everyRequestedKeyLandsInExactlyOneCount() {
         UUID id = UUID.randomUUID();
