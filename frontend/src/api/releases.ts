@@ -224,8 +224,11 @@ export function useDeleteRelease() {
   return useMutation({
     mutationFn: (releaseId: string) => apiFetch<void>(`/api/releases/${releaseId}`, { method: 'DELETE' }),
     onSuccess: (_data, releaseId) => {
-      queryClient.removeQueries({ queryKey: releaseQueryKey(releaseId) });
       queryClient.invalidateQueries({ queryKey: ['releases'] });
+      // type: 'inactive' - removing a query that still has a mounted observer makes that observer
+      // re-create and refetch it, firing a GET against the release that was just deleted and
+      // painting RELEASE_NOT_FOUND for a frame before the navigation lands.
+      queryClient.removeQueries({ queryKey: releaseQueryKey(releaseId), type: 'inactive' });
     },
   });
 }

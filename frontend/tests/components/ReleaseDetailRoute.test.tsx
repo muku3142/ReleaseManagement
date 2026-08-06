@@ -142,6 +142,29 @@ describe('ReleaseDetailRoute', () => {
     expect(byText('Add item')).toBeDefined();
   });
 
+  it('does not refetch the release it just deleted', async () => {
+    const requested: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      requested.push(`${init?.method ?? 'GET'} ${String(input)}`);
+      if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+      return json(200, RELEASE);
+    });
+
+    await renderRoute();
+    expect(requested.filter((r) => r === 'GET /api/releases/r1')).toHaveLength(1);
+
+    await act(async () => byText('Delete release').click());
+    const confirmButton = [...container.querySelectorAll('dialog button')].find(
+      (b) => b.textContent === 'Delete release',
+    ) as HTMLButtonElement;
+    await act(async () => confirmButton.click());
+    await flush();
+
+    expect(navigate).toHaveBeenCalledWith({ to: '/releases' });
+    expect(requested.filter((r) => r === 'GET /api/releases/r1')).toHaveLength(1);
+    expect(container.querySelector('[data-reason="RELEASE_NOT_FOUND"]')).toBeNull();
+  });
+
   it('closes the delete confirmation on failure so the error is readable', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
       if (init?.method === 'DELETE') return json(409, { status: 409, reason: 'RELEASE_FROZEN' });
