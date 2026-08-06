@@ -135,6 +135,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
     }
 
+    // D-04: the SPA keys all of its error copy on `reason`, but every ProblemDetail the framework
+    // builds for itself - malformed JSON, an unknown enum value, a wrong method or media type -
+    // arrives without one, and rawFetch degrades that to 'UNKNOWN'. The status name is exactly
+    // the machine-readable token those paths are missing.
+    @Override
+    protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body,
+                                                             HttpHeaders headers,
+                                                             HttpStatusCode statusCode,
+                                                             WebRequest request) {
+        ResponseEntity<Object> response = super.handleExceptionInternal(ex, body, headers, statusCode, request);
+        if (response != null && response.getBody() instanceof ProblemDetail pd
+                && (pd.getProperties() == null || !pd.getProperties().containsKey("reason"))) {
+            pd.setProperty("reason", HttpStatus.valueOf(statusCode.value()).name());
+        }
+        return response;
+    }
+
     @ExceptionHandler(Exception.class)
     public ProblemDetail handleUnexpected(Exception ex) {
         log.error("Unexpected error handling request", ex);

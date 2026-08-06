@@ -495,9 +495,31 @@ class ReleaseControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"title\":\"Title\",\"description\":\"desc\","
                                 + "\"category\":\"SOMETHING_ELSE\"}"))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("BAD_REQUEST"));
 
         verify(service, never()).addManualItem(any(), any(), any(), any());
+    }
+
+    // D-04 applies to every error body, including the ones the framework builds for itself.
+    @Test
+    void aMethodTheApiDoesNotSupportStillCarriesAMachineReadableReason() throws Exception {
+        mockMvc.perform(put("/api/releases").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.reason").value("METHOD_NOT_ALLOWED"));
+    }
+
+    @Test
+    void aMalformedJsonBodyStillCarriesAMachineReadableReason() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/releases/{id}/items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"ticketKeys\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("BAD_REQUEST"));
+
+        verify(service, never()).addTickets(any(), any());
     }
 
     @Test
