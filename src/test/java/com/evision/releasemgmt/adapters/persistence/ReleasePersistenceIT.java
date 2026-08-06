@@ -10,10 +10,12 @@ import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
 import com.evision.releasemgmt.ports.ReleaseRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -36,6 +38,17 @@ class ReleasePersistenceIT {
 
     @Autowired
     private ReleaseRepository repository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    // One static container, no @Transactional: without this every method inherits the previous
+    // one's rows, and the exact-set assertions below (including the wildcard-escaping ones, which
+    // are the security-relevant pair) would start failing on an unrelated fixture collision.
+    @AfterEach
+    void clearReleases() {
+        jdbcTemplate.execute("TRUNCATE release CASCADE");
+    }
 
     private static ReleaseItem item(String key) {
         return new ReleaseItem(new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed",
@@ -251,7 +264,9 @@ class ReleasePersistenceIT {
         assertThat(repository.search("_")).isEmpty();
         assertThat(repository.search("'; DROP TABLE release; --")).isEmpty();
 
-        assertThat(repository.search("")).extracting(ReleaseSummary::id).contains(release.id());
+        // Exact, not `contains`: with per-method truncation this release is the only row there is,
+        // which is also what proves the truncation is running.
+        assertThat(repository.search("")).extracting(ReleaseSummary::id).containsExactly(release.id());
     }
 
     @Test
