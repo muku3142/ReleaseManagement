@@ -11,6 +11,7 @@ import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemCategory;
+import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
@@ -499,6 +500,21 @@ class ReleaseControllerTest {
                 .andExpect(jsonPath("$.reason").value("BAD_REQUEST"));
 
         verify(service, never()).addManualItem(any(), any(), any(), any());
+    }
+
+    @Test
+    void anUnknownManualItemIdMapsTo404ManualItemNotFoundNotReleaseNotFound() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID manualItemId = UUID.randomUUID();
+        when(service.updateManualItem(eq(id), eq(manualItemId), any(), any(), any()))
+                .thenThrow(new ManualItemNotFoundException());
+
+        mockMvc.perform(put("/api/releases/{id}/manual-items/{itemId}", id, manualItemId)
+                        .with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Title\",\"description\":\"d\",\"category\":\"OTHER\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.reason").value("MANUAL_ITEM_NOT_FOUND"));
     }
 
     // D-04 applies to every error body, including the ones the framework builds for itself.

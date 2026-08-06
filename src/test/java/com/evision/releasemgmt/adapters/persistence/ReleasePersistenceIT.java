@@ -3,6 +3,7 @@ package com.evision.releasemgmt.adapters.persistence;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemCategory;
+import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
@@ -121,6 +122,28 @@ class ReleasePersistenceIT {
         assertThat(loaded.manualItems()).extracting(ManualItem::title)
                 .containsExactly("Alpha", "Mid", "Zeta");
         assertThat(loaded.manualItems().get(0).category()).isEqualTo(ManualItemCategory.DATABASE_SCRIPT);
+    }
+
+    // Editing an id that is not there used to report "This release doesn't exist or has been
+    // deleted." - false, and it sends the user after the wrong problem.
+    @Test
+    void editingAManualItemThatIsNotOnTheReleaseIsAManualItemNotFound() {
+        Release release = Release.create("Manual Miss", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of());
+        ManualItem absent = ManualItem.create("Ghost", "d", ManualItemCategory.OTHER, Instant.now());
+
+        assertThatThrownBy(() -> repository.updateManualItem(release.id(), absent))
+                .isInstanceOf(ManualItemNotFoundException.class);
+    }
+
+    @Test
+    void removingAManualItemThatIsNotOnTheReleaseIsANoOp() {
+        Release release = Release.create("Manual Remove Miss", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of());
+
+        Release loaded = repository.removeManualItem(release.id(), UUID.randomUUID());
+
+        assertThat(loaded.manualItems()).isEmpty();
     }
 
     @Test

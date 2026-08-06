@@ -70,6 +70,7 @@ const REASON_MESSAGES: Record<string, string> = {
   JIRA_ERROR: 'Jira returned an unexpected error. Try again shortly.',
   RESULT_SET_TOO_LARGE: 'This query matched too many tickets to load. Narrow your fix version or JQL filter.',
   RELEASE_NOT_FOUND: "This release doesn't exist or has been deleted.",
+  MANUAL_ITEM_NOT_FOUND: "This manual item doesn't exist or has already been removed.",
   RELEASE_FROZEN: 'This release is frozen and can no longer be changed.',
   RELEASE_DUPLICATE: 'A release with this name and version already exists. Choose a different name or version.',
   REFRESH_INCOMPLETE:

@@ -9,6 +9,7 @@ import com.evision.releasemgmt.adapters.persistence.repository.ReleaseSummaryRow
 import com.evision.releasemgmt.adapters.persistence.repository.ReleaseTicketItemJpaRepository;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.ManualItem;
+import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
@@ -144,7 +145,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     public Release updateManualItem(UUID releaseId, ManualItem item) {
         lockOpen(releaseId);
         ReleaseManualItemEntity entity = manualJpa.findByReleaseIdAndId(releaseId, item.id())
-                .orElseThrow(ReleaseNotFoundException::new);
+                .orElseThrow(ManualItemNotFoundException::new);
         entity.setTitle(item.title());
         entity.setDescription(item.description());
         entity.setCategory(item.category());

@@ -3,6 +3,7 @@ package com.evision.releasemgmt.adapters.web;
 import com.evision.releasemgmt.adapters.security.SessionRefreshException;
 import com.evision.releasemgmt.application.JiraSiteConfigService.JiraSiteNotConfiguredException;
 import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
+import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
@@ -82,6 +83,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleReleaseFrozen(ReleaseFrozenException ex) {
         return problem(HttpStatus.CONFLICT, "Release frozen",
                 "This release is frozen and can no longer be changed.", "RELEASE_FROZEN");
+    }
+
+    @ExceptionHandler(ManualItemNotFoundException.class)
+    public ProblemDetail handleManualItemNotFound(ManualItemNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Manual item not found",
+                "This manual item doesn't exist or has already been removed.",
+                "MANUAL_ITEM_NOT_FOUND");
     }
 
     @ExceptionHandler(ReleaseRefreshIncompleteException.class)
