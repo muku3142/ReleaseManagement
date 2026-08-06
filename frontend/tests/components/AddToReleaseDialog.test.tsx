@@ -161,6 +161,33 @@ describe('AddToReleaseDialog error surfacing', () => {
     );
   });
 
+  // The add goes through a Jira fetch and can take seconds. With no disabled state the silence
+  // invites a second click, which is a second POST /items for the same selection.
+  it('disables every Add button while the add is in flight', async () => {
+    let releaseAdd: (() => void) | undefined;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/items')) {
+        await new Promise<void>((resolve) => {
+          releaseAdd = resolve;
+        });
+        return json(409, { status: 409, reason: 'RELEASE_FROZEN' });
+      }
+      return json(200, { releases: [OPEN_RELEASE] });
+    });
+
+    await renderDialog();
+    await act(async () => byText('Add').click());
+    await flush();
+
+    expect(byText('Add').disabled).toBe(true);
+
+    await act(async () => releaseAdd!());
+    await flush();
+
+    expect(byText('Add').disabled).toBe(false);
+  });
+
   it('reopens with a clean form rather than the previous attempt values and error', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = String(input);
