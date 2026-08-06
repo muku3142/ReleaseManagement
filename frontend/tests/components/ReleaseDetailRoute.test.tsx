@@ -121,6 +121,27 @@ describe('ReleaseDetailRoute', () => {
     );
   });
 
+  // release_manual_item has no uniqueness constraint, so submitting the prefilled form silently
+  // created a second copy of the item that was being edited.
+  it('reopens the manual-item form empty after an edit was abandoned', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, RELEASE));
+
+    await renderRoute();
+    await act(async () => byText('Edit').click());
+    expect(container.querySelector<HTMLInputElement>('#manualTitle')!.value).toBe('Run migration');
+    expect(byText('Save changes')).toBeDefined();
+
+    await act(async () => byText('+ Add manual item').click());
+    expect(container.querySelector('#manualTitle')).toBeNull();
+
+    await act(async () => byText('+ Add manual item').click());
+
+    expect(container.querySelector<HTMLInputElement>('#manualTitle')!.value).toBe('');
+    expect(container.querySelector<HTMLTextAreaElement>('#manualDescription')!.value).toBe('');
+    expect(container.querySelector<HTMLSelectElement>('#manualCategory')!.value).toBe('OTHER');
+    expect(byText('Add item')).toBeDefined();
+  });
+
   it('closes the delete confirmation on failure so the error is readable', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
       if (init?.method === 'DELETE') return json(409, { status: 409, reason: 'RELEASE_FROZEN' });

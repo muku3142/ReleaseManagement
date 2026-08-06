@@ -477,10 +477,10 @@ export function ReleaseDetailRoute() {
       {isOpen && (
         <button
           type="button"
-          onClick={() => {
-            setFormOpen((open) => !open);
-            setEditingId(null);
-          }}
+          // Clearing editingId alone left title/description/category holding the row that was
+          // being edited, so reopening read as a create form prefilled with it - and submitting
+          // created a duplicate manual item, which release_manual_item has no constraint against.
+          onClick={() => (formOpen ? resetManualItemForm() : setFormOpen(true))}
           aria-expanded={formOpen}
           className="mt-3 text-sm text-blue-600 underline"
         >
