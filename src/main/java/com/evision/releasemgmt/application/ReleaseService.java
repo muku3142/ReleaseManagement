@@ -8,6 +8,7 @@ import com.evision.releasemgmt.domain.release.ManualItemCategory;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
+import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.springframework.stereotype.Service;
@@ -101,6 +102,11 @@ public class ReleaseService {
         List<ReleaseItem> refreshed = fetchTickets(keys).stream()
                 .map(ticket -> new ReleaseItem(ticket, now))
                 .toList();
+        if (refreshed.size() != keys.size()) {
+            // replaceItemSnapshots only overwrites the items Jira returned but stamps the whole
+            // release, so a partial response would leave stale rows under a fresh timestamp.
+            throw new ReleaseRefreshIncompleteException();
+        }
         return repository.replaceItemSnapshots(releaseId, refreshed, now);
     }
 

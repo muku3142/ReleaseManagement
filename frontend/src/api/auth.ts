@@ -72,6 +72,8 @@ const REASON_MESSAGES: Record<string, string> = {
   RELEASE_NOT_FOUND: "This release doesn't exist or has been deleted.",
   RELEASE_FROZEN: 'This release is frozen and can no longer be changed.',
   RELEASE_DUPLICATE: 'A release with this name and version already exists. Choose a different name or version.',
+  REFRESH_INCOMPLETE:
+    'Jira did not return every ticket on this release, so nothing was refreshed. Remove the tickets that no longer exist in Jira, or check your Jira permissions, then try again.',
   SESSION_EXPIRED: 'Your session has ended. Sign in again.',
   INVALID_SESSION: 'Your session has ended. Sign in again.',
   UNAUTHENTICATED: 'Your session has ended. Sign in again.',

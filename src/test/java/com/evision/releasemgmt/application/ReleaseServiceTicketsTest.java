@@ -8,6 +8,7 @@ import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
+import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -277,19 +278,50 @@ class ReleaseServiceTicketsTest {
         assertThat(itemsCaptor.getValue().get(0).addedAt()).isEqualTo(refreshedAtCaptor.getValue());
     }
 
+    private static List<TicketDetail> tickets(int fromInclusive, int toInclusive) {
+        return IntStream.rangeClosed(fromInclusive, toInclusive).mapToObj(i -> ticket("CNV-" + i)).toList();
+    }
+
     @Test
     void refreshFetchesInBatchesOfOneHundred() {
         UUID id = UUID.randomUUID();
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         List<String> keys = IntStream.rangeClosed(1, 250).mapToObj(i -> "CNV-" + i).toList();
         when(repository.findTicketKeys(id)).thenReturn(keys);
-        when(ticketSearchService.search(any())).thenReturn(List.of());
+        when(ticketSearchService.search(any()))
+                .thenReturn(tickets(1, 100), tickets(101, 200), tickets(201, 250));
         when(repository.replaceItemSnapshots(any(), any(), any()))
                 .thenReturn(release(id, ReleaseStatus.OPEN));
 
         service.refresh(id);
 
         verify(ticketSearchService, times(3)).search(any());
+    }
+
+    @Test
+    void refreshDoesNotStampLastRefreshedAtWhenJiraReturnedOnlySomeOfTheTickets() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1", "CNV-2"));
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
+
+        assertThatThrownBy(() -> service.refresh(id))
+                .isInstanceOf(ReleaseRefreshIncompleteException.class);
+
+        verify(repository, never()).replaceItemSnapshots(any(), any(), any());
+    }
+
+    @Test
+    void refreshDoesNotStampLastRefreshedAtWhenJiraReturnedNothingAtAll() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
+        when(ticketSearchService.search(any())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.refresh(id))
+                .isInstanceOf(ReleaseRefreshIncompleteException.class);
+
+        verify(repository, never()).replaceItemSnapshots(any(), any(), any());
     }
 
     @Test

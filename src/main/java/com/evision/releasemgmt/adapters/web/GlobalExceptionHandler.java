@@ -6,6 +6,7 @@ import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
+import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -81,6 +82,15 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleReleaseFrozen(ReleaseFrozenException ex) {
         return problem(HttpStatus.CONFLICT, "Release frozen",
                 "This release is frozen and can no longer be changed.", "RELEASE_FROZEN");
+    }
+
+    @ExceptionHandler(ReleaseRefreshIncompleteException.class)
+    public ProblemDetail handleReleaseRefreshIncomplete(ReleaseRefreshIncompleteException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Release not fully refreshed",
+                "Jira did not return every ticket on this release, so nothing was refreshed. "
+                        + "Remove the tickets that no longer exist in Jira, or check your Jira "
+                        + "permissions, then try again.",
+                "REFRESH_INCOMPLETE");
     }
 
     @ExceptionHandler(ReleaseDuplicateException.class)

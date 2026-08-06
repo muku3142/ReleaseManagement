@@ -16,6 +16,7 @@ import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
+import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
 import org.junit.jupiter.api.Test;
@@ -365,6 +366,16 @@ class ReleaseControllerTest {
         mockMvc.perform(post("/api/releases/{id}/refresh", id).with(csrf()).with(authenticated()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.reason").value("RELEASE_FROZEN"));
+    }
+
+    @Test
+    void aPartialRefreshMapsTo422RefreshIncompleteRatherThanASilentSuccess() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.refresh(id)).thenThrow(new ReleaseRefreshIncompleteException());
+
+        mockMvc.perform(post("/api/releases/{id}/refresh", id).with(csrf()).with(authenticated()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.reason").value("REFRESH_INCOMPLETE"));
     }
 
     @Test
