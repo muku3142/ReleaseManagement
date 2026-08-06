@@ -96,9 +96,13 @@ public class JiraRestTicketAdapter implements JiraTicketPort {
     private TicketDetail toTicketDetail(JsonNode issue, Map<TicketField, String> fieldIds) {
         JsonNode fields = issue.path("fields");
         String key = issue.path("key").asText(null);
-        String summary = field(fields, fieldIds, TicketField.SUMMARY).asText(null);
-        String issueType = field(fields, fieldIds, TicketField.ISSUE_TYPE).path("name").asText(null);
-        String status = field(fields, fieldIds, TicketField.STATUS).path("name").asText(null);
+        // summary, issue_type and status are NOT NULL in release_ticket_item. A field hidden by a
+        // permission scheme, or a resolved field id that no longer matches, is exactly the schema
+        // drift the stack notes tell us to expect - it must degrade to placeholder text, not to a
+        // constraint violation at flush and a 500.
+        String summary = field(fields, fieldIds, TicketField.SUMMARY).asText("");
+        String issueType = field(fields, fieldIds, TicketField.ISSUE_TYPE).path("name").asText("Unknown");
+        String status = field(fields, fieldIds, TicketField.STATUS).path("name").asText("Unknown");
         String resolution = field(fields, fieldIds, TicketField.RESOLUTION).path("name").asText(null);
         String assignee = field(fields, fieldIds, TicketField.ASSIGNEE).path("displayName").asText(null);
         String reporter = field(fields, fieldIds, TicketField.REPORTER).path("displayName").asText(null);

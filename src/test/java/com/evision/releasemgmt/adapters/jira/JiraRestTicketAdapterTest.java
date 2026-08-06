@@ -211,6 +211,25 @@ class JiraRestTicketAdapterTest {
         assertThat(ticket.fixVersions()).containsExactly("1.2.0");
     }
 
+    // summary, issue_type and status are NOT NULL in release_ticket_item, so a field the
+    // credential cannot see - or a field id that no longer resolves - must degrade to visible
+    // placeholder text rather than a DataIntegrityViolationException at flush and a 500.
+    @Test
+    void aFieldMissingFromTheResponseDegradesToPlaceholderTextNotNull(WireMockRuntimeInfo wm) {
+        String issue = "{\"key\":\"CNV-101\",\"fields\":{"
+                + "\"resolution\":null,"
+                + "\"description\":null,"
+                + "\"comment\":{\"comments\":[],\"total\":0}"
+                + "}}";
+        stubFor(post(urlEqualTo(SEARCH_URL)).willReturn(okJson("{\"issues\":[" + issue + "]}")));
+
+        TicketDetail ticket = adapter(50).searchAll(context(wm), "project = CNV", fieldIds()).get(0);
+
+        assertThat(ticket.summary()).isEqualTo("");
+        assertThat(ticket.issueType()).isEqualTo("Unknown");
+        assertThat(ticket.status()).isEqualTo("Unknown");
+    }
+
     @Test
     void unassignedAndUnresolvedAreNullNotAnException(WireMockRuntimeInfo wm) {
         stubFor(post(urlEqualTo(SEARCH_URL)).willReturn(okJson(pageJson("CNV-1", null))));
