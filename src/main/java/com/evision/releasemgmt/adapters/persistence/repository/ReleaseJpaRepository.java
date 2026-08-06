@@ -1,7 +1,6 @@
 package com.evision.releasemgmt.adapters.persistence.repository;
 
 import com.evision.releasemgmt.adapters.persistence.entity.ReleaseEntity;
-import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -46,7 +45,4 @@ public interface ReleaseJpaRepository extends JpaRepository<ReleaseEntity, UUID>
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM ReleaseEntity r WHERE r.id = :id")
     Optional<ReleaseEntity> findByIdForUpdate(@Param("id") UUID id);
-
-    // Only OPEN releases are valid targets for the Add-to-release picker (D-03-02).
-    List<ReleaseEntity> findByStatusOrderByCreatedAtDesc(ReleaseStatus status);
 }
