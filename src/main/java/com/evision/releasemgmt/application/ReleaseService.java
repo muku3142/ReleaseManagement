@@ -41,10 +41,6 @@ public class ReleaseService {
         this.ticketSearchService = ticketSearchService;
     }
 
-    public Release create(String name, String version, String jiraProjectKey, String actor) {
-        return createWithTickets(name, version, jiraProjectKey, List.of(), actor).release();
-    }
-
     public AddTicketsResult createWithTickets(String name, String version, String jiraProjectKey,
                                               List<String> ticketKeys, String actor) {
         Instant now = Instant.now();
