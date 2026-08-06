@@ -31,10 +31,21 @@ export function AddToReleaseDialog(props: {
   const [name, setName] = useState('');
   const [version, setVersion] = useState('');
 
+  // The dialog is permanently mounted by TicketsRoute, so without this reset it reopens against a
+  // new ticket selection still holding the previous attempt's form values and error - and
+  // resubmitting would re-send the same rejected name and version.
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (props.open && !dialog.open) dialog.showModal();
+    if (props.open && !dialog.open) {
+      setName('');
+      setVersion('');
+      setFilter('');
+      setFormOpenState(false);
+      createRelease.reset();
+      addTickets.reset();
+      dialog.showModal();
+    }
     if (!props.open && dialog.open) dialog.close();
   }, [props.open]);
 

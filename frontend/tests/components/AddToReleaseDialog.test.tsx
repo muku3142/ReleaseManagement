@@ -32,6 +32,7 @@ function json(status: number, body: unknown): Response {
 
 let container: HTMLDivElement;
 let root: Root;
+let client: QueryClient;
 
 async function flush() {
   await act(async () => {
@@ -39,14 +40,13 @@ async function flush() {
   });
 }
 
-async function renderDialog() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+async function renderDialog(open = true) {
   await act(async () => {
     root.render(
       <StrictMode>
         <QueryClientProvider client={client}>
           <AddToReleaseDialog
-            open
+            open={open}
             ticketKeys={['CNV-1', 'CNV-2']}
             jiraProjectKey="CNV"
             onClose={() => {}}
@@ -58,10 +58,28 @@ async function renderDialog() {
   await flush();
 }
 
-function clickAddButton() {
-  const button = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Add');
-  expect(button).toBeDefined();
-  button!.click();
+function byText(text: string): HTMLButtonElement {
+  const button = [...container.querySelectorAll('button')].find((b) => b.textContent === text);
+  expect(button, `no button labelled "${text}"`).toBeDefined();
+  return button!;
+}
+
+async function submitCreateForm(name: string, version: string) {
+  await act(async () => byText('New release…').click());
+  const nameInput = container.querySelector<HTMLInputElement>('#releaseName')!;
+  const versionInput = container.querySelector<HTMLInputElement>('#releaseVersion')!;
+  await act(async () => {
+    nameInput.value = name;
+    nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+    versionInput.value = version;
+    versionInput.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () => {
+    container
+      .querySelector('form')!
+      .dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  await flush();
 }
 
 describe('AddToReleaseDialog error surfacing', () => {
@@ -80,6 +98,7 @@ describe('AddToReleaseDialog error surfacing', () => {
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   });
 
   afterEach(async () => {
@@ -97,7 +116,7 @@ describe('AddToReleaseDialog error surfacing', () => {
     });
 
     await renderDialog();
-    await act(async () => clickAddButton());
+    await act(async () => byText('Add').click());
     await flush();
 
     const alert = container.querySelector('[data-reason="RELEASE_FROZEN"]');
@@ -113,7 +132,7 @@ describe('AddToReleaseDialog error surfacing', () => {
     });
 
     await renderDialog();
-    await act(async () => clickAddButton());
+    await act(async () => byText('Add').click());
     await flush();
 
     expect(container.querySelector('[data-reason="JIRA_UNREACHABLE"]')?.textContent).toBe(
@@ -135,27 +154,34 @@ describe('AddToReleaseDialog error surfacing', () => {
     });
 
     await renderDialog();
-    await act(async () => {
-      [...container.querySelectorAll('button')]
-        .find((b) => b.textContent === 'New release…')!
-        .click();
-    });
-
-    const name = container.querySelector<HTMLInputElement>('#releaseName')!;
-    const version = container.querySelector<HTMLInputElement>('#releaseVersion')!;
-    await act(async () => {
-      name.value = 'Sprint 43';
-      name.dispatchEvent(new Event('input', { bubbles: true }));
-      version.value = '2026.09';
-      version.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    await act(async () => {
-      container.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-    });
-    await flush();
+    await submitCreateForm('Sprint 43', '2026.09');
 
     expect(container.querySelector('[data-reason="VALIDATION_FAILED"]')?.textContent).toBe(
       'size must be between 0 and 500',
     );
+  });
+
+  it('reopens with a clean form rather than the previous attempt values and error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === '/api/releases' && init?.method === 'POST') {
+        return json(409, { status: 409, reason: 'RELEASE_DUPLICATE' });
+      }
+      return json(200, { releases: [OPEN_RELEASE] });
+    });
+
+    await renderDialog();
+    await submitCreateForm('Sprint 43', '2026.09');
+    expect(container.querySelector('[data-reason="RELEASE_DUPLICATE"]')).not.toBeNull();
+
+    await renderDialog(false);
+    await renderDialog(true);
+
+    expect(container.querySelector('[data-reason="RELEASE_DUPLICATE"]')).toBeNull();
+    expect(container.querySelector('#releaseName')).toBeNull();
+
+    await act(async () => byText('New release…').click());
+    expect(container.querySelector<HTMLInputElement>('#releaseName')!.value).toBe('');
+    expect(container.querySelector<HTMLInputElement>('#releaseVersion')!.value).toBe('');
   });
 });
