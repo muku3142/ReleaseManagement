@@ -3,9 +3,11 @@ package com.evision.releasemgmt.adapters.web;
 import com.evision.releasemgmt.adapters.security.SessionRefreshException;
 import com.evision.releasemgmt.application.JiraSiteConfigService.JiraSiteNotConfiguredException;
 import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
+import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
+import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -83,6 +85,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 "This release is frozen and can no longer be changed.", "RELEASE_FROZEN");
     }
 
+    @ExceptionHandler(ManualItemNotFoundException.class)
+    public ProblemDetail handleManualItemNotFound(ManualItemNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Manual item not found",
+                "This manual item doesn't exist or has already been removed.",
+                "MANUAL_ITEM_NOT_FOUND");
+    }
+
+    @ExceptionHandler(ReleaseRefreshIncompleteException.class)
+    public ProblemDetail handleReleaseRefreshIncomplete(ReleaseRefreshIncompleteException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Release not fully refreshed",
+                "Jira did not return every ticket on this release, so nothing was refreshed. "
+                        + "Remove the tickets that no longer exist in Jira, or check your Jira "
+                        + "permissions, then try again.",
+                "REFRESH_INCOMPLETE");
+    }
+
     @ExceptionHandler(ReleaseDuplicateException.class)
     public ProblemDetail handleReleaseDuplicate(ReleaseDuplicateException ex) {
         return problem(HttpStatus.CONFLICT, "Duplicate release",
@@ -123,6 +141,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         }
         pd.setProperty("fieldErrors", fieldErrors);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
+    }
+
+    // D-04: the SPA keys all of its error copy on `reason`, but every ProblemDetail the framework
+    // builds for itself - malformed JSON, an unknown enum value, a wrong method or media type -
+    // arrives without one, and rawFetch degrades that to 'UNKNOWN'. The status name is exactly
+    // the machine-readable token those paths are missing.
+    @Override
+    protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body,
+                                                             HttpHeaders headers,
+                                                             HttpStatusCode statusCode,
+                                                             WebRequest request) {
+        ResponseEntity<Object> response = super.handleExceptionInternal(ex, body, headers, statusCode, request);
+        if (response != null && response.getBody() instanceof ProblemDetail pd
+                && (pd.getProperties() == null || !pd.getProperties().containsKey("reason"))) {
+            pd.setProperty("reason", HttpStatus.valueOf(statusCode.value()).name());
+        }
+        return response;
     }
 
     @ExceptionHandler(Exception.class)

@@ -8,6 +8,7 @@ import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
+import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -129,7 +130,7 @@ class ReleaseServiceTicketsTest {
     }
 
     @Test
-    void aKeyJiraDoesNotReturnIsSimplyNotAdded() {
+    void aKeyJiraDoesNotReturnIsCountedAsNotFoundRatherThanVanishing() {
         UUID id = UUID.randomUUID();
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         when(repository.findTicketKeys(id)).thenReturn(List.of());
@@ -139,10 +140,68 @@ class ReleaseServiceTicketsTest {
         AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2"));
 
         assertThat(result.added()).isEqualTo(1);
+        assertThat(result.notFound()).isEqualTo(1);
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ReleaseItem>> itemsCaptor = ArgumentCaptor.forClass(List.class);
         verify(repository).addItems(eq(id), itemsCaptor.capture());
         assertThat(itemsCaptor.getValue()).hasSize(1);
+    }
+
+    @Test
+    void aKeyRejectedByTheIssueKeyPatternIsCountedAsNotFound() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of());
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
+        when(repository.addItems(eq(id), any())).thenReturn(release(id, ReleaseStatus.OPEN));
+
+        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "not a key"));
+
+        assertThat(result.added()).isEqualTo(1);
+        assertThat(result.notFound()).isEqualTo(1);
+    }
+
+    // An issue moved between projects is requested as OLD-1 and comes back as NEW-5. Filtering the
+    // request alone let NEW-5 through to an insert that violates release_ticket_item_key_unique.
+    @Test
+    void aRequestedKeyThatResolvesToAnIssueAlreadyOnTheReleaseIsNotInsertedAgain() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("NEW-5"));
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("NEW-5")));
+
+        AddTicketsResult result = service.addTickets(id, List.of("OLD-1"));
+
+        verify(repository, never()).addItems(any(), any());
+        assertThat(result.added()).isEqualTo(0);
+        assertThat(result.alreadyPresent()).isEqualTo(1);
+        assertThat(result.notFound()).isEqualTo(0);
+    }
+
+    @Test
+    void everyRequestedKeyLandsInExactlyOneCount() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-2")));
+        when(repository.addItems(eq(id), any())).thenReturn(release(id, ReleaseStatus.OPEN));
+
+        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2", "CNV-3"));
+
+        assertThat(result.added() + result.alreadyPresent() + result.notFound()).isEqualTo(3);
+        assertThat(result.notFound()).isEqualTo(1);
+    }
+
+    @Test
+    void createWithTicketsCountsTheKeysJiraDidNotReturnAsNotFound() {
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
+        when(repository.create(any(), any())).thenReturn(release(UUID.randomUUID(), ReleaseStatus.OPEN));
+
+        AddTicketsResult result = service.createWithTickets("Sprint 42", "2026.08", "CNV",
+                List.of("CNV-1", "CNV-2"), "557058:abc-123");
+
+        assertThat(result.added()).isEqualTo(1);
+        assertThat(result.notFound()).isEqualTo(1);
     }
 
     @Test
@@ -236,19 +295,50 @@ class ReleaseServiceTicketsTest {
         assertThat(itemsCaptor.getValue().get(0).addedAt()).isEqualTo(refreshedAtCaptor.getValue());
     }
 
+    private static List<TicketDetail> tickets(int fromInclusive, int toInclusive) {
+        return IntStream.rangeClosed(fromInclusive, toInclusive).mapToObj(i -> ticket("CNV-" + i)).toList();
+    }
+
     @Test
     void refreshFetchesInBatchesOfOneHundred() {
         UUID id = UUID.randomUUID();
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         List<String> keys = IntStream.rangeClosed(1, 250).mapToObj(i -> "CNV-" + i).toList();
         when(repository.findTicketKeys(id)).thenReturn(keys);
-        when(ticketSearchService.search(any())).thenReturn(List.of());
+        when(ticketSearchService.search(any()))
+                .thenReturn(tickets(1, 100), tickets(101, 200), tickets(201, 250));
         when(repository.replaceItemSnapshots(any(), any(), any()))
                 .thenReturn(release(id, ReleaseStatus.OPEN));
 
         service.refresh(id);
 
         verify(ticketSearchService, times(3)).search(any());
+    }
+
+    @Test
+    void refreshDoesNotStampLastRefreshedAtWhenJiraReturnedOnlySomeOfTheTickets() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1", "CNV-2"));
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
+
+        assertThatThrownBy(() -> service.refresh(id))
+                .isInstanceOf(ReleaseRefreshIncompleteException.class);
+
+        verify(repository, never()).replaceItemSnapshots(any(), any(), any());
+    }
+
+    @Test
+    void refreshDoesNotStampLastRefreshedAtWhenJiraReturnedNothingAtAll() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
+        when(ticketSearchService.search(any())).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.refresh(id))
+                .isInstanceOf(ReleaseRefreshIncompleteException.class);
+
+        verify(repository, never()).replaceItemSnapshots(any(), any(), any());
     }
 
     @Test

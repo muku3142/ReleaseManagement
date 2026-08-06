@@ -11,11 +11,13 @@ import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemCategory;
+import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
+import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
 import org.junit.jupiter.api.Test;
@@ -77,7 +79,7 @@ class ReleaseControllerTest {
     void createReturns201AndRecordsTheAuthenticatedPrincipalAsActor() throws Exception {
         UUID id = UUID.randomUUID();
         when(service.createWithTickets(any(), any(), any(), any(), any()))
-                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 0, 0));
+                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 0, 0, 0));
 
         mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -145,7 +147,7 @@ class ReleaseControllerTest {
     void nonSemverVersionIsAccepted() throws Exception {
         UUID id = UUID.randomUUID();
         when(service.createWithTickets(any(), any(), any(), any(), any()))
-                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 0, 0));
+                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 0, 0, 0));
 
         mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -157,7 +159,7 @@ class ReleaseControllerTest {
     void createWithTicketKeysReturnsAddedCount() throws Exception {
         UUID id = UUID.randomUUID();
         when(service.createWithTickets(any(), any(), any(), any(), any()))
-                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 2, 0));
+                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 2, 0, 0));
 
         mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -260,17 +262,18 @@ class ReleaseControllerTest {
     }
 
     @Test
-    void addTicketsReturnsBothCounts() throws Exception {
+    void addTicketsReturnsEveryCountIncludingTheKeysJiraDidNotReturn() throws Exception {
         UUID id = UUID.randomUUID();
         when(service.addTickets(eq(id), any()))
-                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 1, 1));
+                .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 1, 1, 2));
 
         mockMvc.perform(post("/api/releases/{id}/items", id).with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"ticketKeys\":[\"CNV-1\",\"CNV-2\"]}"))
+                        .content("{\"ticketKeys\":[\"CNV-1\",\"CNV-2\",\"CNV-3\",\"CNV-4\"]}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.added").value(1))
-                .andExpect(jsonPath("$.alreadyPresent").value(1));
+                .andExpect(jsonPath("$.alreadyPresent").value(1))
+                .andExpect(jsonPath("$.notFound").value(2));
     }
 
     @Test
@@ -364,6 +367,16 @@ class ReleaseControllerTest {
         mockMvc.perform(post("/api/releases/{id}/refresh", id).with(csrf()).with(authenticated()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.reason").value("RELEASE_FROZEN"));
+    }
+
+    @Test
+    void aPartialRefreshMapsTo422RefreshIncompleteRatherThanASilentSuccess() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.refresh(id)).thenThrow(new ReleaseRefreshIncompleteException());
+
+        mockMvc.perform(post("/api/releases/{id}/refresh", id).with(csrf()).with(authenticated()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.reason").value("REFRESH_INCOMPLETE"));
     }
 
     @Test
@@ -483,9 +496,46 @@ class ReleaseControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"title\":\"Title\",\"description\":\"desc\","
                                 + "\"category\":\"SOMETHING_ELSE\"}"))
-                .andExpect(status().is4xxClientError());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("BAD_REQUEST"));
 
         verify(service, never()).addManualItem(any(), any(), any(), any());
+    }
+
+    @Test
+    void anUnknownManualItemIdMapsTo404ManualItemNotFoundNotReleaseNotFound() throws Exception {
+        UUID id = UUID.randomUUID();
+        UUID manualItemId = UUID.randomUUID();
+        when(service.updateManualItem(eq(id), eq(manualItemId), any(), any(), any()))
+                .thenThrow(new ManualItemNotFoundException());
+
+        mockMvc.perform(put("/api/releases/{id}/manual-items/{itemId}", id, manualItemId)
+                        .with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"title\":\"Title\",\"description\":\"d\",\"category\":\"OTHER\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.reason").value("MANUAL_ITEM_NOT_FOUND"));
+    }
+
+    // D-04 applies to every error body, including the ones the framework builds for itself.
+    @Test
+    void aMethodTheApiDoesNotSupportStillCarriesAMachineReadableReason() throws Exception {
+        mockMvc.perform(put("/api/releases").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(jsonPath("$.reason").value("METHOD_NOT_ALLOWED"));
+    }
+
+    @Test
+    void aMalformedJsonBodyStillCarriesAMachineReadableReason() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/releases/{id}/items", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"ticketKeys\":"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("BAD_REQUEST"));
+
+        verify(service, never()).addTickets(any(), any());
     }
 
     @Test

@@ -41,7 +41,13 @@ public interface ReleaseRepository {
 
     Release addManualItem(UUID releaseId, ManualItem item);
 
+    /**
+     * @throws com.evision.releasemgmt.domain.release.ManualItemNotFoundException
+     *         when the release has no manual item with this id - an edit that silently saved
+     *         nothing would look identical to a successful one
+     */
     Release updateManualItem(UUID releaseId, ManualItem item);
 
+    /** Idempotent: an id that is not on the release is a no-op, matching {@link #removeItem}. */
     Release removeManualItem(UUID releaseId, UUID manualItemId);
 }

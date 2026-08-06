@@ -86,8 +86,10 @@ export function TicketsRoute() {
   const selectedProjectKey =
     projects.data?.find((p) => p.id === projectId)?.key ?? 'the selected project';
   // D-03-05: the release's advisory project key defaults to the project being browsed. Null when
-  // the search ran from raw JQL, where there is no single browsed project.
-  const browsedProjectKey = projects.data?.find((p) => p.id === projectId)?.key ?? null;
+  // the search ran from raw JQL, where there is no single browsed project - keyed on loadedMode,
+  // not the live select, which may name a project none of the loaded tickets came from.
+  const browsedProjectKey =
+    loadedMode === 'jql' ? null : (projects.data?.find((p) => p.id === projectId)?.key ?? null);
   const selectedSprint = sprints.data?.find((s) => s.id === sprintId)?.name;
   const scopeDescription = selectedSprint
     ? `${selectedProjectKey} / ${selectedSprint}`

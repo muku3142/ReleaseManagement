@@ -31,10 +31,21 @@ export function AddToReleaseDialog(props: {
   const [name, setName] = useState('');
   const [version, setVersion] = useState('');
 
+  // The dialog is permanently mounted by TicketsRoute, so without this reset it reopens against a
+  // new ticket selection still holding the previous attempt's form values and error - and
+  // resubmitting would re-send the same rejected name and version.
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    if (props.open && !dialog.open) dialog.showModal();
+    if (props.open && !dialog.open) {
+      setName('');
+      setVersion('');
+      setFilter('');
+      setFormOpenState(false);
+      createRelease.reset();
+      addTickets.reset();
+      dialog.showModal();
+    }
     if (!props.open && dialog.open) dialog.close();
   }, [props.open]);
 
@@ -63,7 +74,11 @@ export function AddToReleaseDialog(props: {
     navigate({
       to: '/releases/$releaseId',
       params: { releaseId: result.release.id },
-      search: { added: result.added, alreadyPresent: result.alreadyPresent },
+      search: {
+        added: result.added,
+        alreadyPresent: result.alreadyPresent,
+        notFound: result.notFound,
+      },
     });
   }
 
@@ -80,6 +95,9 @@ export function AddToReleaseDialog(props: {
     );
   }
 
+  const addProblem =
+    addTickets.isError && addTickets.error instanceof ApiError ? addTickets.error.problem : undefined;
+
   const createProblem =
     createRelease.isError && createRelease.error instanceof ApiError
       ? createRelease.error.problem
@@ -88,6 +106,14 @@ export function AddToReleaseDialog(props: {
     createProblem?.reason === 'VALIDATION_FAILED' ? createProblem.fieldErrors?.name : undefined;
   const versionError =
     createProblem?.reason === 'VALIDATION_FAILED' ? createProblem.fieldErrors?.version : undefined;
+  // RELEASE_DUPLICATE has its own copy below, and a name/version field error is rendered against
+  // its own input. Everything else - a ticketKeys[n] violation, JIRA_UNREACHABLE, a frozen target
+  // - would otherwise be swallowed.
+  const showCreateProblem =
+    createProblem !== undefined &&
+    createProblem.reason !== 'RELEASE_DUPLICATE' &&
+    nameError === undefined &&
+    versionError === undefined;
 
   return (
     <dialog
@@ -151,7 +177,8 @@ export function AddToReleaseDialog(props: {
                       { onSuccess: goToRelease },
                     )
                   }
-                  className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700"
+                  disabled={addTickets.isPending}
+                  className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 disabled:opacity-50"
                 >
                   Add
                 </button>
@@ -159,6 +186,22 @@ export function AddToReleaseDialog(props: {
             ))}
           </ul>
         </div>
+      )}
+
+      {addTickets.isPending && (
+        <div className="mt-4 flex items-center gap-3">
+          <span
+            className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"
+            aria-hidden="true"
+          />
+          <p className="text-sm text-gray-600">Adding tickets…</p>
+        </div>
+      )}
+
+      {addProblem && (
+        <p role="alert" data-reason={addProblem.reason} className="mt-2 text-sm text-red-600">
+          {messageForReason(addProblem)}
+        </p>
       )}
 
       <button
@@ -204,6 +247,11 @@ export function AddToReleaseDialog(props: {
           {createProblem?.reason === 'RELEASE_DUPLICATE' && (
             <p role="alert" data-reason="RELEASE_DUPLICATE" className="mt-2 text-sm text-red-600">
               {`A release named '${name}' version '${version}' already exists. Choose a different name or version.`}
+            </p>
+          )}
+          {showCreateProblem && (
+            <p role="alert" data-reason={createProblem.reason} className="mt-2 text-sm text-red-600">
+              {messageForReason(createProblem)}
             </p>
           )}
 

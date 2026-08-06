@@ -130,7 +130,7 @@ describe('releases API client', () => {
   it('resolves a mocked 201 on POST /api/releases to { release, added, alreadyPresent }', async () => {
     const release: Release = { ...summary({ id: '1' }), items: [], manualItems: [] };
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      jsonResponse(201, { release, added: 2, alreadyPresent: 0 }),
+      jsonResponse(201, { release, added: 2, alreadyPresent: 0, notFound: 0 }),
     );
 
     const result = await apiFetch<ReleaseAddResult>('/api/releases', {
@@ -138,7 +138,7 @@ describe('releases API client', () => {
       body: JSON.stringify({ name: 'R1', version: '1.0', ticketKeys: ['CNV-1', 'CNV-2'] }),
     });
 
-    expect(result).toEqual({ release, added: 2, alreadyPresent: 0 });
+    expect(result).toEqual({ release, added: 2, alreadyPresent: 0, notFound: 0 });
   });
 
   it('rejects with an ApiError whose problem.reason is RELEASE_DUPLICATE on a mocked 409', async () => {
@@ -176,10 +176,10 @@ describe('releases API client', () => {
     );
   });
 
-  it('resolves a mocked 200 on POST /api/releases/{id}/items with both counts, including the all-duplicate case as a success', async () => {
+  it('resolves a mocked 200 on POST /api/releases/{id}/items with every count, including the all-duplicate case as a success', async () => {
     const release: Release = { ...summary({ id: '1' }), items: [], manualItems: [] };
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      jsonResponse(200, { release, added: 0, alreadyPresent: 3 }),
+      jsonResponse(200, { release, added: 0, alreadyPresent: 3, notFound: 0 }),
     );
 
     const result = await apiFetch<ReleaseAddResult>('/api/releases/1/items', {
@@ -187,7 +187,7 @@ describe('releases API client', () => {
       body: JSON.stringify({ ticketKeys: ['CNV-1', 'CNV-2', 'CNV-3'] }),
     });
 
-    expect(result).toEqual({ release, added: 0, alreadyPresent: 3 });
+    expect(result).toEqual({ release, added: 0, alreadyPresent: 3, notFound: 0 });
   });
 
   it('rejects with an ApiError whose problem.reason is RELEASE_FROZEN on the items endpoint', async () => {

@@ -18,8 +18,18 @@ import {
 import { ConfirmDialog } from '../components/ConfirmDialog';
 
 // D-03-13: idempotent add, honest feedback - never phrased as a warning, because a duplicate
-// add is a success, not a partial failure.
-function addResultMessage(added: number, alreadyPresent: number, name: string, version: string) {
+// add is a success, not a partial failure. A key Jira did not return is neither added nor
+// already present, so it gets its own clause rather than being silently absorbed into "added".
+export function addResultMessage(
+  added: number,
+  alreadyPresent: number,
+  notFound: number,
+  name: string,
+  version: string,
+) {
+  if (notFound > 0) {
+    return `${added} added, ${alreadyPresent} already on this release, ${notFound} not found in Jira.`;
+  }
   if (alreadyPresent === 0) return `${added} ticket(s) added to ${name} ${version}.`;
   if (added === 0) return `All ${alreadyPresent} selected tickets were already on this release.`;
   return `${added} added, ${alreadyPresent} already on this release.`;
@@ -30,7 +40,9 @@ export function ReleaseDetailRoute() {
   // so TanStack Router's generated route-id space prefixes every child with /authenticated even
   // though the actual URL (and `to=` navigation) has no such segment.
   const { releaseId } = useParams({ from: '/authenticated/releases/$releaseId' });
-  const { added, alreadyPresent } = useSearch({ from: '/authenticated/releases/$releaseId' });
+  const { added, alreadyPresent, notFound } = useSearch({
+    from: '/authenticated/releases/$releaseId',
+  });
   const navigate = useNavigate();
   const release = useRelease(releaseId);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -241,7 +253,9 @@ export function ReleaseDetailRoute() {
         confirmLabel="Freeze release"
         confirmClassName="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         pending={freeze.isPending}
-        onConfirm={() => freeze.mutate(data.id, { onSuccess: () => setConfirming(null) })}
+        // onSettled, not onSuccess: showModal() makes the rest of the document inert, so a
+        // failure that left the dialog open would render actionProblem behind the backdrop.
+        onConfirm={() => freeze.mutate(data.id, { onSettled: () => setConfirming(null) })}
         onCancel={() => setConfirming(null)}
       />
 
@@ -253,7 +267,10 @@ export function ReleaseDetailRoute() {
         confirmClassName="rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         pending={remove.isPending}
         onConfirm={() =>
-          remove.mutate(data.id, { onSuccess: () => navigate({ to: '/releases' }) })
+          remove.mutate(data.id, {
+            onSuccess: () => navigate({ to: '/releases' }),
+            onSettled: () => setConfirming(null),
+          })
         }
         onCancel={() => setConfirming(null)}
       />
@@ -263,7 +280,7 @@ export function ReleaseDetailRoute() {
           role="status"
           className="mt-4 flex items-start justify-between rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900"
         >
-          <p>{addResultMessage(added, alreadyPresent, data.name, data.version)}</p>
+          <p>{addResultMessage(added, alreadyPresent, notFound ?? 0, data.name, data.version)}</p>
           <button
             type="button"
             aria-label="Dismiss"
@@ -460,10 +477,10 @@ export function ReleaseDetailRoute() {
       {isOpen && (
         <button
           type="button"
-          onClick={() => {
-            setFormOpen((open) => !open);
-            setEditingId(null);
-          }}
+          // Clearing editingId alone left title/description/category holding the row that was
+          // being edited, so reopening read as a create form prefilled with it - and submitting
+          // created a duplicate manual item, which release_manual_item has no constraint against.
+          onClick={() => (formOpen ? resetManualItemForm() : setFormOpen(true))}
           aria-expanded={formOpen}
           className="mt-3 text-sm text-blue-600 underline"
         >

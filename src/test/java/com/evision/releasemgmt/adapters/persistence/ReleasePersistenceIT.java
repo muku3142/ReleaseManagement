@@ -3,16 +3,20 @@ package com.evision.releasemgmt.adapters.persistence;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemCategory;
+import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
+import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
 import com.evision.releasemgmt.ports.ReleaseRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -20,6 +24,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,6 +39,17 @@ class ReleasePersistenceIT {
 
     @Autowired
     private ReleaseRepository repository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    // One static container, no @Transactional: without this every method inherits the previous
+    // one's rows, and the exact-set assertions below (including the wildcard-escaping ones, which
+    // are the security-relevant pair) would start failing on an unrelated fixture collision.
+    @AfterEach
+    void clearReleases() {
+        jdbcTemplate.execute("TRUNCATE release CASCADE");
+    }
 
     private static ReleaseItem item(String key) {
         return new ReleaseItem(new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed",
@@ -108,6 +124,28 @@ class ReleasePersistenceIT {
         assertThat(loaded.manualItems().get(0).category()).isEqualTo(ManualItemCategory.DATABASE_SCRIPT);
     }
 
+    // Editing an id that is not there used to report "This release doesn't exist or has been
+    // deleted." - false, and it sends the user after the wrong problem.
+    @Test
+    void editingAManualItemThatIsNotOnTheReleaseIsAManualItemNotFound() {
+        Release release = Release.create("Manual Miss", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of());
+        ManualItem absent = ManualItem.create("Ghost", "d", ManualItemCategory.OTHER, Instant.now());
+
+        assertThatThrownBy(() -> repository.updateManualItem(release.id(), absent))
+                .isInstanceOf(ManualItemNotFoundException.class);
+    }
+
+    @Test
+    void removingAManualItemThatIsNotOnTheReleaseIsANoOp() {
+        Release release = Release.create("Manual Remove Miss", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of());
+
+        Release loaded = repository.removeManualItem(release.id(), UUID.randomUUID());
+
+        assertThat(loaded.manualItems()).isEmpty();
+    }
+
     @Test
     void addItemsIsSeparateFromCreateAndAccumulates() {
         Release release = Release.create("Accumulate", "1.0", "CNV", "rm@acme.com", Instant.now());
@@ -116,6 +154,18 @@ class ReleasePersistenceIT {
         repository.addItems(release.id(), List.of(item("CNV-2"), item("CNV-3")));
 
         assertThat(repository.findById(release.id()).orElseThrow().items()).hasSize(3);
+    }
+
+    @Test
+    void addItemsIgnoresAKeyAlreadyOnTheReleaseRatherThanViolatingTheUniqueConstraint() {
+        Release release = Release.create("Concurrent Add", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(item("CNV-1")));
+
+        repository.addItems(release.id(), List.of(item("CNV-1"), item("CNV-2")));
+
+        assertThat(repository.findById(release.id()).orElseThrow().items())
+                .extracting(ReleaseItem::ticketKey)
+                .containsExactly("CNV-1", "CNV-2");
     }
 
     @Test
@@ -178,6 +228,51 @@ class ReleasePersistenceIT {
         assertThat(repository.search("")).extracting(ReleaseSummary::id).doesNotContain(release.id());
     }
 
+    // The service's requireOpen() runs against a snapshot read in an earlier transaction, with a
+    // paginated Jira call in between, so it cannot be what enforces the one-way door. These two
+    // call the repository directly - exactly what a concurrent freeze leaves the service doing.
+    @Test
+    void aFrozenReleaseRefusesEveryMutationAtThePersistenceBoundary() {
+        Release release = Release.create("Frozen Guard", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(item("CNV-1")));
+        UUID id = release.id();
+        repository.freeze(id, "rm@acme.com", Instant.now());
+        ManualItem note = ManualItem.create("Note", "desc", ManualItemCategory.OTHER, Instant.now());
+
+        assertThatThrownBy(() -> repository.addItems(id, List.of(item("CNV-2"))))
+                .isInstanceOf(ReleaseFrozenException.class);
+        assertThatThrownBy(() -> repository.removeItem(id, "CNV-1"))
+                .isInstanceOf(ReleaseFrozenException.class);
+        assertThatThrownBy(() -> repository.replaceItemSnapshots(id, List.of(item("CNV-1")), Instant.now()))
+                .isInstanceOf(ReleaseFrozenException.class);
+        assertThatThrownBy(() -> repository.addManualItem(id, note))
+                .isInstanceOf(ReleaseFrozenException.class);
+        assertThatThrownBy(() -> repository.removeManualItem(id, note.id()))
+                .isInstanceOf(ReleaseFrozenException.class);
+        assertThatThrownBy(() -> repository.delete(id))
+                .isInstanceOf(ReleaseFrozenException.class);
+
+        Release loaded = repository.findById(id).orElseThrow();
+        assertThat(loaded.items()).extracting(ReleaseItem::ticketKey).containsExactly("CNV-1");
+        assertThat(loaded.manualItems()).isEmpty();
+        assertThat(loaded.lastRefreshedAt()).isNull();
+    }
+
+    @Test
+    void freezingAnAlreadyFrozenReleaseIsRefusedAndKeepsTheOriginalActorAndTimestamp() {
+        Release release = Release.create("Double Freeze", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of());
+        Instant frozenAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        repository.freeze(release.id(), "rm@acme.com", frozenAt);
+
+        assertThatThrownBy(() -> repository.freeze(release.id(), "someone.else@acme.com", Instant.now()))
+                .isInstanceOf(ReleaseFrozenException.class);
+
+        Release loaded = repository.findById(release.id()).orElseThrow();
+        assertThat(loaded.frozenBy()).isEqualTo("rm@acme.com");
+        assertThat(loaded.frozenAt()).isEqualTo(frozenAt);
+    }
+
     @Test
     void searchMatchesNameOrVersionCaseInsensitively() {
         Release sprint = Release.create("Sprint 42", "2026.08", "CNV", "rm@acme.com", Instant.now());
@@ -204,7 +299,9 @@ class ReleasePersistenceIT {
         assertThat(repository.search("_")).isEmpty();
         assertThat(repository.search("'; DROP TABLE release; --")).isEmpty();
 
-        assertThat(repository.search("")).extracting(ReleaseSummary::id).contains(release.id());
+        // Exact, not `contains`: with per-method truncation this release is the only row there is,
+        // which is also what proves the truncation is running.
+        assertThat(repository.search("")).extracting(ReleaseSummary::id).containsExactly(release.id());
     }
 
     @Test

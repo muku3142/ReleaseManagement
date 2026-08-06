@@ -9,8 +9,10 @@ import com.evision.releasemgmt.adapters.persistence.repository.ReleaseSummaryRow
 import com.evision.releasemgmt.adapters.persistence.repository.ReleaseTicketItemJpaRepository;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.ManualItem;
+import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
+import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
@@ -23,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -74,13 +77,19 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     @Override
     @Transactional
     public Release addItems(UUID releaseId, List<ReleaseItem> items) {
-        insertItems(releaseId, items);
+        lockOpen(releaseId);
+        // The lock means the key set cannot change beneath this read, so filtering here is what
+        // stops two concurrent adds of the same key from surfacing
+        // release_ticket_item_key_unique as a 500.
+        Set<String> present = Set.copyOf(findTicketKeys(releaseId));
+        insertItems(releaseId, items.stream().filter(i -> !present.contains(i.ticketKey())).toList());
         return load(releaseId);
     }
 
     @Override
     @Transactional
     public Release removeItem(UUID releaseId, String ticketKey) {
+        lockOpen(releaseId);
         itemJpa.deleteByReleaseIdAndTicketKey(releaseId, ticketKey);
         return load(releaseId);
     }
@@ -88,11 +97,11 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     @Override
     @Transactional
     public Release replaceItemSnapshots(UUID releaseId, List<ReleaseItem> items, Instant refreshedAt) {
+        ReleaseEntity release = lockOpen(releaseId);
         for (ReleaseItem item : items) {
             itemJpa.findByReleaseIdAndTicketKey(releaseId, item.ticketKey())
                     .ifPresent(entity -> overwriteSnapshot(entity, item.ticket()));
         }
-        ReleaseEntity release = jpa.findById(releaseId).orElseThrow(ReleaseNotFoundException::new);
         release.setLastRefreshedAt(refreshedAt);
         jpa.save(release);
         return load(releaseId);
@@ -101,7 +110,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     @Override
     @Transactional
     public Release freeze(UUID releaseId, String actor, Instant at) {
-        ReleaseEntity entity = jpa.findById(releaseId).orElseThrow(ReleaseNotFoundException::new);
+        ReleaseEntity entity = lockOpen(releaseId);
         entity.setStatus(ReleaseStatus.FROZEN);
         entity.setFrozenAt(at);
         entity.setFrozenBy(actor);
@@ -112,12 +121,14 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     @Override
     @Transactional
     public void delete(UUID releaseId) {
+        lockOpen(releaseId);
         jpa.deleteById(releaseId);
     }
 
     @Override
     @Transactional
     public Release addManualItem(UUID releaseId, ManualItem item) {
+        lockOpen(releaseId);
         ReleaseManualItemEntity entity = new ReleaseManualItemEntity();
         entity.setId(item.id());
         entity.setReleaseId(releaseId);
@@ -132,8 +143,9 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     @Override
     @Transactional
     public Release updateManualItem(UUID releaseId, ManualItem item) {
+        lockOpen(releaseId);
         ReleaseManualItemEntity entity = manualJpa.findByReleaseIdAndId(releaseId, item.id())
-                .orElseThrow(ReleaseNotFoundException::new);
+                .orElseThrow(ManualItemNotFoundException::new);
         entity.setTitle(item.title());
         entity.setDescription(item.description());
         entity.setCategory(item.category());
@@ -144,8 +156,21 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     @Override
     @Transactional
     public Release removeManualItem(UUID releaseId, UUID manualItemId) {
+        lockOpen(releaseId);
         manualJpa.findByReleaseIdAndId(releaseId, manualItemId).ifPresent(manualJpa::delete);
         return load(releaseId);
+    }
+
+    // The service checks status too, but against a snapshot read in an earlier transaction with a
+    // paginated Jira call in between. This is the check that actually holds: it runs inside the
+    // mutating transaction and holds the row lock until commit, so a concurrent freeze either
+    // lands before it (and is seen) or blocks until after it.
+    private ReleaseEntity lockOpen(UUID releaseId) {
+        ReleaseEntity entity = jpa.findByIdForUpdate(releaseId).orElseThrow(ReleaseNotFoundException::new);
+        if (entity.getStatus() == ReleaseStatus.FROZEN) {
+            throw new ReleaseFrozenException();
+        }
+        return entity;
     }
 
     private Release load(UUID id) {
