@@ -92,13 +92,15 @@ Note: this phase also runs the Jira→Azure DevOps link-discovery verification s
 **Goal**: Release manager can author, validate, and live-preview a separate template per document type against a safe, documented, fixed view-model
 **Mode:** mvp
 **Depends on**: Phase 3
-**Requirements**: TMPL-01, TMPL-02, TMPL-03, TMPL-04, TMPL-05, TMPL-06
+**Requirements**: TMPL-01, TMPL-02, TMPL-03, TMPL-04, TMPL-05, TMPL-06, TMPL-08, TMPL-09
 **Success Criteria** (what must be TRUE):
   1. Release manager can create and edit a separate template for each document type — release notes, deployment runbook, approval document
   2. Templates use `{{ }}`-style placeholders resolved against a documented, fixed view-model of release/ticket/code-reference data, with no expression language, method invocation, or arbitrary property traversal reachable from the template
   3. Release manager can browse a catalog of every available placeholder while authoring, with a description of what each resolves to
   4. Saving a template runs a validation render against a sample context (including a ticket with no linked code) and reports unknown placeholders as errors rather than silently blanking them later
   5. Release manager can preview a template against a real selected release's actual data while editing, and rendering is bounded by an execution timeout and a collection-size limit
+  6. Release manager can define a template's document chrome through structured fields — cover page on/off, cover title and subtitle, running header, footer, page numbering — each accepting the same `{{ }}` placeholders as the body, introducing no new expression surface
+  7. Release manager can upload and manage a per-template logo image, restricted to raster formats with type validated by content rather than extension, and bounded in byte size and pixel dimensions
 **Plans**: TBD
 **UI hint**: yes
 
