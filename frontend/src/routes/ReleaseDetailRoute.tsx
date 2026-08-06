@@ -253,7 +253,9 @@ export function ReleaseDetailRoute() {
         confirmLabel="Freeze release"
         confirmClassName="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         pending={freeze.isPending}
-        onConfirm={() => freeze.mutate(data.id, { onSuccess: () => setConfirming(null) })}
+        // onSettled, not onSuccess: showModal() makes the rest of the document inert, so a
+        // failure that left the dialog open would render actionProblem behind the backdrop.
+        onConfirm={() => freeze.mutate(data.id, { onSettled: () => setConfirming(null) })}
         onCancel={() => setConfirming(null)}
       />
 
@@ -265,7 +267,10 @@ export function ReleaseDetailRoute() {
         confirmClassName="rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         pending={remove.isPending}
         onConfirm={() =>
-          remove.mutate(data.id, { onSuccess: () => navigate({ to: '/releases' }) })
+          remove.mutate(data.id, {
+            onSuccess: () => navigate({ to: '/releases' }),
+            onSettled: () => setConfirming(null),
+          })
         }
         onCancel={() => setConfirming(null)}
       />
