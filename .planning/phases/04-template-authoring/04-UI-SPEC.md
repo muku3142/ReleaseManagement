@@ -119,7 +119,7 @@ requirement exists to prevent, and blue is already fully committed to the accent
 role. Amber is the conventional, widely legible "caution, non-blocking" signal and is used
 **nowhere else** in the app, so its appearance is always meaningful.
 
-Accent (`blue-600`) reserved for: "New template" button, "Save template" button, "Create" button in
+Accent (`blue-600`) reserved for: "New template" button, "Save template" button, "Create template" button in
 the new-template dialog, "Make active" text action, the release picker's focus ring, the
 Placeholders drawer toggle button's active/open state, and the clean-save confirmation banner
 (`bg-blue-50 border-blue-200 text-blue-900`, matching Phase 3's add-result banner exactly).
@@ -197,7 +197,7 @@ pattern).
     **"Approval templates"**.
   - A list of rows, one per template, sorted alphabetically by name: template name (`Link` to
     `/templates/$templateId`, `text-blue-600 font-semibold hover:underline`) · **"Active"** badge
-    (`bg-gray-800 text-white` pill) when active, otherwise no badge · a small `amber-500` dot
+    (`bg-gray-800 text-white` pill) when active, otherwise no badge · a small `amber-600` dot
     (`aria-label="Has unresolved placeholder warnings"`) when the template's last save recorded
     warnings · row actions: **"Make active"** (non-active rows only) · **"Duplicate"** · **"Delete"**
     (all plain `text-gray-600 hover:text-gray-900 text-sm` text buttons except Delete, which stays
@@ -207,7 +207,7 @@ pattern).
     3's `/releases/$releaseId` row-action precedent for a genuinely destructive action-with-cost).
   - Empty state (that type has zero templates): see Copywriting Contract.
   - "+ New template" action at the bottom of each section's list — opens the new-template dialog
-    (native `<dialog>`, single **Name** input, **Cancel**/**Create** buttons) scoped to that
+    (native `<dialog>`, single **Name** input, **Cancel**/**Create template** buttons) scoped to that
     section's document type; on success, navigates to `/templates/$newId`.
 - **Duplicate** is an immediate action (no dialog): POST duplicates the template body/chrome/logo,
   names it "{name} copy" (backend disambiguates collisions), and navigates directly to the new
@@ -442,16 +442,49 @@ a concept here. Do not invent a drag interaction for this phase.
 
 ---
 
+## Checker follow-ups — BINDING, not optional
+
+Raised by `gsd-ui-checker` on 2026-08-06 and applied. Same status as everything else in this
+contract.
+
+### Primary visual anchor (Dimension 2)
+
+Every screen in this phase declares one focal point. Nothing else on the screen may compete with it
+for visual weight.
+
+- **`/templates`** — the **three document-type section cards**. The eye should land on "which
+  templates exist, and which one is active per type." The `bg-gray-800` Active pill is the strongest
+  mark on the screen and is what the anchor resolves to; row actions stay plain text so they never
+  compete with it. There is deliberately no search, no filter bar and no toolbar above the sections
+  to pull attention away.
+- **`/templates/$templateId`** — the **rendered preview pane**. This is the whole reason D-04-21
+  chose two panes over three and gave the preview the larger 55% share: the author's question is
+  "what does this produce," and the preview is the only thing that answers it. Consequences that
+  follow and are binding: the source textarea stays visually quiet (mono, no highlighting, no
+  chrome of its own); the catalog drawer overlays the **preview** rather than the editor only
+  because the drawer is transient and the editor is where the cursor lives — but the drawer must be
+  dismissible in one gesture precisely because it occludes the anchor; and no persistent banner,
+  toolbar or panel may be added above the preview that would push it below the fold at the
+  `lg` breakpoint.
+
+### Applied corrections
+
+| Dimension | Finding | Correction applied |
+|---|---|---|
+| 1 Copywriting | New-template dialog CTA was bare "Create" | Now **"Create template"** (list screen and the Color reserved-for list both updated) |
+| 2 Visuals | No explicit focal point declared, unlike Phases 2/3 | Anchor statement above, for both routes |
+| 3 Color | List-row warning dot used undeclared `amber-500` | Now `amber-600`, matching the declared Warning role |
+
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS *(was FLAG — bare "Create" CTA, corrected)*
+- [x] Dimension 2 Visuals: PASS *(was FLAG — no anchor declared, corrected)*
+- [x] Dimension 3 Color: PASS *(was FLAG — undeclared `amber-500`, corrected)*
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** APPROVED 2026-08-06 by `gsd-ui-checker` (6/6, three non-blocking FLAGs since applied)
 
 ---
 
