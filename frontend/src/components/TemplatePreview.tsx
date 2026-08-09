@@ -66,7 +66,7 @@ type MarkResult = { ok: true; source: string } | { ok: false };
 // mid-typing syntax the walk cannot make sense of degrades to { ok: false } (the neutral "Preview
 // unavailable" panel), since the Save button, not the live preview, is the authoritative gate.
 function markUnknownTokens(source: string, validByScope: Map<Scope, Set<string>>): MarkResult {
-  const stack: { name: string; scope: Scope }[] = [];
+  const stack: { name: string; scope: Scope; unknown: boolean }[] = [];
   let out = '';
   const length = source.length;
   let i = 0;
@@ -95,12 +95,17 @@ function markUnknownTokens(source: string, validByScope: Map<Scope, Set<string>>
       out += source.slice(tagStart, closeIdx + 2);
     } else if (sigil === '#' || sigil === '^') {
       const name = inner.slice(1).trim();
-      if (!isValid(currentScope, name)) {
-        stack.push({ name, scope: currentScope });
+      const valid = isValid(currentScope, name);
+      if (!valid) {
+        // Mirrors RenderService.markUnknownTokens's Deque<Boolean>: the frame carries whether ITS
+        // own opening tag was unknown, so the matching close tag is blanked only for that reason -
+        // not by recomputing validity against the scope active *inside* the section, which would
+        // be the wrong scope (e.g. ITEM, once "items" has already pushed it).
+        stack.push({ name, scope: currentScope, unknown: true });
         out += `[[unknown: ${name}]]`;
       } else {
         const pushedScope = SCOPE_PUSHES[name] ?? currentScope;
-        stack.push({ name, scope: pushedScope });
+        stack.push({ name, scope: pushedScope, unknown: false });
         out += source.slice(tagStart, closeIdx + 2);
       }
     } else if (sigil === '/') {
@@ -109,7 +114,7 @@ function markUnknownTokens(source: string, validByScope: Map<Scope, Set<string>>
       if (!top || top.name !== name) {
         return { ok: false };
       }
-      if (isValid(currentScope, name)) {
+      if (!top.unknown) {
         out += source.slice(tagStart, closeIdx + 2);
       }
       // else: this closed an unknown section, whose opening tag was already rewritten to the
