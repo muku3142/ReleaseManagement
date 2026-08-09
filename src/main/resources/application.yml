@@ -5,6 +5,10 @@ spring:
     url: ${RM_DB_URL:jdbc:postgresql://localhost:5432/releasemgmt}
     username: ${RM_DB_USER:releasemgmt}
     password: ${RM_DB_PASSWORD:releasemgmt}
+  servlet:
+    multipart:
+      max-file-size: 4MB
+      max-request-size: 4MB
   jpa:
     open-in-view: false
     hibernate:
