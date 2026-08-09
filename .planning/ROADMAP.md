@@ -101,7 +101,21 @@ Note: this phase also runs the Jira→Azure DevOps link-discovery verification s
   5. Release manager can preview a template against a real selected release's actual data while editing, and rendering is bounded by an execution timeout and a collection-size limit
   6. Release manager can define a template's document chrome through structured fields — cover page on/off, cover title and subtitle, running header, footer, page numbering — each accepting the same `{{ }}` placeholders as the body, introducing no new expression surface
   7. Release manager can upload and manage a per-template logo image, restricted to raster formats with type validated by content rather than extension, and bounded in byte size and pixel dimensions
-**Plans**: TBD
+**Plans**: 11 across 9 waves
+
+Plans:
+- [ ] 04-01-PLAN.md — View-model records, placeholder catalog and the template scanner (wave 1)
+- [ ] 04-02-PLAN.md — V4 migration, Template aggregate, repository port and persistence adapter (wave 1)
+- [ ] 04-03-PLAN.md — Render port, jmustache/flexmark adapter, bounded RenderService and view assembler (wave 2)
+- [ ] 04-04-PLAN.md — TemplateService, REST surface, DTOs and the new ProblemDetail reason codes (wave 3)
+- [ ] 04-05-PLAN.md — Content-sniffed logo upload with byte and pixel-dimension caps (wave 4)
+- [ ] 04-06-PLAN.md — Three seeded starter templates and the backend lifecycle integration tests (wave 4)
+- [ ] 04-07-PLAN.md — Templates API client module, /templates list route, router and nav registration (wave 5)
+- [ ] 04-08-PLAN.md — Two-pane authoring route: editor, save, validation states, unsaved-changes guard (wave 6)
+- [ ] 04-09-PLAN.md — Client-side Mustache + Markdown preview with the unknown-placeholder marker (wave 7)
+- [ ] 04-10-PLAN.md — Chrome fields form, logo upload control and chrome rendering in the preview (wave 8)
+- [ ] 04-11-PLAN.md — Placeholder catalog drawer, insert-at-cursor and the live-tenant verification (wave 9)
+
 **UI hint**: yes
 
 Note: engine and view-model design (jmustache integration, `ReleaseView`/`TicketView`/`CommitView`/`PullRequestView` shape, placeholder catalog metadata, validation-render mechanics) is the highest-risk decision in the project per research convergence and must be settled — as the first work inside this phase — before the authoring UI is built on top of it.
