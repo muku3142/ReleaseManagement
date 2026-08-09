@@ -8,6 +8,10 @@ import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
+import com.evision.releasemgmt.domain.template.RenderBoundExceededException;
+import com.evision.releasemgmt.domain.template.TemplateDuplicateException;
+import com.evision.releasemgmt.domain.template.TemplateMalformedException;
+import com.evision.releasemgmt.domain.template.TemplateNotFoundException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -106,6 +110,37 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.CONFLICT, "Duplicate release",
                 "A release with this name and version already exists. Choose a different name or version.",
                 "RELEASE_DUPLICATE");
+    }
+
+    @ExceptionHandler(TemplateNotFoundException.class)
+    public ProblemDetail handleTemplateNotFound(TemplateNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Template not found",
+                "This template doesn't exist or has been deleted.", "TEMPLATE_NOT_FOUND");
+    }
+
+    @ExceptionHandler(TemplateDuplicateException.class)
+    public ProblemDetail handleTemplateDuplicate(TemplateDuplicateException ex) {
+        return problem(HttpStatus.CONFLICT, "Duplicate template name",
+                "A template with this name already exists for this document type. Choose a different name.",
+                "TEMPLATE_DUPLICATE");
+    }
+
+    // The one handler in this file whose detail is dynamic: the SPA renders it verbatim after
+    // "Template not saved — ", so it must name the specific defect and, for a chrome field, the field.
+    @ExceptionHandler(TemplateMalformedException.class)
+    public ProblemDetail handleTemplateMalformed(TemplateMalformedException ex) {
+        String detail = "Body".equals(ex.field())
+                ? ex.getMessage()
+                : ex.field() + ": " + ex.getMessage();
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Template not saved", detail, "TEMPLATE_MALFORMED");
+    }
+
+    @ExceptionHandler(RenderBoundExceededException.class)
+    public ProblemDetail handleRenderBoundExceeded(RenderBoundExceededException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Template not saved",
+                "Validation took too long or produced too much content to render safely. "
+                        + "Simplify the template (fewer nested sections or shorter loops) and try again.",
+                "RENDER_BOUND_EXCEEDED");
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
