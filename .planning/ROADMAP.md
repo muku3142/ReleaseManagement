@@ -112,7 +112,7 @@ Plans:
 - [x] 04-03-PLAN.md — Render port, jmustache/flexmark adapter, bounded RenderService and view assembler (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 04-04-PLAN.md — TemplateService, REST surface, DTOs and the new ProblemDetail reason codes (wave 3)
+- [x] 04-04-PLAN.md — TemplateService, REST surface, DTOs and the new ProblemDetail reason codes (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 04-05-PLAN.md — Content-sniffed logo upload with byte and pixel-dimension caps (wave 4)
@@ -192,7 +192,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundation & Authentication | 7/8 | In Progress|  |
 | 2. Jira Ticket Browsing | 6/7 | In Progress|  |
 | 3. Release Assembly | 8/8 | Complete   | 2026-08-06 |
-| 4. Template Authoring | 3/11 | In Progress|  |
+| 4. Template Authoring | 4/11 | In Progress|  |
 | 5. Document Generation | 0/TBD | Not started | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
