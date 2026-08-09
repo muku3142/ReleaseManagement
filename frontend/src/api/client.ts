@@ -23,7 +23,11 @@ function readCookie(name: string): string | null {
 async function rawFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const method = (init.method ?? 'GET').toUpperCase();
   const headers = new Headers(init.headers);
-  if (init.body !== undefined) headers.set('Content-Type', 'application/json');
+  // A FormData body carries its own multipart/form-data content type with a generated boundary.
+  // Overwriting it with application/json makes the server unable to parse the upload at all.
+  if (init.body !== undefined && !(init.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
   if (method !== 'GET' && method !== 'HEAD') {
     const csrf = readCookie('XSRF-TOKEN');
     if (csrf) headers.set('X-XSRF-TOKEN', csrf);

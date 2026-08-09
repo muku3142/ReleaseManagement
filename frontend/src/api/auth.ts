@@ -79,6 +79,15 @@ const REASON_MESSAGES: Record<string, string> = {
   INVALID_SESSION: 'Your session has ended. Sign in again.',
   UNAUTHENTICATED: 'Your session has ended. Sign in again.',
   FORBIDDEN: 'That request was rejected. Reload the page and try again.',
+  TEMPLATE_NOT_FOUND: "This template doesn't exist or has been deleted.",
+  TEMPLATE_DUPLICATE: 'A template with this name already exists for this document type. Choose a different name.',
+  TEMPLATE_MALFORMED: 'Template not saved — check the placeholders and sections in this template.',
+  RENDER_BOUND_EXCEEDED:
+    'Template not saved — validation took too long or produced too much content to render safely. Simplify the template (fewer nested sections or shorter loops) and try again.',
+  LOGO_INVALID_TYPE:
+    "This file isn't a supported image. Upload a PNG or JPEG — SVG and other formats aren't accepted.",
+  LOGO_TOO_LARGE: 'This image is too large.',
+  LOGO_DIMENSIONS_EXCEEDED: 'This image is too large.',
 };
 
 export function messageForReason(problem: ProblemDetail): string {
