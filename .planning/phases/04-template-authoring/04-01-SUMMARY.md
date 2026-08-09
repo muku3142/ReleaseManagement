@@ -128,3 +128,7 @@ None - no external service configuration required.
 ---
 *Phase: 04-template-authoring*
 *Completed: 2026-08-09*
+
+## Self-Check: PASSED
+
+All 17 created files (16 source/test files + this SUMMARY.md) verified present on disk. All 4 commit hashes (`c0fe782`, `5fbb0c0`, `f311b3c`, `b95fc40`) verified present in `git log --all`. Full `mvn clean test` (JAVA_HOME=jdk-25) exits 0.
