@@ -5,18 +5,22 @@ import { messageForReason } from '../api/auth';
 import {
   DOCUMENT_TYPE_LABELS,
   useActivateTemplate,
+  usePlaceholderCatalog,
   useRenameTemplate,
+  useRenderContext,
   useSaveTemplateContent,
   useTemplate,
   type ChromeFields,
 } from '../api/templates';
 import { useReleases } from '../api/releases';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { TemplatePreview } from '../components/TemplatePreview';
 
 export function TemplateDetailRoute() {
   const { templateId } = useParams({ from: '/authenticated/templates/$templateId' });
   const template = useTemplate(templateId);
   const releases = useReleases('');
+  const catalog = usePlaceholderCatalog();
 
   const [body, setBody] = useState('');
   const [chrome, setChrome] = useState<ChromeFields | null>(null);
@@ -27,6 +31,7 @@ export function TemplateDetailRoute() {
   const [renameValue, setRenameValue] = useState('');
 
   const [previewReleaseId, setPreviewReleaseId] = useState<string | undefined>(undefined);
+  const renderContext = useRenderContext(previewReleaseId);
 
   const [saveOutcome, setSaveOutcome] = useState<'clean' | 'warnings' | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -382,7 +387,9 @@ export function TemplateDetailRoute() {
               </Link>
             </div>
           ) : (
-            <div className="p-4" data-testid="preview-content" />
+            <div data-testid="preview-content">
+              <TemplatePreview body={body} view={renderContext.data} entries={catalog.data?.entries} />
+            </div>
           )}
         </div>
       </div>
