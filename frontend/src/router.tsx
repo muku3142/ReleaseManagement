@@ -6,6 +6,7 @@ import { TicketsRoute } from './routes/TicketsRoute';
 import { ReleasesRoute } from './routes/ReleasesRoute';
 import { ReleaseDetailRoute } from './routes/ReleaseDetailRoute';
 import { TemplatesRoute } from './routes/TemplatesRoute';
+import { TemplateDetailRoute } from './routes/TemplateDetailRoute';
 import { LoginRoute } from './routes/LoginRoute';
 import { fetchSessionOrNull } from './api/auth';
 import { queryClient } from './api/queryClient';
@@ -78,13 +79,10 @@ const templatesRoute = createRoute({
   component: TemplatesRoute,
 });
 
-// Placeholder pending plan 04-08's two-pane authoring screen. Registered now so
-// TemplatesRoute's row links, create-dialog success and duplicate success can navigate
-// somewhere real and type-check against the router.
 const templateDetailRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/templates/$templateId',
-  component: () => null,
+  component: TemplateDetailRoute,
 });
 
 const routeTree = rootRoute.addChildren([
