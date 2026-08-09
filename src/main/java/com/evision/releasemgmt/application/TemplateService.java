@@ -1,6 +1,7 @@
 package com.evision.releasemgmt.application;
 
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import com.evision.releasemgmt.domain.template.TemplateNotFoundException;
@@ -23,10 +24,13 @@ public class TemplateService {
 
     private final TemplateRepository repository;
     private final RenderService renderService;
+    private final LogoValidator logoValidator;
 
-    public TemplateService(TemplateRepository repository, RenderService renderService) {
+    public TemplateService(TemplateRepository repository, RenderService renderService,
+                           LogoValidator logoValidator) {
         this.repository = repository;
         this.renderService = renderService;
+        this.logoValidator = logoValidator;
     }
 
     public List<Template> list() {
@@ -95,6 +99,23 @@ public class TemplateService {
 
     public void delete(UUID id) {
         repository.delete(id);
+    }
+
+    // No actor parameter: the logo table has no updated_by column (D-04-16), so unlike every other
+    // mutating method here there is nothing to record it into - carrying an unused parameter for
+    // symmetry alone would violate the no-dead-parameter rule.
+    public Template uploadLogo(UUID templateId, byte[] bytes, String filename) {
+        get(templateId);                                     // 404s before anything is decoded
+        return repository.saveLogo(templateId, logoValidator.validate(bytes, filename));
+    }
+
+    public Template removeLogo(UUID templateId) {
+        get(templateId);
+        return repository.deleteLogo(templateId);
+    }
+
+    public LogoImage getLogo(UUID templateId) {
+        return repository.findLogo(templateId).orElseThrow(TemplateNotFoundException::new);
     }
 
     // D-04-07: unknown placeholders warn, they do not block. This is a deliberate, recorded deviation
