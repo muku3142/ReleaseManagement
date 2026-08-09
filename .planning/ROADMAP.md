@@ -105,8 +105,8 @@ Note: this phase also runs the Jira→Azure DevOps link-discovery verification s
 
 Plans:
 **Wave 1**
-- [ ] 04-01-PLAN.md — View-model records, placeholder catalog and the template scanner (wave 1)
-- [ ] 04-02-PLAN.md — V4 migration, Template aggregate, repository port and persistence adapter (wave 1)
+- [x] 04-01-PLAN.md — View-model records, placeholder catalog and the template scanner (wave 1)
+- [x] 04-02-PLAN.md — V4 migration, Template aggregate, repository port and persistence adapter (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 04-03-PLAN.md — Render port, jmustache/flexmark adapter, bounded RenderService and view assembler (wave 2)
@@ -192,7 +192,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundation & Authentication | 7/8 | In Progress|  |
 | 2. Jira Ticket Browsing | 6/7 | In Progress|  |
 | 3. Release Assembly | 8/8 | Complete   | 2026-08-06 |
-| 4. Template Authoring | 0/11 | Planned    |  |
+| 4. Template Authoring | 2/11 | In Progress|  |
 | 5. Document Generation | 0/TBD | Not started | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |

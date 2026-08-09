@@ -4,8 +4,8 @@ milestone: v1.0
 milestone_name: milestone
 status: executing
 stopped_at: Phase 4 UI-SPEC approved
-last_updated: "2026-08-09T07:19:58.640Z"
-last_activity: 2026-08-09 -- Phase 4 planning complete
+last_updated: "2026-08-09T07:27:29.686Z"
+last_activity: 2026-08-09 -- Phase 4 execution started
 progress:
   total_phases: 7
   completed_phases: 1
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-27)
 
 **Core value:** Given a set of Jira tickets, produce accurate and consistent release documentation plus a tracked deployment record — without anyone doing manual release bookkeeping in Jira.
-**Current focus:** Phase 03 — release-assembly
+**Current focus:** Phase 4 — Template Authoring
 
 ## Current Position
 
-Phase: 4
-Plan: Not started
+Phase: 4 (Template Authoring) — EXECUTING
+Plan: 1 of 11
 human-action checkpoint needing a live Jira API token to capture CNV-2896's
 dev-status response. Waves 1-5 are complete: 02-01, 02-02, 02-03, 02-05,
 02-06, 02-07. The user confirmed the /tickets screen works against the real
@@ -49,8 +49,8 @@ replaced entirely by **sprint** (brings Jira's Agile API into scope, reversing
 part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
 names, table widening, and frontend tests moved to `frontend/tests/`.
 
-Status: Ready to execute
-Last activity: 2026-08-09 -- Phase 4 planning complete
+Status: Executing Phase 4
+Last activity: 2026-08-09 -- Phase 4 execution started
 
 Progress: [████████░░] 86%
 
