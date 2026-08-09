@@ -15,12 +15,16 @@ import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.application.ReleaseViewAssembler;
 import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.PlaceholderCatalog;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.view.ReleaseView;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,9 +32,12 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
@@ -129,6 +136,35 @@ public class TemplateController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable UUID templateId) {
         templateService.delete(templateId);
+    }
+
+    // Also serves as "replace" - saveLogo overwrites whatever logo the template already has, so
+    // there is no separate replace endpoint (TMPL-09).
+    @PostMapping(path = "/{templateId}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public TemplateResponse uploadLogo(@PathVariable UUID templateId,
+                                       @RequestParam("file") MultipartFile file) throws IOException {
+        return toResponse(templateService.uploadLogo(templateId, file.getBytes(),
+                file.getOriginalFilename()));
+    }
+
+    @DeleteMapping("/{templateId}/logo")
+    public TemplateResponse removeLogo(@PathVariable UUID templateId) {
+        return toResponse(templateService.removeLogo(templateId));
+    }
+
+    @GetMapping("/{templateId}/logo")
+    public ResponseEntity<byte[]> downloadLogo(@PathVariable UUID templateId) {
+        LogoImage image = templateService.getLogo(templateId);
+        return ResponseEntity.ok()
+                // The stored type is one of two values enforced by both the sniffing validator and
+                // a CHECK constraint, and the header below stops a browser from re-interpreting the
+                // bytes as anything else. User-uploaded content served from our own origin gets both belts.
+                .header(HttpHeaders.CONTENT_TYPE, image.metadata().contentType())
+                .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + image.metadata().filename() + "\"")
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(image.bytes());
     }
 
     private static TemplateResponse toResponse(Template template) {

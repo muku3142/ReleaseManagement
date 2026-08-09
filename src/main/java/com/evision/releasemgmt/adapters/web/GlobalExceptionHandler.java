@@ -8,6 +8,7 @@ import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
+import com.evision.releasemgmt.domain.template.LogoRejectedException;
 import com.evision.releasemgmt.domain.template.RenderBoundExceededException;
 import com.evision.releasemgmt.domain.template.TemplateDuplicateException;
 import com.evision.releasemgmt.domain.template.TemplateMalformedException;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 import java.util.LinkedHashMap;
@@ -135,6 +137,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Template not saved", detail, "TEMPLATE_MALFORMED");
     }
 
+    @ExceptionHandler(LogoRejectedException.class)
+    public ProblemDetail handleLogoRejected(LogoRejectedException ex) {
+        return switch (ex.reason()) {
+            case INVALID_TYPE -> problem(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Logo rejected",
+                    "This file isn't a supported image. Upload a PNG or JPEG — SVG and other "
+                            + "formats aren't accepted.", "LOGO_INVALID_TYPE");
+            case TOO_LARGE -> problem(HttpStatus.PAYLOAD_TOO_LARGE, "Logo rejected",
+                    "This image is too large for the configured byte limit.", "LOGO_TOO_LARGE");
+            case DIMENSIONS_EXCEEDED -> problem(HttpStatus.UNPROCESSABLE_ENTITY, "Logo rejected",
+                    "This image exceeds the configured maximum pixel dimensions.",
+                    "LOGO_DIMENSIONS_EXCEEDED");
+        };
+    }
+
     @ExceptionHandler(RenderBoundExceededException.class)
     public ProblemDetail handleRenderBoundExceeded(RenderBoundExceededException ex) {
         return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Template not saved",
@@ -161,6 +177,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                     "Your session is no longer valid. Sign in again.",
                     ex.reason().name());
         };
+    }
+
+    // Spring rejects anything above spring.servlet.multipart.max-file-size before our validator
+    // sees a byte. ResponseEntityExceptionHandler already resolves this exception through its own
+    // handleException dispatch, so a plain @ExceptionHandler here would be ambiguous with the
+    // superclass method - overriding the superclass's own hook is the correct way to customise it,
+    // exactly like handleMethodArgumentNotValid below.
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex,
+                                                                           HttpHeaders headers,
+                                                                           HttpStatusCode status,
+                                                                           WebRequest request) {
+        ProblemDetail pd = problem(HttpStatus.PAYLOAD_TOO_LARGE, "Logo rejected",
+                "This image is too large for the configured byte limit.", "LOGO_TOO_LARGE");
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(pd);
     }
 
     @Override

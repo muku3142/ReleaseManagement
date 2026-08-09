@@ -4,6 +4,10 @@ spring:
   docker:
     compose:
       enabled: false
+  servlet:
+    multipart:
+      max-file-size: 4MB
+      max-request-size: 4MB
 app:
   jira:
     default-base-url: https://test.atlassian.net
