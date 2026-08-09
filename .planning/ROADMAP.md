@@ -119,7 +119,7 @@ Plans:
 - [x] 04-06-PLAN.md — Three seeded starter templates and the backend lifecycle integration tests (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
-- [ ] 04-07-PLAN.md — Templates API client module, /templates list route, router and nav registration (wave 5)
+- [x] 04-07-PLAN.md — Templates API client module, /templates list route, router and nav registration (wave 5)
 
 **Wave 6** *(blocked on Wave 5 completion)*
 - [ ] 04-08-PLAN.md — Two-pane authoring route: editor, save, validation states, unsaved-changes guard (wave 6)
@@ -192,7 +192,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundation & Authentication | 7/8 | In Progress|  |
 | 2. Jira Ticket Browsing | 6/7 | In Progress|  |
 | 3. Release Assembly | 8/8 | Complete   | 2026-08-06 |
-| 4. Template Authoring | 6/11 | In Progress|  |
+| 4. Template Authoring | 7/11 | In Progress|  |
 | 5. Document Generation | 0/TBD | Not started | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
