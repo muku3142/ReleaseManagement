@@ -54,6 +54,13 @@ export function AppShell() {
             Releases
           </Link>
           <Link
+            to="/templates"
+            className="text-gray-600 hover:text-gray-900"
+            activeProps={{ className: 'font-semibold text-gray-900' }}
+          >
+            Templates
+          </Link>
+          <Link
             to="/settings"
             className="text-gray-600 hover:text-gray-900"
             activeProps={{ className: 'font-semibold text-gray-900' }}
