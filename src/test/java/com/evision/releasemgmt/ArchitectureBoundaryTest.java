@@ -40,11 +40,23 @@ class ArchitectureBoundaryTest {
         // (JwtTokenService) that application/AuthenticationService orchestrates
         // directly, per plan 06 - there is no port abstraction over it and none
         // is warranted for a single-implementation technical concern. Every other
-        // adapters subpackage (jira/persistence/web) remains off-limits.
+        // adapters subpackage (jira/persistence/web/render) remains off-limits;
+        // RenderService can only reach the render engine through RenderEnginePort.
         ArchRule rule = noClasses()
                 .that().resideInAPackage("..application..")
                 .should().dependOnClassesThat()
-                .resideInAnyPackage("..adapters.jira..", "..adapters.persistence..", "..adapters.web..")
+                .resideInAnyPackage("..adapters.jira..", "..adapters.persistence..", "..adapters.web..",
+                        "..adapters.render..")
+                .allowEmptyShould(true);
+        rule.check(classes);
+    }
+
+    @Test
+    void renderLibrariesLiveOnlyInTheRenderAdapter() {
+        ArchRule rule = noClasses()
+                .that().resideOutsideOfPackage("..adapters.render..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage("com.samskivert..", "com.vladsch..")
                 .allowEmptyShould(true);
         rule.check(classes);
     }

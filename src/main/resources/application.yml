@@ -32,6 +32,10 @@ app:
     search:
       page-size: 100
       max-pages: 50
+  template:
+    render:
+      timeout: PT2S
+      max-collection-size: 500
   credential:
     key: ${RM_CREDENTIAL_KEY}
     key-version: ${RM_CREDENTIAL_KEY_VERSION:1}
