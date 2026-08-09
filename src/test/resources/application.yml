@@ -12,6 +12,10 @@ app:
     search:
       page-size: 100
       max-pages: 50
+  template:
+    render:
+      timeout: PT2S
+      max-collection-size: 500
   credential:
     key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
     key-version: 1
