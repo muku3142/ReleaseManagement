@@ -16,6 +16,10 @@ app:
     render:
       timeout: PT2S
       max-collection-size: 500
+    logo:
+      max-bytes: 2097152
+      max-width: 2000
+      max-height: 2000
   credential:
     key: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
     key-version: 1
