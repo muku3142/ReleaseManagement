@@ -125,7 +125,7 @@ Plans:
 - [x] 04-08-PLAN.md — Two-pane authoring route: editor, save, validation states, unsaved-changes guard (wave 6)
 
 **Wave 7** *(blocked on Wave 6 completion)*
-- [ ] 04-09-PLAN.md — Client-side Mustache + Markdown preview with the unknown-placeholder marker (wave 7)
+- [x] 04-09-PLAN.md — Client-side Mustache + Markdown preview with the unknown-placeholder marker (wave 7)
 
 **Wave 8** *(blocked on Wave 7 completion)*
 - [ ] 04-10-PLAN.md — Chrome fields form, logo upload control and chrome rendering in the preview (wave 8)
@@ -192,7 +192,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundation & Authentication | 7/8 | In Progress|  |
 | 2. Jira Ticket Browsing | 6/7 | In Progress|  |
 | 3. Release Assembly | 8/8 | Complete   | 2026-08-06 |
-| 4. Template Authoring | 8/11 | In Progress|  |
+| 4. Template Authoring | 9/11 | In Progress|  |
 | 5. Document Generation | 0/TBD | Not started | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
