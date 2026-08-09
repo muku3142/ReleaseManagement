@@ -196,3 +196,10 @@ was introduced outside what the plan specified.
 ---
 *Phase: 04-template-authoring*
 *Completed: 2026-08-09*
+
+## Self-Check: PASSED
+
+All 9 created files (6 main source + 3 test files) plus this SUMMARY.md verified present on disk.
+All 4 commit hashes (`42497a2`, `58ff51f`, `0a1116b`, `95d7da7`) verified present in `git log`. Full
+`mvn clean test` (JAVA_HOME=jdk-25) exits 0 with 382 tests passing (359 baseline + 23 new), including
+`ArchitectureBoundaryTest`.
