@@ -195,3 +195,9 @@ None - no external service configuration required.
 ---
 *Phase: 05-document-generation*
 *Completed: 2026-08-10*
+
+## Self-Check: PASSED
+
+All claimed files exist on disk (pom.xml, RenderEnginePort.java, MustacheFlexmarkRenderAdapter.java,
+RenderService.java, ArchitectureBoundaryTest.java, both test files, this SUMMARY.md). All claimed
+commit hashes (8290b61, b02bf53, d956581, 63564a8) are present in `git log`.
