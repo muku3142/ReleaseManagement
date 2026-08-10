@@ -7,6 +7,7 @@ import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.RenderBoundExceededException;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import com.evision.releasemgmt.domain.template.view.SampleReleaseView;
@@ -25,6 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 // Uses a real RenderService wired to a real MustacheFlexmarkRenderAdapter and a real
@@ -124,6 +127,45 @@ class DocumentGenerationServiceTest {
         service.generate(frozenRelease.id(), TemplateDocumentType.RELEASE_NOTES, "actor-1");
 
         assertThat(snapshotCaptor().revision()).isEqualTo(1);
+    }
+
+    @Test
+    void generationDoesNotCallJira() {
+        // Compile-time documentation: DocumentGenerationService's only constructor takes no Jira
+        // port at all, so no code path here can reach Jira even by accident - D-03-06 already
+        // materialised every ticket locally, which is what makes this possible.
+        Class<?>[] paramTypes = DocumentGenerationService.class.getConstructors()[0].getParameterTypes();
+        assertThat(paramTypes).noneMatch(type -> type.getSimpleName().contains("Jira"));
+    }
+
+    @Test
+    void chromeIsStoredResolvedNotRaw() {
+        Release release = openRelease();
+        ChromeFields templateChrome = new ChromeFields(false, "Version {{release.version}}", "", "", "", false);
+        Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body", templateChrome);
+        stubHappyPath(release, template, 1);
+
+        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, "actor-1");
+
+        assertThat(snapshotCaptor().chrome().coverTitle()).isEqualTo("Version 2026.08");
+    }
+
+    @Test
+    void boundBreachPropagates() {
+        Release release = openRelease();
+        Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body", ChromeFields.empty());
+        when(releaseRepository.findById(release.id())).thenReturn(Optional.of(release));
+        when(templateRepository.findActive(template.documentType())).thenReturn(Optional.of(template));
+        when(assembler.assemble(release)).thenReturn(SampleReleaseView.instance());
+        RenderService boundBreachingRenderService = mock(RenderService.class);
+        when(boundBreachingRenderService.render(any(), any(), any())).thenThrow(new RenderBoundExceededException());
+        DocumentGenerationService serviceWithBoundBreach = new DocumentGenerationService(releaseRepository,
+                templateRepository, snapshotRepository, assembler, boundBreachingRenderService);
+
+        assertThatThrownBy(() -> serviceWithBoundBreach.generate(release.id(), TemplateDocumentType.RELEASE_NOTES,
+                "actor-1")).isInstanceOf(RenderBoundExceededException.class);
+
+        verify(snapshotRepository, never()).create(any(), any());
     }
 
     private DocumentSnapshot snapshotCaptor() {
