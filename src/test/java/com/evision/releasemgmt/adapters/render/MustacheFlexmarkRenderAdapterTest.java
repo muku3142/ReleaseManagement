@@ -83,6 +83,54 @@ class MustacheFlexmarkRenderAdapterTest {
         assertThat(nodesOfType(document, HtmlInline.class)).isEmpty();
     }
 
+    @Test
+    void pipeTableRendersAsAnHtmlTable() {
+        String source = """
+                | Service | Service |
+                |---|---|
+                | Archival Management API | UC Engine |
+                """;
+        String html = adapter.render(source, Map.of());
+        assertThat(html).contains("<table>");
+        assertThat(html).contains("<thead>");
+        assertThat(html).contains("<th>Service</th>");
+        assertThat(html).contains("<td>UC Engine</td>");
+        assertThat(html).doesNotContain("| Service |");
+    }
+
+    @Test
+    void rawHtmlInsideATableCellIsStillNeutralised() {
+        String source = """
+                | Service | Notes |
+                |---|---|
+                | Archival Management API | <script>alert(1)</script> |
+                """;
+        String html = adapter.render(source, Map.of());
+        assertThat(html).contains("&lt;script&gt;");
+        assertThat(html).doesNotContain("<script>");
+    }
+
+    @Test
+    void renderHtmlOnTheSharedAstMatchesRender() {
+        String source = """
+                # Heading
+
+                - one
+                - two
+
+                | Service | Service |
+                |---|---|
+                | Archival Management API | UC Engine |
+                """;
+        assertThat(adapter.renderHtml(adapter.parseMarkdown(source))).isEqualTo(adapter.render(source, Map.of()));
+    }
+
+    @Test
+    void resolveReturnsPlainTextWithNoMarkdownWrapper() {
+        String resolved = adapter.resolve("Orchstro {{v}} notes", Map.of("v", "4.2.0"));
+        assertThat(resolved).isEqualTo("Orchstro 4.2.0 notes");
+    }
+
     private static Map<String, Object> releaseCtx(String name) {
         return Map.of("release", Map.of("name", name));
     }

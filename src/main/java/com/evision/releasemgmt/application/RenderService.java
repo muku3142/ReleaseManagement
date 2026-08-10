@@ -56,6 +56,12 @@ public class RenderService {
         return new RenderResult(html, scan.unknownTokens());
     }
 
+    // RED stub - deliberately skips enforceCollectionCap so resolveTextEnforcesTheCollectionCap
+    // fails before the real implementation lands.
+    public RenderResult resolveText(String source, ReleaseView view, String field) {
+        return new RenderResult(source, List.of());
+    }
+
     @PreDestroy
     void shutdown() {
         executor.shutdown();

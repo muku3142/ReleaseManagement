@@ -66,17 +66,40 @@ class RenderServiceTest {
 
     @Test
     void aRenderThatExceedsTheTimeoutTripsTheWallClockBound() {
-        RenderEnginePort slowEngine = (source, context) -> {
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
+        RenderEnginePort slowEngine = new RenderEnginePort() {
+            @Override
+            public String render(String source, Map<String, Object> context) {
+                try {
+                    Thread.sleep(200);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return "never used";
             }
-            return "never used";
+
+            @Override
+            public String resolve(String source, Map<String, Object> context) {
+                return source;
+            }
         };
         RenderService slow = new RenderService(slowEngine, Duration.ofMillis(1), 500);
         assertThatThrownBy(() -> slow.render("{{release.name}}", SampleReleaseView.instance(), "Body"))
                 .isInstanceOf(RenderBoundExceededException.class);
+    }
+
+    @Test
+    void resolveTextEnforcesTheCollectionCap() {
+        RenderService capped = new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 3);
+        ReleaseView view = releaseViewWithItems(4);
+        assertThatThrownBy(() -> capped.resolveText("{{release.name}}", view, "Header"))
+                .isInstanceOf(RenderBoundExceededException.class);
+    }
+
+    @Test
+    void resolveTextMarksUnknownTokensLikeRenderDoes() {
+        RenderResult result = service.resolveText("{{nope}}", SampleReleaseView.instance(), "Header text");
+        assertThat(result.html()).isEqualTo("[[unknown: nope]]");
+        assertThat(result.unknownTokens()).containsExactly("nope");
     }
 
     @Test

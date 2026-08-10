@@ -18,4 +18,19 @@ public interface RenderEnginePort {
      *         when the engine rejects the source
      */
     String render(String source, Map<String, Object> context);
+
+    /**
+     * Resolves the Mustache placeholders in {@code source} against {@code context} and returns the
+     * resolved text verbatim - no Markdown parse, no HTML.
+     *
+     * <p>TMPL-08 chrome fields (cover title/subtitle, header, footer) are single-line plain text,
+     * not Markdown documents. Passing them through {@link #render} would wrap a running header in a
+     * {@code <p>} element and escape characters a plain-text header must keep.
+     *
+     * <p>The same context rules as {@link #render} apply: plain data only.
+     *
+     * @throws com.evision.releasemgmt.domain.template.TemplateMalformedException
+     *         when the engine rejects the source
+     */
+    String resolve(String source, Map<String, Object> context);
 }

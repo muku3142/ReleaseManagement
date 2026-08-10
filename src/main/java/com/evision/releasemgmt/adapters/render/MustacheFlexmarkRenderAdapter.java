@@ -52,6 +52,19 @@ public class MustacheFlexmarkRenderAdapter implements RenderEnginePort {
         return htmlRenderer.render(document);
     }
 
+    // RED stub - deliberately wrong (returns source unresolved) so
+    // resolveReturnsPlainTextWithNoMarkdownWrapper fails before the real implementation lands.
+    @Override
+    public String resolve(String source, Map<String, Object> context) {
+        return source;
+    }
+
+    // RED stub - deliberately wrong (returns empty) so renderHtmlOnTheSharedAstMatchesRender fails
+    // before the real implementation lands.
+    String renderHtml(Document document) {
+        return "";
+    }
+
     private String resolveMustache(String source, Map<String, Object> context) {
         try {
             return compiler.compile(source).execute(context);
