@@ -48,6 +48,19 @@ function makeTemplate(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const CATALOG = {
+  entries: [
+    {
+      scope: 'ROOT',
+      token: 'release.name',
+      kind: 'VARIABLE',
+      description: "The release's name.",
+      tags: ['Chrome + Body'],
+    },
+  ],
+  logoLimits: { maxBytes: 2_000_000, maxWidth: 2000, maxHeight: 2000, contentTypes: ['image/png', 'image/jpeg'] },
+};
+
 const RELEASES = [
   {
     id: 'r1',
@@ -390,5 +403,66 @@ describe('TemplateDetailRoute', () => {
     expect(requested.some((r) => r.endsWith('PUT /api/templates/t1/name'))).toBe(true);
     expect(requested.some((r) => r.endsWith('PUT /api/templates/t1/content'))).toBe(false);
     expect(container.textContent).toContain('Renamed template');
+  });
+
+  it('opens the placeholder drawer via the toolbar toggle, tints the button, and closes on a second click', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/releases')) return json(200, { releases: RELEASES });
+      if (url.endsWith('/api/templates/catalog')) return json(200, CATALOG);
+      return json(200, makeTemplate());
+    });
+
+    await renderRoute();
+
+    const toggle = byText('Placeholders');
+    expect(toggle.className).not.toContain('bg-blue-50');
+    expect(container.querySelector('[aria-label="Placeholders"]')).toBeNull();
+
+    await act(async () => toggle.click());
+    expect(toggle.className).toContain('bg-blue-50');
+    expect(container.querySelector('[aria-label="Placeholders"]')).not.toBeNull();
+
+    await act(async () => toggle.click());
+    expect(toggle.className).not.toContain('bg-blue-50');
+    expect(container.querySelector('[aria-label="Placeholders"]')).toBeNull();
+  });
+
+  it('inserts {{release.name}} at the last recorded body caret and keeps the drawer open', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/releases')) return json(200, { releases: RELEASES });
+      if (url.endsWith('/api/templates/catalog')) return json(200, CATALOG);
+      return json(200, makeTemplate({ body: '0123456789' }));
+    });
+
+    await renderRoute();
+
+    // React's onSelect is not a direct alias for the native 'select' event (it is synthesized
+    // from several other native events), so a raw dispatchEvent('select') in jsdom does not
+    // reach it reliably. onBlur uses the standard native event and shares the same
+    // rememberSelection handler, so focus + set the caret + blur is the deterministic way to
+    // seed the "last focused field" state in a test.
+    const textarea = bodyTextarea();
+    textarea.focus();
+    textarea.setSelectionRange(5, 5);
+    await act(async () => {
+      textarea.blur();
+    });
+
+    await act(async () => byText('Placeholders').click());
+
+    const row = [...container.querySelectorAll('button')].find(
+      (b) => b.querySelector('.font-mono')?.textContent === 'release.name',
+    );
+    expect(row, 'no release.name row found in the drawer').toBeDefined();
+
+    await act(async () => {
+      row!.click();
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+
+    expect(bodyTextarea().value).toBe('01234{{release.name}}56789');
+    expect(container.querySelector('[aria-label="Placeholders"]')).not.toBeNull();
   });
 });

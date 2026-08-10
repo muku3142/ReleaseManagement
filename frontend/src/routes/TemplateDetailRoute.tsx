@@ -17,6 +17,12 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { TemplatePreview } from '../components/TemplatePreview';
 import { ChromeFieldsForm, type ChromeFieldName } from '../components/ChromeFieldsForm';
 import { LogoUpload } from '../components/LogoUpload';
+import { PlaceholderDrawer } from '../components/PlaceholderDrawer';
+
+// ChromeFieldsForm (plan 04-10) renders its four text inputs in this fixed order and is not
+// modified by this plan - insertion locates the right chrome input by position within the
+// editor pane rather than by a ref forwarded through that component.
+const CHROME_FIELD_ORDER: ChromeFieldName[] = ['coverTitle', 'coverSubtitle', 'headerText', 'footerText'];
 
 export function TemplateDetailRoute() {
   const { templateId } = useParams({ from: '/authenticated/templates/$templateId' });
@@ -43,6 +49,11 @@ export function TemplateDetailRoute() {
   // Remembers the last cursor position of whichever field - body or a chrome input - was last
   // focused, so plan 04-11's placeholder drawer can insert into it without a change here.
   const selectionRef = useRef<{ field: 'body' | ChromeFieldName; start: number; end: number } | null>(null);
+  // Holds both tabs' content so a chrome field can be located by DOM position even while the
+  // Body tab is active (the field itself isn't mounted then, but focus can only have landed on
+  // it while it was, so this ref is only read once we already know which field was targeted).
+  const editorPaneRef = useRef<HTMLDivElement>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const rename = useRenameTemplate();
   const save = useSaveTemplateContent();
@@ -175,6 +186,48 @@ export function TemplateDetailRoute() {
     selectionRef.current = { field, start, end };
   }
 
+  function chromeFieldElement(field: ChromeFieldName): HTMLInputElement | null {
+    const inputs = editorPaneRef.current?.querySelectorAll<HTMLInputElement>('input[type="text"]');
+    if (!inputs) return null;
+    return inputs[CHROME_FIELD_ORDER.indexOf(field)] ?? null;
+  }
+
+  // Refocuses whichever field the token was inserted into and places the caret right after it.
+  // The rAF delay lets React commit the new value first - setSelectionRange on a controlled
+  // input/textarea before its value prop updates would place the caret against stale content.
+  function focusAfterInsert(field: 'body' | ChromeFieldName, caret: number) {
+    selectionRef.current = { field, start: caret, end: caret };
+    requestAnimationFrame(() => {
+      const el = field === 'body' ? bodyRef.current : chromeFieldElement(field);
+      el?.focus();
+      el?.setSelectionRange(caret, caret);
+    });
+  }
+
+  function insertToken(token: string) {
+    const text = `{{${token}}}`;
+    const target = selectionRef.current;
+
+    if (!target) {
+      // Nothing has ever been focused: append to the body and switch to it rather than a dead
+      // click on a field the author never interacted with.
+      setTab('body');
+      const next = body + text;
+      setBody(next);
+      focusAfterInsert('body', next.length);
+      return;
+    }
+
+    if (target.field === 'body') {
+      setBody(body.slice(0, target.start) + text + body.slice(target.end));
+    } else if (chrome) {
+      const current = chrome[target.field];
+      const next = current.slice(0, target.start) + text + current.slice(target.end);
+      setChrome({ ...chrome, [target.field]: next });
+    }
+    focusAfterInsert(target.field, target.start + text.length);
+  }
+
   function handleSave() {
     if (!chrome) return;
     save.mutate(
@@ -234,6 +287,13 @@ export function TemplateDetailRoute() {
         </div>
 
         <div className="flex items-center gap-3">
+          <button type="button" data-placeholder-toggle onClick={() => setDrawerOpen((v) => !v)}
+                  aria-expanded={drawerOpen}
+                  className={drawerOpen
+                    ? 'rounded border border-blue-300 bg-blue-50 px-3 py-1.5 text-sm text-blue-700'
+                    : 'rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700'}>
+            Placeholders
+          </button>
           {dirty && <span className="text-sm text-gray-600">Unsaved changes</span>}
           <button
             type="button"
@@ -327,8 +387,8 @@ export function TemplateDetailRoute() {
         </button>
       </div>
 
-      <div className="flex h-[calc(100vh-260px)] min-h-[420px] flex-col lg:flex-row">
-        <div className="overflow-y-auto lg:basis-[45%] border-r border-gray-200 bg-white">
+      <div className="relative flex h-[calc(100vh-260px)] min-h-[420px] flex-col lg:flex-row">
+        <div ref={editorPaneRef} className="overflow-y-auto lg:basis-[45%] border-r border-gray-200 bg-white">
           {tab === 'body' ? (
             <>
               {/* D-04-19: a plain styled textarea, no editor library. A code-editor component and a
@@ -407,6 +467,15 @@ export function TemplateDetailRoute() {
             </div>
           )}
         </div>
+
+        {drawerOpen && (
+          <PlaceholderDrawer
+            open={drawerOpen}
+            entries={catalog.data?.entries}
+            onInsert={insertToken}
+            onClose={() => setDrawerOpen(false)}
+          />
+        )}
       </div>
 
       <ConfirmDialog
