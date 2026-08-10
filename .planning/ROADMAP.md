@@ -144,13 +144,16 @@ Note: engine and view-model design (jmustache integration, `ReleaseView`/`Ticket
 **Goal**: Release manager can generate, preview, and export release notes, deployment runbooks, and approval documents from templates, with every generated document retained as an immutable audit record — working correctly for Jira-only releases with no Azure DevOps data
 **Mode:** mvp
 **Depends on**: Phase 3, Phase 4
-**Requirements**: DOC-01, DOC-02, DOC-03, DOC-04, DOC-05, DOC-06, DOC-07
+**Requirements**: DOC-01, DOC-02, DOC-03, DOC-04, DOC-05, DOC-06, DOC-07, DOC-08, DOC-09, UX-01
 **Success Criteria** (what must be TRUE):
   1. Release manager can generate release notes for a release, grouped by issue type by default and by component, epic, or label when the template specifies it
   2. Release manager can generate a deployment runbook with distinct places for deploy steps, post-deploy validation, and a rollback section with explicit trigger conditions
   3. Release manager can generate an approval/change document carrying risk, impact, and backout-plan fields
   4. Release manager can preview any generated document and export it as PDF or DOCX
   5. Every generated document is stored as an immutable snapshot recording template version, content, and generation timestamp — regenerating creates a new revision instead of altering the previous one
+  6. Both the PDF and DOCX export of a document render that template's cover page, running header, footer and page numbering, and the two formats are visually equivalent rather than merely both present
+  7. Release manager can see across all releases which of the three documents have been generated, which are stale relative to the release's current ticket set, and which were never generated
+  8. Release manager can reorder items where ordering is the natural gesture — runbook deploy steps, and items within a grouping — by drag-and-drop, with a keyboard-accessible equivalent for every drag interaction
 **Plans**: TBD
 **UI hint**: yes
 
