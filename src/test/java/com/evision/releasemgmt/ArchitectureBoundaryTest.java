@@ -56,7 +56,8 @@ class ArchitectureBoundaryTest {
         ArchRule rule = noClasses()
                 .that().resideOutsideOfPackage("..adapters.render..")
                 .should().dependOnClassesThat()
-                .resideInAnyPackage("com.samskivert..", "com.vladsch..")
+                .resideInAnyPackage("com.samskivert..", "com.vladsch..",
+                        "com.openhtmltopdf..", "org.docx4j..")
                 .allowEmptyShould(true);
         rule.check(classes);
     }
