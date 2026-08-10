@@ -65,6 +65,12 @@ public class TemplateRepositoryAdapter implements TemplateRepository {
     }
 
     @Override
+    public Optional<Template> findActive(TemplateDocumentType documentType) {
+        return jpa.findByDocumentTypeAndActiveTrue(documentType)
+                .map(e -> toDomain(e, logoJpa.findMetadata(e.getId()).orElse(null)));
+    }
+
+    @Override
     @Transactional
     public Template update(Template template) {
         TemplateEntity entity = jpa.findById(template.id()).orElseThrow(TemplateNotFoundException::new);

@@ -23,6 +23,9 @@ public interface TemplateRepository {
 
     List<Template> findByDocumentType(TemplateDocumentType documentType);
 
+    /** D-04-12: at most one per type. D-04-13 permits zero, which is a supported state. */
+    Optional<Template> findActive(TemplateDocumentType documentType);
+
     /**
      * Replaces name, body, chrome and warnings and stamps updated_at/updated_by. Never touches
      * active or the logo.
