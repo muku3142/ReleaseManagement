@@ -115,6 +115,16 @@ class LogoValidatorTest {
     }
 
     @Test
+    void filenameQuotesAndControlCharactersAreStrippedBecauseTheyAreLaterInterpolatedIntoAContentDispositionHeader()
+            throws IOException {
+        byte[] png = png(10, 10);
+
+        LogoImage image = validator.validate(png, "logo\".png\"; filename=\"evil\r\n.png");
+
+        assertThat(image.metadata().filename()).doesNotContain("\"", "\r", "\n");
+    }
+
+    @Test
     void pngMagicBytesWithAnUnparseableStreamAreRejectedAsInvalidTypeNotARawIOException() {
         byte[] corrupted = new byte[PNG_SIGNATURE.length + 20];
         System.arraycopy(PNG_SIGNATURE, 0, corrupted, 0, PNG_SIGNATURE.length);

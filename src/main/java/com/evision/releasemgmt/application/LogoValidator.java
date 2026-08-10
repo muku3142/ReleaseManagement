@@ -116,7 +116,10 @@ public class LogoValidator {
     }
 
     // The filename is only ever echoed back to the SPA as display text, but a path fragment has
-    // no business being stored (T-04-28).
+    // no business being stored (T-04-28). It is also later interpolated verbatim into a
+    // Content-Disposition header (TemplateController.downloadLogo, DocumentController.logo), so
+    // quotes and control characters must be stripped here - the single point where this
+    // attacker-controlled string enters the system - matching ExportFilename's allowlist pattern.
     private static String safeFilename(String filename) {
         if (filename == null) {
             return "logo";
@@ -126,7 +129,7 @@ public class LogoValidator {
         if (lastSlash >= 0) {
             base = base.substring(lastSlash + 1);
         }
-        base = base.trim();
+        base = base.replaceAll("[\"\\\\\\r\\n\\p{Cntrl}]", "_").trim();
         if (base.isBlank()) {
             return "logo";
         }
