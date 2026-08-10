@@ -46,6 +46,11 @@ public class ReleaseTicketItemEntity {
     @Convert(converter = JsonStringListConverter.class)
     private List<String> fixVersions;
 
+    // D-05-03: nullable with no backfill. Existing rows keep NULL; an OPEN release picks the value
+    // up on its next refresh, and a FROZEN release is never touched.
+    @Column(name = "component")
+    private String component;
+
     @Column(name = "description", nullable = false)
     private String description;
 
@@ -140,6 +145,14 @@ public class ReleaseTicketItemEntity {
 
     public void setFixVersions(List<String> fixVersions) {
         this.fixVersions = fixVersions;
+    }
+
+    public String getComponent() {
+        return component;
+    }
+
+    public void setComponent(String component) {
+        this.component = component;
     }
 
     public String getDescription() {

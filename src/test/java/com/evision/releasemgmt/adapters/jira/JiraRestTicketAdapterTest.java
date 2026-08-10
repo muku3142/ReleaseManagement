@@ -72,6 +72,7 @@ class JiraRestTicketAdapterTest {
         ids.put(TicketField.DESCRIPTION, "description");
         ids.put(TicketField.COMMENT, "comment");
         ids.put(TicketField.FIX_VERSIONS, "fixVersions");
+        ids.put(TicketField.COMPONENT, "components");
         return ids;
     }
 
@@ -84,6 +85,7 @@ class JiraRestTicketAdapterTest {
                 + "\"assignee\":null,"
                 + "\"reporter\":{\"displayName\":\"Reporter Person\"},"
                 + "\"fixVersions\":[],"
+                + "\"components\":[],"
                 + "\"description\":null,"
                 + "\"comment\":{\"comments\":[],\"total\":0}"
                 + "}}";
@@ -194,6 +196,7 @@ class JiraRestTicketAdapterTest {
                 + "\"assignee\":{\"displayName\":\"Jane Doe\"},"
                 + "\"reporter\":{\"displayName\":\"John Roe\"},"
                 + "\"fixVersions\":[{\"name\":\"1.2.0\"}],"
+                + "\"components\":[{\"id\":\"1\",\"name\":\"Matching Module\"}],"
                 + "\"description\":null,"
                 + "\"comment\":{\"comments\":[],\"total\":0}"
                 + "}}";
@@ -209,6 +212,110 @@ class JiraRestTicketAdapterTest {
         assertThat(ticket.assignee()).isEqualTo("Jane Doe");
         assertThat(ticket.reporter()).isEqualTo("John Roe");
         assertThat(ticket.fixVersions()).containsExactly("1.2.0");
+        assertThat(ticket.component()).isEqualTo("Matching Module");
+    }
+
+    @Test
+    void oneComponentYieldsItsName(WireMockRuntimeInfo wm) {
+        String issue = "{\"key\":\"CNV-1\",\"fields\":{"
+                + "\"summary\":\"S\","
+                + "\"issuetype\":{\"name\":\"Bug\"},"
+                + "\"status\":{\"name\":\"Open\"},"
+                + "\"resolution\":null,"
+                + "\"assignee\":null,"
+                + "\"reporter\":null,"
+                + "\"fixVersions\":[],"
+                + "\"components\":[{\"id\":\"1\",\"name\":\"Matching Module\"}],"
+                + "\"description\":null,"
+                + "\"comment\":{\"comments\":[],\"total\":0}"
+                + "}}";
+        stubFor(post(urlEqualTo(SEARCH_URL)).willReturn(okJson("{\"issues\":[" + issue + "]}")));
+
+        TicketDetail ticket = adapter(50).searchAll(context(wm), "project = CNV", fieldIds()).get(0);
+
+        assertThat(ticket.component()).isEqualTo("Matching Module");
+    }
+
+    @Test
+    void absentComponentsYieldsNull(WireMockRuntimeInfo wm) {
+        stubFor(post(urlEqualTo(SEARCH_URL)).willReturn(okJson(pageJson("CNV-1", null))));
+
+        TicketDetail ticket = adapter(50).searchAll(context(wm), "project = CNV", fieldIds()).get(0);
+
+        assertThat(ticket.component()).isNull();
+    }
+
+    @Test
+    void emptyComponentsArrayYieldsNull(WireMockRuntimeInfo wm) {
+        String issue = "{\"key\":\"CNV-1\",\"fields\":{"
+                + "\"summary\":\"S\","
+                + "\"issuetype\":{\"name\":\"Bug\"},"
+                + "\"status\":{\"name\":\"Open\"},"
+                + "\"resolution\":null,"
+                + "\"assignee\":null,"
+                + "\"reporter\":null,"
+                + "\"fixVersions\":[],"
+                + "\"components\":[],"
+                + "\"description\":null,"
+                + "\"comment\":{\"comments\":[],\"total\":0}"
+                + "}}";
+        stubFor(post(urlEqualTo(SEARCH_URL)).willReturn(okJson("{\"issues\":[" + issue + "]}")));
+
+        TicketDetail ticket = adapter(50).searchAll(context(wm), "project = CNV", fieldIds()).get(0);
+
+        assertThat(ticket.component()).isNull();
+    }
+
+    @Test
+    void twoComponentsYieldsTheFirstDeterministically(WireMockRuntimeInfo wm) {
+        String issue = "{\"key\":\"CNV-1\",\"fields\":{"
+                + "\"summary\":\"S\","
+                + "\"issuetype\":{\"name\":\"Bug\"},"
+                + "\"status\":{\"name\":\"Open\"},"
+                + "\"resolution\":null,"
+                + "\"assignee\":null,"
+                + "\"reporter\":null,"
+                + "\"fixVersions\":[],"
+                + "\"components\":[{\"id\":\"1\",\"name\":\"Matching Module\"},{\"id\":\"2\",\"name\":\"Security\"}],"
+                + "\"description\":null,"
+                + "\"comment\":{\"comments\":[],\"total\":0}"
+                + "}}";
+        stubFor(post(urlEqualTo(SEARCH_URL)).willReturn(okJson("{\"issues\":[" + issue + "]}")));
+
+        TicketDetail ticket = adapter(50).searchAll(context(wm), "project = CNV", fieldIds()).get(0);
+
+        assertThat(ticket.component()).isEqualTo("Matching Module");
+    }
+
+    @Test
+    void componentWithNoNameYieldsNullRatherThanThrowing(WireMockRuntimeInfo wm) {
+        String issue = "{\"key\":\"CNV-1\",\"fields\":{"
+                + "\"summary\":\"S\","
+                + "\"issuetype\":{\"name\":\"Bug\"},"
+                + "\"status\":{\"name\":\"Open\"},"
+                + "\"resolution\":null,"
+                + "\"assignee\":null,"
+                + "\"reporter\":null,"
+                + "\"fixVersions\":[],"
+                + "\"components\":[{\"id\":\"1\"}],"
+                + "\"description\":null,"
+                + "\"comment\":{\"comments\":[],\"total\":0}"
+                + "}}";
+        stubFor(post(urlEqualTo(SEARCH_URL)).willReturn(okJson("{\"issues\":[" + issue + "]}")));
+
+        TicketDetail ticket = adapter(50).searchAll(context(wm), "project = CNV", fieldIds()).get(0);
+
+        assertThat(ticket.component()).isNull();
+    }
+
+    @Test
+    void componentFieldIsAmongTheRequestedFieldIds(WireMockRuntimeInfo wm) {
+        stubFor(post(urlEqualTo(SEARCH_URL)).willReturn(okJson(pageJson("CNV-1", null))));
+
+        adapter(50).searchAll(context(wm), "project = CNV", fieldIds());
+
+        verify(postRequestedFor(urlEqualTo(SEARCH_URL))
+                .withRequestBody(containing("\"components\"")));
     }
 
     // summary, issue_type and status are NOT NULL in release_ticket_item, so a field the

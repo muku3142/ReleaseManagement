@@ -187,7 +187,7 @@ class ReleaseControllerTest {
     void getReturnsTheFullReleaseIncludingItemDetail() throws Exception {
         UUID id = UUID.randomUUID();
         TicketDetail ticket = new TicketDetail("CNV-1", "Summary", "Bug", "Done", "Fixed",
-                "Dev Person", "Reporter Person", List.of("2026.1"), "Full description",
+                "Dev Person", "Reporter Person", List.of("2026.1"), null, "Full description",
                 List.of("First comment", "Second comment"), 2);
         ReleaseItem item = new ReleaseItem(ticket, Instant.parse("2026-08-04T09:30:00Z"));
         ManualItem manual = new ManualItem(UUID.randomUUID(), "Run migration", "Apply schema change",

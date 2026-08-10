@@ -9,7 +9,8 @@ public enum TicketField {
     REPORTER("Reporter"),
     DESCRIPTION("Description"),
     COMMENT("Comment"),
-    FIX_VERSIONS("Fix versions");
+    FIX_VERSIONS("Fix versions"),
+    COMPONENT("Components");
 
     private final String displayName;
 

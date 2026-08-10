@@ -53,7 +53,7 @@ class ReleasePersistenceIT {
 
     private static ReleaseItem item(String key) {
         return new ReleaseItem(new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed",
-                "Dev Person", "Reporter Person", List.of("2026.08"),
+                "Dev Person", "Reporter Person", List.of("2026.08"), null,
                 "Ship it", List.of("Looks good", "He said \"ship it\""), 2), Instant.now());
     }
 
@@ -188,7 +188,7 @@ class ReleasePersistenceIT {
         Instant addedAt = repository.findById(release.id()).orElseThrow().items().get(0).addedAt();
 
         ReleaseItem updated = new ReleaseItem(new TicketDetail("CNV-1", "Summary CNV-1", "Bug", "In Progress",
-                "Fixed", "Dev Person", "Reporter Person", List.of("2026.08"), "Ship it",
+                "Fixed", "Dev Person", "Reporter Person", List.of("2026.08"), null, "Ship it",
                 List.of("Looks good", "He said \"ship it\""), 2), Instant.now());
         Instant refreshedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
 

@@ -136,6 +136,6 @@ class TicketSearchServiceTest {
 
     private static TicketDetail ticket(String key) {
         return new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed", null, "Reporter",
-                List.of("1.0.0"), "", List.of(), 0);
+                List.of("1.0.0"), null, "", List.of(), 0);
     }
 }

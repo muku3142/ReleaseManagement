@@ -115,6 +115,16 @@ public class JiraRestTicketAdapter implements JiraTicketPort {
             }
         }
 
+        // D-05-02: Jira's fields.components is an array of {id, name} - the same shape as
+        // fixVersions - but the view-model carries a single component, so the first entry wins.
+        // No placeholder default is substituted here: that belongs at the view-model layer
+        // (D-05-03), so the stored snapshot records what Jira actually said, including nothing.
+        String component = null;
+        JsonNode componentsNode = field(fields, fieldIds, TicketField.COMPONENT);
+        if (componentsNode.isArray() && !componentsNode.isEmpty()) {
+            component = componentsNode.get(0).path("name").asText(null);
+        }
+
         String description = adfFlattener.flatten(field(fields, fieldIds, TicketField.DESCRIPTION));
 
         JsonNode commentField = field(fields, fieldIds, TicketField.COMMENT);
@@ -125,7 +135,7 @@ public class JiraRestTicketAdapter implements JiraTicketPort {
         int commentTotal = commentField.path("total").asInt(comments.size());
 
         return new TicketDetail(key, summary, issueType, status, resolution, assignee, reporter,
-                fixVersions, description, comments, commentTotal);
+                fixVersions, component, description, comments, commentTotal);
     }
 
     private static JsonNode field(JsonNode fields, Map<TicketField, String> ids, TicketField f) {

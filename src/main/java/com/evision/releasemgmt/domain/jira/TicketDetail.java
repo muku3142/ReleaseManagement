@@ -11,6 +11,7 @@ public record TicketDetail(
         String assignee,
         String reporter,
         List<String> fixVersions,
+        String component,
         String description,
         List<String> comments,
         int commentTotal) {
