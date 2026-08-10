@@ -147,8 +147,9 @@ Complete map as of Phase 4 wave 5. Source column shows where the token is define
 | `502` | `JIRA_ERROR` | Jira returned an unexpected error | `JiraAuthFailureReason` |
 | `503` | `JIRA_UNREACHABLE` | Jira could not be reached | `JiraAuthFailureReason` |
 | *(varies)* | `BAD_REQUEST`, `METHOD_NOT_ALLOWED`, … | Framework-generated problems — backfilled with the status name | `handleExceptionInternal` |
+| `502` | `EXPORT_FAILED` | PDF/DOCX renderer failed during on-demand export | `GlobalExceptionHandler` literal |
 
-**27 explicit reasons**, plus the backfilled status-name family.
+**28 explicit reasons**, plus the backfilled status-name family.
 
 Status choices worth noting:
 

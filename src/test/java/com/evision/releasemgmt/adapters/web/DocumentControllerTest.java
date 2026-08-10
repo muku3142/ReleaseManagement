@@ -2,6 +2,7 @@ package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.security.CookieBearerTokenResolver;
 import com.evision.releasemgmt.adapters.security.ProblemDetailAuthenticationEntryPoint;
+import com.evision.releasemgmt.application.DocumentExportService;
 import com.evision.releasemgmt.application.DocumentGenerationService;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
@@ -12,6 +13,7 @@ import com.evision.releasemgmt.domain.template.ChromeFields;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.LogoMetadata;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
+import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -49,6 +51,12 @@ class DocumentControllerTest {
 
     @MockitoBean
     private DocumentGenerationService service;
+
+    @MockitoBean
+    private DocumentExportService exportService;
+
+    @MockitoBean
+    private ReleaseRepository releaseRepository;
 
     private static RequestPostProcessor authenticated() {
         return jwt().jwt(b -> b.subject("557058:abc-123").claim("token_type", "access"));
