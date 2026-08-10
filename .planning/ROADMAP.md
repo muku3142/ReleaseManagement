@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 1: Foundation & Authentication** - Spring Boot/React skeleton with hexagonal boundaries, single-jar deployment, Jira site configuration, and sign-in via the release manager's own Jira credentials
 - [ ] **Phase 2: Jira Ticket Browsing** - Browse/filter the complete candidate ticket set from the configured Jira Cloud site; run the Jira→ADO link-discovery spike
 - [x] **Phase 3: Release Assembly** - Create, freeze, and manage named/versioned releases built from browsed tickets (completed 2026-08-06)
-- [x] **Phase 4: Template Authoring** - Author, validate, and live-preview per-document-type templates against a safe, documented view-model (completed 2026-08-10)
+- [ ] **Phase 4: Template Authoring** - Author, validate, and live-preview per-document-type templates against a safe, documented view-model (all code merged 2026-08-10; awaiting the 04-11 live-tenant verification)
 - [ ] **Phase 5: Document Generation** - Generate, preview, and export release notes, runbooks, and approval documents as immutable snapshots
 - [ ] **Phase 6: Azure DevOps Enrichment** - Surface linked commits/PRs per ticket, degrading gracefully when absent, with tracked-expiry credentials
 - [ ] **Phase 7: Promotion Tracking & Audit Trail** - Promote releases through the fixed environment ladder with a complete, append-only history
@@ -195,7 +195,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 1. Foundation & Authentication | 7/8 | In Progress|  |
 | 2. Jira Ticket Browsing | 6/7 | In Progress|  |
 | 3. Release Assembly | 8/8 | Complete   | 2026-08-06 |
-| 4. Template Authoring | 11/11 | Complete   | 2026-08-10 |
+| 4. Template Authoring | 11/11 | Code merged, awaiting live-tenant verification (04-11 task 3) |  |
 | 5. Document Generation | 0/TBD | Not started | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
