@@ -198,6 +198,26 @@ class TemplateServiceTest {
         assertThat(repository.findByDocumentType(TemplateDocumentType.RELEASE_NOTES)).isEmpty();
     }
 
+    // WR-04: a real template with no logo must come back as an empty Optional, not collapse into
+    // the same TemplateNotFoundException a genuinely missing template throws.
+    @Test
+    void getLogoOnARealTemplateWithNoLogoReturnsEmptyRatherThanTemplateNotFound() {
+        Template existing = existingTemplate();
+        when(repository.findById(existing.id())).thenReturn(Optional.of(existing));
+        when(repository.findLogo(existing.id())).thenReturn(Optional.empty());
+
+        assertThat(service.getLogo(existing.id())).isEmpty();
+    }
+
+    @Test
+    void getLogoOnAMissingTemplateThrowsTemplateNotFound() {
+        UUID missingId = UUID.randomUUID();
+        when(repository.findById(missingId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getLogo(missingId))
+                .isInstanceOf(com.evision.releasemgmt.domain.template.TemplateNotFoundException.class);
+    }
+
     private static Template existingTemplate() {
         return Template.create("Standard notes", TemplateDocumentType.RELEASE_NOTES, "actor-1", Instant.now());
     }

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -117,8 +118,13 @@ public class TemplateService {
         return repository.deleteLogo(templateId);
     }
 
-    public LogoImage getLogo(UUID templateId) {
-        return repository.findLogo(templateId).orElseThrow(TemplateNotFoundException::new);
+    // WR-04: repository.findLogo returns empty both when the template doesn't exist and when it
+    // exists but simply has no logo (the common case). get() below throws TemplateNotFoundException
+    // for the first case only, so a logo-less-but-real template correctly comes back as an empty
+    // Optional rather than a misleading "this template doesn't exist" 404.
+    public Optional<LogoImage> getLogo(UUID templateId) {
+        get(templateId);
+        return repository.findLogo(templateId);
     }
 
     // D-04-07: unknown placeholders warn, they do not block. This is a deliberate, recorded deviation

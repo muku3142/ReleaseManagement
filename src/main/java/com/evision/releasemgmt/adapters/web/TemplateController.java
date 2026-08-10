@@ -162,9 +162,17 @@ public class TemplateController {
         return toResponse(templateService.removeLogo(templateId));
     }
 
+    // WR-04: templateService.getLogo() 404s TEMPLATE_NOT_FOUND when the template itself doesn't
+    // exist; an empty Optional here means the template is real but simply has no logo, which gets
+    // a plain 404 rather than the misleading "this template doesn't exist" reason.
     @GetMapping("/{templateId}/logo")
     public ResponseEntity<byte[]> downloadLogo(@PathVariable UUID templateId) {
-        LogoImage image = templateService.getLogo(templateId);
+        return templateService.getLogo(templateId)
+                .map(TemplateController::toLogoResponse)
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    private static ResponseEntity<byte[]> toLogoResponse(LogoImage image) {
         return ResponseEntity.ok()
                 // The stored type is one of two values enforced by both the sniffing validator and
                 // a CHECK constraint, and the header below stops a browser from re-interpreting the

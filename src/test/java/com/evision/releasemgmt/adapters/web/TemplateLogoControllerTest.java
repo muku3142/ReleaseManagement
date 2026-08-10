@@ -159,7 +159,7 @@ class TemplateLogoControllerTest {
         Instant now = Instant.parse("2026-08-09T09:00:00Z");
         LogoImage image = new LogoImage(bytes, new LogoMetadata("image/png", "logo.png", bytes.length,
                 10, 10, now));
-        when(templateService.getLogo(id)).thenReturn(image);
+        when(templateService.getLogo(id)).thenReturn(java.util.Optional.of(image));
 
         mockMvc.perform(get("/api/templates/{id}/logo", id).with(authenticated()))
                 .andExpect(status().isOk())
@@ -172,12 +172,24 @@ class TemplateLogoControllerTest {
     }
 
     @Test
-    void downloadingALogoForATemplateWithNoneReturns404() throws Exception {
+    void downloadingALogoForATemplateThatDoesNotExistReturns404WithTemplateNotFoundReason() throws Exception {
         UUID id = UUID.randomUUID();
         when(templateService.getLogo(id)).thenThrow(new TemplateNotFoundException());
 
         mockMvc.perform(get("/api/templates/{id}/logo", id).with(authenticated()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.reason").value("TEMPLATE_NOT_FOUND"));
+    }
+
+    // WR-04: a template that plainly exists but simply has no logo must not be reported as "this
+    // template doesn't exist" - it gets a plain 404 with no misleading reason.
+    @Test
+    void downloadingALogoForARealTemplateWithNoLogoReturnsPlain404WithoutTemplateNotFoundReason() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(templateService.getLogo(id)).thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(get("/api/templates/{id}/logo", id).with(authenticated()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.reason").doesNotExist());
     }
 }
