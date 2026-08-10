@@ -4,6 +4,7 @@ import com.evision.releasemgmt.adapters.security.SessionRefreshException;
 import com.evision.releasemgmt.application.JiraSiteConfigService.JiraSiteNotConfiguredException;
 import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
 import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
+import com.evision.releasemgmt.domain.document.ExportFailedException;
 import com.evision.releasemgmt.domain.document.NoActiveTemplateException;
 import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
@@ -140,6 +141,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.CONFLICT, "No active template",
                 "No active template exists for this document type. Activate one from Templates "
                         + "before generating.", "NO_ACTIVE_TEMPLATE");
+    }
+
+    @ExceptionHandler(ExportFailedException.class)
+    public ProblemDetail handleExportFailed(ExportFailedException ex) {
+        log.error("Document export failed", ex);
+        return problem(HttpStatus.BAD_GATEWAY, "Export failed",
+                "The document could not be exported. Try again, and check the server logs if it "
+                        + "persists.", "EXPORT_FAILED");
     }
 
     // The one handler in this file whose detail is dynamic: the SPA renders it verbatim after

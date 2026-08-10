@@ -4,11 +4,15 @@ import com.evision.releasemgmt.adapters.web.dto.ChromeFieldsResponse;
 import com.evision.releasemgmt.adapters.web.dto.DocumentResponse;
 import com.evision.releasemgmt.adapters.web.dto.DocumentRevisionListResponse;
 import com.evision.releasemgmt.adapters.web.dto.DocumentRevisionResponse;
+import com.evision.releasemgmt.application.DocumentExportService;
 import com.evision.releasemgmt.application.DocumentGenerationService;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
+import com.evision.releasemgmt.domain.release.Release;
+import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.template.ChromeFields;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
+import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,9 +35,14 @@ import java.util.UUID;
 public class DocumentController {
 
     private final DocumentGenerationService service;
+    private final DocumentExportService exportService;
+    private final ReleaseRepository releaseRepository;
 
-    public DocumentController(DocumentGenerationService service) {
+    public DocumentController(DocumentGenerationService service, DocumentExportService exportService,
+                              ReleaseRepository releaseRepository) {
         this.service = service;
+        this.exportService = exportService;
+        this.releaseRepository = releaseRepository;
     }
 
     @PostMapping
@@ -74,6 +83,53 @@ public class DocumentController {
         return service.logo(releaseId, documentType, revision)
                 .map(DocumentController::toImageResponse)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/export.pdf")
+    public ResponseEntity<byte[]> exportPdf(@PathVariable UUID releaseId,
+                                            @PathVariable TemplateDocumentType documentType,
+                                            @RequestParam(required = false) Integer revision) {
+        int effectiveRevision = effectiveRevision(releaseId, documentType, revision);
+        byte[] bytes = exportService.toPdf(releaseId, documentType, revision);
+        String filename = exportFilename(releaseId, documentType, effectiveRevision, "pdf");
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, "application/pdf")
+                .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.CONTENT_DISPOSITION, ExportFilename.attachment(filename))
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(bytes);
+    }
+
+    @GetMapping("/export.docx")
+    public ResponseEntity<byte[]> exportDocx(@PathVariable UUID releaseId,
+                                             @PathVariable TemplateDocumentType documentType,
+                                             @RequestParam(required = false) Integer revision) {
+        int effectiveRevision = effectiveRevision(releaseId, documentType, revision);
+        byte[] bytes = exportService.toDocx(releaseId, documentType, revision);
+        String filename = exportFilename(releaseId, documentType, effectiveRevision, "docx");
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE,
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+                .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.CONTENT_DISPOSITION, ExportFilename.attachment(filename))
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(bytes);
+    }
+
+    // The revision actually exported must drive the filename, not the possibly-null requested
+    // value - a caller that omits ?revision= still gets a filename naming the concrete revision
+    // they downloaded.
+    private int effectiveRevision(UUID releaseId, TemplateDocumentType documentType, Integer revision) {
+        DocumentSnapshot snapshot = revision == null
+                ? service.latest(releaseId, documentType)
+                : service.revision(releaseId, documentType, revision);
+        return snapshot.revision();
+    }
+
+    private String exportFilename(UUID releaseId, TemplateDocumentType documentType, int revision,
+                                  String extension) {
+        Release release = releaseRepository.findById(releaseId).orElseThrow(ReleaseNotFoundException::new);
+        return ExportFilename.sanitize(release.name(), release.version(), documentType, revision, extension);
     }
 
     // The filename here comes from the copied upload metadata, not from free text, so it needs no
