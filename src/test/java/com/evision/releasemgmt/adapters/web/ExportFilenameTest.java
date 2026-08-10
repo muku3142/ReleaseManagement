@@ -54,10 +54,23 @@ class ExportFilenameTest {
     }
 
     @Test
-    void aNameThatSanitisesToNothingFallsBackToDocument() {
+    void aNameAndVersionThatSanitiseToNothingStillProduceANonEmptySafeFilename() {
+        // The document-type label and revision suffix are always non-empty and allowlist-safe, so
+        // a hostile name/version alone cannot drive the whole candidate to empty here - only their
+        // own contribution vanishes. The fallback-to-"document" branch below is exercised by a
+        // scenario where truncation removes everything, not by a hostile name/version alone.
         String filename = ExportFilename.sanitize("\"\"\"", "\"\"\"", TemplateDocumentType.RELEASE_NOTES, 1, "pdf");
 
-        assertThat(filename).isEqualTo("document.pdf");
+        assertThat(filename).isEqualTo("Release Notes r1.pdf");
+    }
+
+    @Test
+    void aCandidateEmptiedByTruncationFallsBackToDocument() {
+        String longExtension = "p".repeat(119);
+        String filename = ExportFilename.sanitize("Orchstro", "4.2.0", TemplateDocumentType.RELEASE_NOTES, 1,
+                longExtension);
+
+        assertThat(filename).isEqualTo("document." + longExtension);
     }
 
     @Test
