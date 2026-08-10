@@ -79,3 +79,28 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, retried 
     throw error;
   }
 }
+
+// Every other apiFetch call expects a JSON body; export downloads are the one binary response in
+// the app. GET-only, so no CSRF header is needed. Reuses the same ApiError/ProblemDetail parsing
+// so messageForReason works unchanged on a failed export.
+export async function apiFetchBlob(path: string): Promise<Blob> {
+  const response = await fetch(path, { credentials: 'same-origin' });
+  if (!response.ok) {
+    const problem = await response.json().catch(() => ({ status: response.status, reason: 'UNKNOWN' }));
+    throw new ApiError({ ...problem, status: response.status, reason: problem.reason ?? 'UNKNOWN' });
+  }
+  return response.blob();
+}
+
+// Cleaning up the object URL immediately after the click is not optional: skipping it leaves a
+// blob addressable via a stable in-page URL for the tab's whole lifetime (T-05-57).
+export function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

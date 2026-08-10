@@ -72,7 +72,7 @@ class ReleaseControllerTest {
                 Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123",
                 status == ReleaseStatus.FROZEN ? Instant.parse("2026-08-04T10:00:00Z") : null,
                 status == ReleaseStatus.FROZEN ? "557058:abc-123" : null,
-                null, List.of(), List.of());
+                null, null, List.of(), List.of());
     }
 
     @Test
@@ -193,7 +193,7 @@ class ReleaseControllerTest {
         ManualItem manual = new ManualItem(UUID.randomUUID(), "Run migration", "Apply schema change",
                 ManualItemCategory.DATABASE_SCRIPT, Instant.parse("2026-08-04T09:31:00Z"));
         Release release = new Release(id, "Sprint 42", "2026.08", ReleaseStatus.OPEN, "CNV",
-                Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null, null,
+                Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null, null, null,
                 List.of(item), List.of(manual));
         when(service.get(id)).thenReturn(release);
 
@@ -225,10 +225,10 @@ class ReleaseControllerTest {
     void listReturnsSummariesWithItemCounts() throws Exception {
         ReleaseSummary first = new ReleaseSummary(UUID.randomUUID(), "Sprint 42", "2026.08",
                 ReleaseStatus.OPEN, "CNV", Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123",
-                null, null, null, 3);
+                null, null, null, null, 3);
         ReleaseSummary second = new ReleaseSummary(UUID.randomUUID(), "Sprint 41", "2026.07",
                 ReleaseStatus.FROZEN, "CNV", Instant.parse("2026-07-04T09:00:00Z"), "557058:abc-123",
-                Instant.parse("2026-07-05T09:00:00Z"), "557058:abc-123", null, 5);
+                Instant.parse("2026-07-05T09:00:00Z"), "557058:abc-123", null, null, 5);
         when(service.search(any())).thenReturn(List.of(first, second));
 
         mockMvc.perform(get("/api/releases").with(authenticated()))
@@ -351,7 +351,7 @@ class ReleaseControllerTest {
         UUID id = UUID.randomUUID();
         Release refreshed = new Release(id, "Sprint 42", "2026.08", ReleaseStatus.OPEN, "CNV",
                 Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null,
-                Instant.parse("2026-08-05T09:00:00Z"), List.of(), List.of());
+                Instant.parse("2026-08-05T09:00:00Z"), null, List.of(), List.of());
         when(service.refresh(id)).thenReturn(refreshed);
 
         mockMvc.perform(post("/api/releases/{id}/refresh", id).with(csrf()).with(authenticated()))
@@ -455,7 +455,7 @@ class ReleaseControllerTest {
         ManualItem manual = new ManualItem(UUID.randomUUID(), "Rebuild search index",
                 "Run scripts/reindex.sh on each node", category, Instant.parse("2026-08-04T09:31:00Z"));
         return new Release(id, "Sprint 42", "2026.08", ReleaseStatus.OPEN, "CNV",
-                Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null, null,
+                Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null, null, null,
                 List.of(), List.of(manual));
     }
 

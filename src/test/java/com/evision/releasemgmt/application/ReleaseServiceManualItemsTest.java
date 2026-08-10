@@ -45,7 +45,7 @@ class ReleaseServiceManualItemsTest {
 
     private static Release release(UUID id, ReleaseStatus status) {
         return new Release(id, "Sprint 42", "2026.08", status, "CNV",
-                Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null, null,
+                Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null, null, null,
                 List.of(), List.of());
     }
 

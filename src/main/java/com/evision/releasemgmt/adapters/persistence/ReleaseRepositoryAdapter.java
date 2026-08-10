@@ -77,20 +77,24 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     @Override
     @Transactional
     public Release addItems(UUID releaseId, List<ReleaseItem> items) {
-        lockOpen(releaseId);
+        ReleaseEntity entity = lockOpen(releaseId);
         // The lock means the key set cannot change beneath this read, so filtering here is what
         // stops two concurrent adds of the same key from surfacing
         // release_ticket_item_key_unique as a 500.
         Set<String> present = Set.copyOf(findTicketKeys(releaseId));
         insertItems(releaseId, items.stream().filter(i -> !present.contains(i.ticketKey())).toList());
+        stampItemsChanged(entity);
+        jpa.save(entity);
         return load(releaseId);
     }
 
     @Override
     @Transactional
     public Release removeItem(UUID releaseId, String ticketKey) {
-        lockOpen(releaseId);
+        ReleaseEntity entity = lockOpen(releaseId);
         itemJpa.deleteByReleaseIdAndTicketKey(releaseId, ticketKey);
+        stampItemsChanged(entity);
+        jpa.save(entity);
         return load(releaseId);
     }
 
@@ -103,6 +107,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
                     .ifPresent(entity -> overwriteSnapshot(entity, item.ticket()));
         }
         release.setLastRefreshedAt(refreshedAt);
+        stampItemsChanged(release);
         jpa.save(release);
         return load(releaseId);
     }
@@ -128,7 +133,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     @Override
     @Transactional
     public Release addManualItem(UUID releaseId, ManualItem item) {
-        lockOpen(releaseId);
+        ReleaseEntity release = lockOpen(releaseId);
         ReleaseManualItemEntity entity = new ReleaseManualItemEntity();
         entity.setId(item.id());
         entity.setReleaseId(releaseId);
@@ -137,27 +142,33 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         entity.setCategory(item.category());
         entity.setAddedAt(item.addedAt());
         manualJpa.save(entity);
+        stampItemsChanged(release);
+        jpa.save(release);
         return load(releaseId);
     }
 
     @Override
     @Transactional
     public Release updateManualItem(UUID releaseId, ManualItem item) {
-        lockOpen(releaseId);
+        ReleaseEntity release = lockOpen(releaseId);
         ReleaseManualItemEntity entity = manualJpa.findByReleaseIdAndId(releaseId, item.id())
                 .orElseThrow(ManualItemNotFoundException::new);
         entity.setTitle(item.title());
         entity.setDescription(item.description());
         entity.setCategory(item.category());
         manualJpa.save(entity);
+        stampItemsChanged(release);
+        jpa.save(release);
         return load(releaseId);
     }
 
     @Override
     @Transactional
     public Release removeManualItem(UUID releaseId, UUID manualItemId) {
-        lockOpen(releaseId);
+        ReleaseEntity release = lockOpen(releaseId);
         manualJpa.findByReleaseIdAndId(releaseId, manualItemId).ifPresent(manualJpa::delete);
+        stampItemsChanged(release);
+        jpa.save(release);
         return load(releaseId);
     }
 
@@ -175,6 +186,13 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
 
     private Release load(UUID id) {
         return findById(id).orElseThrow(ReleaseNotFoundException::new);
+    }
+
+    // D-05-09: this is what makes a REMOVAL visible to the staleness comparison. last_refreshed_at
+    // covers refreshes and max(added_at) covers additions, but removing an item leaves no timestamp
+    // anywhere - without this, deleting a ticket would leave its release notes reading "Up to date".
+    private void stampItemsChanged(ReleaseEntity entity) {
+        entity.setItemsChangedAt(Instant.now());
     }
 
     // The bound :query parameter can never alter SQL structure, but a literal '%' or '_' in it
@@ -229,6 +247,10 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         entity.setFrozenAt(release.frozenAt());
         entity.setFrozenBy(release.frozenBy());
         entity.setLastRefreshedAt(release.lastRefreshedAt());
+        // The initial item set is established at creation time, so it counts as "changed" here too -
+        // this is the "set it at create" case D-05-09 calls out, distinct from the six mutation call
+        // sites above that share the stampItemsChanged helper.
+        entity.setItemsChangedAt(release.createdAt());
         return entity;
     }
 
@@ -246,7 +268,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     private static Release toDomain(ReleaseEntity e, List<ReleaseItem> items, List<ManualItem> manualItems) {
         return new Release(e.getId(), e.getName(), e.getVersion(), e.getStatus(), e.getJiraProjectKey(),
                 e.getCreatedAt(), e.getCreatedBy(), e.getFrozenAt(), e.getFrozenBy(), e.getLastRefreshedAt(),
-                items, manualItems);
+                e.getItemsChangedAt(), items, manualItems);
     }
 
     private static ReleaseItem toDomain(ReleaseTicketItemEntity e) {
@@ -264,6 +286,6 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         return new ReleaseSummary(row.getId(), row.getName(), row.getVersion(),
                 ReleaseStatus.valueOf(row.getStatus()), row.getJiraProjectKey(), row.getCreatedAt(),
                 row.getCreatedBy(), row.getFrozenAt(), row.getFrozenBy(), row.getLastRefreshedAt(),
-                Math.toIntExact(row.getItemCount()));
+                row.getItemsChangedAt(), Math.toIntExact(row.getItemCount()));
     }
 }

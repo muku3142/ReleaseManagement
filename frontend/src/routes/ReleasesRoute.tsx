@@ -3,6 +3,9 @@ import { Link } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
 import { useReleases } from '../api/releases';
+import { readinessFor, useDocumentReadiness } from '../api/documents';
+import { DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS } from '../api/templates';
+import { ReadinessPill } from '../components/ReadinessPill';
 
 export function ReleasesRoute() {
   const [search, setSearch] = useState('');
@@ -17,6 +20,9 @@ export function ReleasesRoute() {
 
   const releases = useReleases(query);
   const problem = releases.isError && releases.error instanceof ApiError ? releases.error.problem : undefined;
+  // DOC-09: independent of the releases query on purpose - a readiness failure must not blank the
+  // whole release table (T-05-60), so its own isError branch only affects the three new cells below.
+  const readiness = useDocumentReadiness();
 
   return (
     <div className="w-full">
@@ -105,6 +111,11 @@ export function ReleasesRoute() {
                 <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
                   Last refreshed
                 </th>
+                {DOCUMENT_TYPES.map((type) => (
+                  <th key={type} scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
+                    {DOCUMENT_TYPE_LABELS[type]}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -132,6 +143,19 @@ export function ReleasesRoute() {
                   <td className="whitespace-nowrap px-4 py-2 text-gray-700">
                     {r.lastRefreshedAt ? new Date(r.lastRefreshedAt).toLocaleString() : '—'}
                   </td>
+                  {DOCUMENT_TYPES.map((type) => (
+                    <td key={type} className="whitespace-nowrap px-4 py-2">
+                      {readiness.isError ? (
+                        <span className="text-gray-400">—</span>
+                      ) : (
+                        <ReadinessPill
+                          state={readinessFor(readiness.data?.entries, r.id, type)?.state ?? 'NOT_GENERATED'}
+                          releaseId={r.id}
+                          documentType={type}
+                        />
+                      )}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>

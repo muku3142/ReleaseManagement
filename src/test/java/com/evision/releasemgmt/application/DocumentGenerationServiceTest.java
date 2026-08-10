@@ -121,7 +121,7 @@ class DocumentGenerationServiceTest {
     void generationWorksIdenticallyOnAFrozenRelease() {
         Instant now = Instant.now();
         Release frozenRelease = new Release(UUID.randomUUID(), "Sample Release", "2026.08",
-                ReleaseStatus.FROZEN, "CNV", now, "actor-0", now, "actor-1", now, List.of(), List.of());
+                ReleaseStatus.FROZEN, "CNV", now, "actor-0", now, "actor-1", now, null, List.of(), List.of());
         Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body", ChromeFields.empty());
         stubHappyPath(frozenRelease, template, 1);
 
@@ -201,7 +201,7 @@ class DocumentGenerationServiceTest {
     private static Release openRelease() {
         Instant now = Instant.now();
         return new Release(UUID.randomUUID(), "Sample Release", "2026.08", ReleaseStatus.OPEN, "CNV",
-                now, "actor-0", null, null, now, List.of(), List.of());
+                now, "actor-0", null, null, now, null, List.of(), List.of());
     }
 
     private static Template activeTemplate(TemplateDocumentType documentType, String body, ChromeFields chrome) {

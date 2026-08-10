@@ -65,7 +65,7 @@ class DocumentExportControllerTest {
     private static Release release(UUID releaseId, String name, String version) {
         Instant now = Instant.parse("2026-08-01T00:00:00Z");
         return new Release(releaseId, name, version, ReleaseStatus.OPEN, "CNV", now, "actor-0", null, null,
-                now, List.of(), List.of());
+                now, null, List.of(), List.of());
     }
 
     @Test

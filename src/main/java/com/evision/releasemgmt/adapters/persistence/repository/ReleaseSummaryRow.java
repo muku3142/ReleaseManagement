@@ -25,5 +25,7 @@ public interface ReleaseSummaryRow {
 
     Instant getLastRefreshedAt();
 
+    Instant getItemsChangedAt();
+
     long getItemCount();
 }

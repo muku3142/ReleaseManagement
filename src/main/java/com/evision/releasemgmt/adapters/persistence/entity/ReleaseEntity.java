@@ -46,6 +46,9 @@ public class ReleaseEntity {
     @Column(name = "last_refreshed_at")
     private Instant lastRefreshedAt;
 
+    @Column(name = "items_changed_at")
+    private Instant itemsChangedAt;
+
     public ReleaseEntity() {
     }
 
@@ -127,5 +130,13 @@ public class ReleaseEntity {
 
     public void setLastRefreshedAt(Instant lastRefreshedAt) {
         this.lastRefreshedAt = lastRefreshedAt;
+    }
+
+    public Instant getItemsChangedAt() {
+        return itemsChangedAt;
+    }
+
+    public void setItemsChangedAt(Instant itemsChangedAt) {
+        this.itemsChangedAt = itemsChangedAt;
     }
 }

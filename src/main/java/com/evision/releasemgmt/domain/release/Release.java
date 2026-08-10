@@ -4,15 +4,18 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+// D-05-09: itemsChangedAt is stamped by ReleaseRepositoryAdapter on every item mutation - it is
+// what makes a ticket REMOVAL visible to DocumentReadinessService's staleness comparison, since
+// last_refreshed_at only covers refreshes and max(added_at) cannot see a removal.
 public record Release(UUID id, String name, String version, ReleaseStatus status,
                       String jiraProjectKey, Instant createdAt, String createdBy,
                       Instant frozenAt, String frozenBy, Instant lastRefreshedAt,
-                      List<ReleaseItem> items, List<ManualItem> manualItems) {
+                      Instant itemsChangedAt, List<ReleaseItem> items, List<ManualItem> manualItems) {
 
     public static Release create(String name, String version, String jiraProjectKey,
                                  String actor, Instant now) {
         return new Release(UUID.randomUUID(), name, version, ReleaseStatus.OPEN, jiraProjectKey,
-                now, actor, null, null, null, List.of(), List.of());
+                now, actor, null, null, null, null, List.of(), List.of());
     }
 
     public boolean isFrozen() {
