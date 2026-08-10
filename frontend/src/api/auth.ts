@@ -88,6 +88,9 @@ const REASON_MESSAGES: Record<string, string> = {
     "This file isn't a supported image. Upload a PNG or JPEG — SVG and other formats aren't accepted.",
   LOGO_TOO_LARGE: 'This image is too large.',
   LOGO_DIMENSIONS_EXCEEDED: 'This image is too large.',
+  DOCUMENT_NOT_FOUND: "This document doesn't exist yet.",
+  NO_ACTIVE_TEMPLATE: 'No active template exists for this document type. Activate one from Templates before generating.',
+  EXPORT_FAILED: "The document couldn't be exported. Try again, and check the server logs if it persists.",
 };
 
 export function messageForReason(problem: ProblemDetail): string {
