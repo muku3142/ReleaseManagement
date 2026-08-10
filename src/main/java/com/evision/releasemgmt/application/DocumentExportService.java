@@ -33,7 +33,18 @@ public class DocumentExportService {
     }
 
     public byte[] toPdf(UUID releaseId, TemplateDocumentType type, Integer revisionOrNull) {
-        DocumentSnapshot snapshot = resolve(releaseId, type, revisionOrNull);
+        return toPdf(resolve(releaseId, type, revisionOrNull));
+    }
+
+    public byte[] toDocx(UUID releaseId, TemplateDocumentType type, Integer revisionOrNull) {
+        return toDocx(resolve(releaseId, type, revisionOrNull));
+    }
+
+    // WR-02: callers that have already resolved "latest" once (e.g. to name the download) must
+    // export from that SAME snapshot rather than letting this service resolve "latest" again -
+    // two independent resolutions can observe different revisions if a generate() commits a new
+    // one in between, leaving the downloaded filename naming a different revision than its bytes.
+    public byte[] toPdf(DocumentSnapshot snapshot) {
         LogoImage logo = snapshotRepository.findLogo(snapshot.id()).orElse(null);
         try {
             return pdfExportPort.toPdf(snapshot.markdown(), snapshot.chrome(), logo);
@@ -42,8 +53,7 @@ public class DocumentExportService {
         }
     }
 
-    public byte[] toDocx(UUID releaseId, TemplateDocumentType type, Integer revisionOrNull) {
-        DocumentSnapshot snapshot = resolve(releaseId, type, revisionOrNull);
+    public byte[] toDocx(DocumentSnapshot snapshot) {
         LogoImage logo = snapshotRepository.findLogo(snapshot.id()).orElse(null);
         try {
             return docxExportPort.toDocx(snapshot.markdown(), snapshot.chrome(), logo);

@@ -89,9 +89,9 @@ public class DocumentController {
     public ResponseEntity<byte[]> exportPdf(@PathVariable UUID releaseId,
                                             @PathVariable TemplateDocumentType documentType,
                                             @RequestParam(required = false) Integer revision) {
-        int effectiveRevision = effectiveRevision(releaseId, documentType, revision);
-        byte[] bytes = exportService.toPdf(releaseId, documentType, revision);
-        String filename = exportFilename(releaseId, documentType, effectiveRevision, "pdf");
+        DocumentSnapshot snapshot = resolveSnapshot(releaseId, documentType, revision);
+        byte[] bytes = exportService.toPdf(snapshot);
+        String filename = exportFilename(releaseId, documentType, snapshot.revision(), "pdf");
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE, "application/pdf")
                 .header("X-Content-Type-Options", "nosniff")
@@ -104,9 +104,9 @@ public class DocumentController {
     public ResponseEntity<byte[]> exportDocx(@PathVariable UUID releaseId,
                                              @PathVariable TemplateDocumentType documentType,
                                              @RequestParam(required = false) Integer revision) {
-        int effectiveRevision = effectiveRevision(releaseId, documentType, revision);
-        byte[] bytes = exportService.toDocx(releaseId, documentType, revision);
-        String filename = exportFilename(releaseId, documentType, effectiveRevision, "docx");
+        DocumentSnapshot snapshot = resolveSnapshot(releaseId, documentType, revision);
+        byte[] bytes = exportService.toDocx(snapshot);
+        String filename = exportFilename(releaseId, documentType, snapshot.revision(), "docx");
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_TYPE,
                         "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
@@ -116,14 +116,14 @@ public class DocumentController {
                 .body(bytes);
     }
 
-    // The revision actually exported must drive the filename, not the possibly-null requested
-    // value - a caller that omits ?revision= still gets a filename naming the concrete revision
-    // they downloaded.
-    private int effectiveRevision(UUID releaseId, TemplateDocumentType documentType, Integer revision) {
-        DocumentSnapshot snapshot = revision == null
+    // WR-02: resolved exactly once and reused for both the filename and the exported bytes, so a
+    // concurrent generate() cannot make the downloaded filename disagree with its content - a
+    // caller that omits ?revision= still gets a filename naming the concrete revision they
+    // actually downloaded.
+    private DocumentSnapshot resolveSnapshot(UUID releaseId, TemplateDocumentType documentType, Integer revision) {
+        return revision == null
                 ? service.latest(releaseId, documentType)
                 : service.revision(releaseId, documentType, revision);
-        return snapshot.revision();
     }
 
     private String exportFilename(UUID releaseId, TemplateDocumentType documentType, int revision,

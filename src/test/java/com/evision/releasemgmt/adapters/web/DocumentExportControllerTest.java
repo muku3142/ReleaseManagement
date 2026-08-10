@@ -75,7 +75,7 @@ class DocumentExportControllerTest {
         when(service.latest(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(snapshot);
         when(releaseRepository.findById(releaseId))
                 .thenReturn(Optional.of(release(releaseId, "Orchstro", "4.2.0")));
-        when(exportService.toPdf(releaseId, TemplateDocumentType.RELEASE_NOTES, null))
+        when(exportService.toPdf(snapshot))
                 .thenReturn(new byte[]{1, 2, 3});
 
         mockMvc.perform(get("/api/releases/{releaseId}/documents/{documentType}/export.pdf", releaseId,
@@ -93,7 +93,7 @@ class DocumentExportControllerTest {
         when(service.latest(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(snapshot);
         when(releaseRepository.findById(releaseId))
                 .thenReturn(Optional.of(release(releaseId, "Orchstro", "4.2.0")));
-        when(exportService.toDocx(releaseId, TemplateDocumentType.RELEASE_NOTES, null))
+        when(exportService.toDocx(snapshot))
                 .thenReturn(new byte[]{1, 2, 3});
 
         mockMvc.perform(get("/api/releases/{releaseId}/documents/{documentType}/export.docx", releaseId,
@@ -110,9 +110,9 @@ class DocumentExportControllerTest {
         when(service.latest(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(snapshot);
         when(releaseRepository.findById(releaseId))
                 .thenReturn(Optional.of(release(releaseId, "Orchstro", "4.2.0")));
-        when(exportService.toPdf(releaseId, TemplateDocumentType.RELEASE_NOTES, null))
+        when(exportService.toPdf(snapshot))
                 .thenReturn(new byte[]{1});
-        when(exportService.toDocx(releaseId, TemplateDocumentType.RELEASE_NOTES, null))
+        when(exportService.toDocx(snapshot))
                 .thenReturn(new byte[]{1});
 
         mockMvc.perform(get("/api/releases/{releaseId}/documents/{documentType}/export.pdf", releaseId,
@@ -133,7 +133,7 @@ class DocumentExportControllerTest {
         when(service.latest(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(snapshot);
         when(releaseRepository.findById(releaseId))
                 .thenReturn(Optional.of(release(releaseId, "A\"B\r\nX-Injected: 1/../..", "1.0")));
-        when(exportService.toPdf(releaseId, TemplateDocumentType.RELEASE_NOTES, null))
+        when(exportService.toPdf(snapshot))
                 .thenReturn(new byte[]{1});
 
         mockMvc.perform(get("/api/releases/{releaseId}/documents/{documentType}/export.pdf", releaseId,
@@ -151,7 +151,7 @@ class DocumentExportControllerTest {
         when(service.latest(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(latest);
         when(releaseRepository.findById(releaseId))
                 .thenReturn(Optional.of(release(releaseId, "Orchstro", "4.2.0")));
-        when(exportService.toPdf(releaseId, TemplateDocumentType.RELEASE_NOTES, null))
+        when(exportService.toPdf(latest))
                 .thenReturn(new byte[]{1});
 
         mockMvc.perform(get("/api/releases/{releaseId}/documents/{documentType}/export.pdf", releaseId,
@@ -159,6 +159,27 @@ class DocumentExportControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"Orchstro 4.2.0 Release Notes r4.pdf\""));
+    }
+
+    // WR-02: the filename and the exported bytes must come from the exact same resolved snapshot
+    // instance - if the controller re-resolved "latest" a second time, a concurrent generate()
+    // could make the two disagree about which revision was exported.
+    @Test
+    void filenameAndExportedBytesAreDerivedFromTheSameResolvedSnapshot() throws Exception {
+        UUID releaseId = UUID.randomUUID();
+        DocumentSnapshot latest = snapshot(releaseId, 4);
+        when(service.latest(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(latest);
+        when(releaseRepository.findById(releaseId))
+                .thenReturn(Optional.of(release(releaseId, "Orchstro", "4.2.0")));
+        when(exportService.toPdf(latest)).thenReturn(new byte[]{1});
+
+        mockMvc.perform(get("/api/releases/{releaseId}/documents/{documentType}/export.pdf", releaseId,
+                        "RELEASE_NOTES").with(authenticated()))
+                .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(service, org.mockito.Mockito.times(1))
+                .latest(releaseId, TemplateDocumentType.RELEASE_NOTES);
+        org.mockito.Mockito.verify(exportService).toPdf(org.mockito.ArgumentMatchers.same(latest));
     }
 
     @Test
@@ -180,7 +201,7 @@ class DocumentExportControllerTest {
         when(service.latest(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(snapshot);
         when(releaseRepository.findById(releaseId))
                 .thenReturn(Optional.of(release(releaseId, "Orchstro", "4.2.0")));
-        when(exportService.toPdf(releaseId, TemplateDocumentType.RELEASE_NOTES, null))
+        when(exportService.toPdf(snapshot))
                 .thenThrow(new ExportFailedException(new RuntimeException("renderer blew up")));
 
         mockMvc.perform(get("/api/releases/{releaseId}/documents/{documentType}/export.pdf", releaseId,
