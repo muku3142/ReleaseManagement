@@ -1,6 +1,7 @@
 package com.evision.releasemgmt.application;
 
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
@@ -52,12 +53,13 @@ public class TemplateService {
         Template existing = get(id);
         Instant now = Instant.now();
         Template renamed = new Template(existing.id(), name.trim(), existing.documentType(),
-                existing.body(), existing.active(), existing.chrome(), existing.logo(),
-                existing.warnings(), existing.createdAt(), existing.createdBy(), now, actor);
+                existing.body(), existing.active(), existing.chrome(), existing.groupingDimension(),
+                existing.logo(), existing.warnings(), existing.createdAt(), existing.createdBy(), now, actor);
         return repository.update(renamed);
     }
 
-    public Template saveContent(UUID id, String body, ChromeFields chrome, String actor) {
+    public Template saveContent(UUID id, String body, ChromeFields chrome,
+                                GroupingDimension groupingDimension, String actor) {
         Template existing = get(id);
         ReleaseView sample = SampleReleaseView.instance();
         List<String> warnings = new ArrayList<>();
@@ -68,7 +70,7 @@ public class TemplateService {
         collect(warnings, chrome.footerText(), sample, "Footer text");
 
         Template updated = new Template(existing.id(), existing.name(), existing.documentType(),
-                body, existing.active(), chrome, existing.logo(), List.copyOf(warnings),
+                body, existing.active(), chrome, groupingDimension, existing.logo(), List.copyOf(warnings),
                 existing.createdAt(), existing.createdBy(), Instant.now(), actor);
         return repository.update(updated);
     }
@@ -93,7 +95,8 @@ public class TemplateService {
         // copy never carries one - the release manager re-uploads it if the duplicate needs one.
         Instant now = Instant.now();
         Template copy = new Template(UUID.randomUUID(), name, source.documentType(), source.body(),
-                false, source.chrome(), null, source.warnings(), now, actor, now, actor);
+                false, source.chrome(), source.groupingDimension(), null, source.warnings(), now, actor,
+                now, actor);
         return repository.create(copy);
     }
 

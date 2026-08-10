@@ -1,6 +1,7 @@
 package com.evision.releasemgmt.adapters.persistence.entity;
 
 import com.evision.releasemgmt.adapters.persistence.converter.JsonStringListConverter;
+import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
@@ -51,6 +52,10 @@ public class TemplateEntity {
 
     @Column(name = "page_numbers_enabled", nullable = false)
     private boolean pageNumbersEnabled;
+
+    @Column(name = "grouping_dimension", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private GroupingDimension groupingDimension;
 
     @Column(name = "warnings", nullable = false)
     @Convert(converter = JsonStringListConverter.class)
@@ -157,6 +162,14 @@ public class TemplateEntity {
 
     public void setPageNumbersEnabled(boolean pageNumbersEnabled) {
         this.pageNumbersEnabled = pageNumbersEnabled;
+    }
+
+    public GroupingDimension getGroupingDimension() {
+        return groupingDimension;
+    }
+
+    public void setGroupingDimension(GroupingDimension groupingDimension) {
+        this.groupingDimension = groupingDimension;
     }
 
     public List<String> getWarnings() {

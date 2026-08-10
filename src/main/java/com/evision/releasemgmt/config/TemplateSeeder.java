@@ -2,6 +2,7 @@ package com.evision.releasemgmt.config;
 
 import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import org.springframework.boot.ApplicationArguments;
@@ -51,7 +52,9 @@ public class TemplateSeeder implements ApplicationRunner {
         // exact same TMPL-04 render every hand-authored template gets - if a starter ever stops
         // validating, startup fails loudly rather than shipping a broken artefact.
         Template created = templateService.create(name, type, SEED_ACTOR);
-        templateService.saveContent(created.id(), body, chrome, SEED_ACTOR);
+        // D-05-04: starters keep the ISSUE_TYPE default - none of the three seeded starters names a
+        // component-shaped section, so there is nothing here for COMPONENT grouping to improve on.
+        templateService.saveContent(created.id(), body, chrome, GroupingDimension.ISSUE_TYPE, SEED_ACTOR);
         templateService.activate(created.id(), SEED_ACTOR);
     }
 

@@ -48,6 +48,7 @@ public final class RenderContextMapper {
         map.put("resolution", nullToEmpty(item.resolution()));
         map.put("assignee", nullToEmpty(item.assignee()));
         map.put("reporter", nullToEmpty(item.reporter()));
+        map.put("component", nullToEmpty(item.component()));
         map.put("description", nullToEmpty(item.description()));
         map.put("category", nullToEmpty(item.category()));
         map.put("comments", item.comments().stream().map(RenderContextMapper::commentMap).toList());

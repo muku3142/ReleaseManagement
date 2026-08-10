@@ -1,6 +1,7 @@
 package com.evision.releasemgmt.adapters.persistence;
 
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.LogoMetadata;
 import com.evision.releasemgmt.domain.template.Template;
@@ -50,8 +51,8 @@ class TemplatePersistenceIT {
     private static Template template(String name, TemplateDocumentType type) {
         Template base = Template.create(name, type, "rm@acme.com", Instant.now());
         return new Template(base.id(), base.name(), base.documentType(), "Body {{release.name}}",
-                base.active(), chrome(), null, List.of("unknown.field"), base.createdAt(),
-                base.createdBy(), base.updatedAt(), base.updatedBy());
+                base.active(), chrome(), base.groupingDimension(), null, List.of("unknown.field"),
+                base.createdAt(), base.createdBy(), base.updatedAt(), base.updatedBy());
     }
 
     private static LogoImage logo() {
@@ -75,6 +76,20 @@ class TemplatePersistenceIT {
         assertThat(loaded.chrome().footerText()).isEqualTo("Footer");
         assertThat(loaded.chrome().pageNumbersEnabled()).isTrue();
         assertThat(loaded.warnings()).containsExactly("unknown.field");
+        assertThat(loaded.groupingDimension()).isEqualTo(GroupingDimension.ISSUE_TYPE);
+    }
+
+    @Test
+    void updateRoundTripsAComponentGroupingDimension() {
+        Template saved = repository.create(template("Component Grouped", TemplateDocumentType.RUNBOOK));
+        Template withComponentDimension = new Template(saved.id(), saved.name(), saved.documentType(),
+                saved.body(), saved.active(), saved.chrome(), GroupingDimension.COMPONENT, saved.logo(),
+                saved.warnings(), saved.createdAt(), saved.createdBy(), saved.updatedAt(), saved.updatedBy());
+
+        repository.update(withComponentDimension);
+
+        Template loaded = repository.findById(saved.id()).orElseThrow();
+        assertThat(loaded.groupingDimension()).isEqualTo(GroupingDimension.COMPONENT);
     }
 
     @Test

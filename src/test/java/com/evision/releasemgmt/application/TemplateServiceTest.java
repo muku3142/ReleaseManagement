@@ -2,6 +2,7 @@ package com.evision.releasemgmt.application;
 
 import com.evision.releasemgmt.adapters.render.MustacheFlexmarkRenderAdapter;
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import com.evision.releasemgmt.domain.template.TemplateMalformedException;
@@ -49,15 +50,36 @@ class TemplateServiceTest {
     }
 
     @Test
+    void newTemplateDefaultsToIssueType() {
+        when(repository.create(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Template created = service.create("Standard notes", TemplateDocumentType.RELEASE_NOTES, "actor-1");
+
+        assertThat(created.groupingDimension()).isEqualTo(GroupingDimension.ISSUE_TYPE);
+    }
+
+    @Test
     void saveContentWithCleanBodyReturnsNoWarnings() {
         Template existing = existingTemplate();
         when(repository.findById(existing.id())).thenReturn(Optional.of(existing));
         when(repository.update(any())).thenAnswer(inv -> inv.getArgument(0));
 
         Template saved = service.saveContent(existing.id(), "Release {{release.name}} is ready.",
-                ChromeFields.empty(), "actor-2");
+                ChromeFields.empty(), GroupingDimension.ISSUE_TYPE, "actor-2");
 
         assertThat(saved.warnings()).isEmpty();
+    }
+
+    @Test
+    void saveContentPersistsTheGroupingDimension() {
+        Template existing = existingTemplate();
+        when(repository.findById(existing.id())).thenReturn(Optional.of(existing));
+        when(repository.update(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Template saved = service.saveContent(existing.id(), "Clean body", ChromeFields.empty(),
+                GroupingDimension.COMPONENT, "actor-2");
+
+        assertThat(saved.groupingDimension()).isEqualTo(GroupingDimension.COMPONENT);
     }
 
     @Test
@@ -67,7 +89,7 @@ class TemplateServiceTest {
         when(repository.update(any())).thenAnswer(inv -> inv.getArgument(0));
 
         Template saved = service.saveContent(existing.id(), "{{ticket.compnent}}", ChromeFields.empty(),
-                "actor-2");
+                GroupingDimension.ISSUE_TYPE, "actor-2");
 
         assertThat(saved.warnings()).containsExactly("ticket.compnent — Body");
     }
@@ -79,7 +101,7 @@ class TemplateServiceTest {
         when(repository.update(any())).thenAnswer(inv -> inv.getArgument(0));
         ChromeFields chrome = new ChromeFields(true, "{{nope}}", "", "", "", false);
 
-        Template saved = service.saveContent(existing.id(), "", chrome, "actor-2");
+        Template saved = service.saveContent(existing.id(), "", chrome, GroupingDimension.ISSUE_TYPE, "actor-2");
 
         assertThat(saved.warnings()).containsExactly("nope — Cover title");
     }
@@ -90,7 +112,7 @@ class TemplateServiceTest {
         when(repository.findById(existing.id())).thenReturn(Optional.of(existing));
 
         assertThatThrownBy(() -> service.saveContent(existing.id(), "{{>partial}}", ChromeFields.empty(),
-                "actor-2"))
+                GroupingDimension.ISSUE_TYPE, "actor-2"))
                 .isInstanceOf(TemplateMalformedException.class)
                 .satisfies(ex -> assertThat(((TemplateMalformedException) ex).field()).isEqualTo("Body"));
 
@@ -103,7 +125,8 @@ class TemplateServiceTest {
         when(repository.findById(existing.id())).thenReturn(Optional.of(existing));
         ChromeFields chrome = new ChromeFields(false, "", "", "{{#items}}", "", false);
 
-        assertThatThrownBy(() -> service.saveContent(existing.id(), "", chrome, "actor-2"))
+        assertThatThrownBy(() -> service.saveContent(existing.id(), "", chrome, GroupingDimension.ISSUE_TYPE,
+                "actor-2"))
                 .isInstanceOf(TemplateMalformedException.class)
                 .satisfies(ex -> assertThat(((TemplateMalformedException) ex).field()).isEqualTo("Header text"));
 
@@ -116,7 +139,8 @@ class TemplateServiceTest {
         when(repository.findById(existing.id())).thenReturn(Optional.of(existing));
         when(repository.update(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        Template saved = service.saveContent(existing.id(), "Clean body", ChromeFields.empty(), "actor-2");
+        Template saved = service.saveContent(existing.id(), "Clean body", ChromeFields.empty(),
+                GroupingDimension.ISSUE_TYPE, "actor-2");
 
         assertThat(saved.warnings()).isEmpty();
         verify(renderService).render(eq("Clean body"), any(), eq("Body"));
@@ -129,8 +153,8 @@ class TemplateServiceTest {
     @Test
     void duplicateGeneratesIncrementingCopyNamesAndIsNeverActive() {
         Template source = new Template(UUID.randomUUID(), "Standard notes",
-                TemplateDocumentType.RELEASE_NOTES, "Body", true, ChromeFields.empty(), null, List.of(),
-                Instant.now(), "actor-1", Instant.now(), "actor-1");
+                TemplateDocumentType.RELEASE_NOTES, "Body", true, ChromeFields.empty(),
+                GroupingDimension.ISSUE_TYPE, null, List.of(), Instant.now(), "actor-1", Instant.now(), "actor-1");
         when(repository.findById(source.id())).thenReturn(Optional.of(source));
         when(repository.findByDocumentType(TemplateDocumentType.RELEASE_NOTES)).thenReturn(List.of(source));
         ArgumentCaptor<Template> captor = ArgumentCaptor.forClass(Template.class);
@@ -148,10 +172,24 @@ class TemplateServiceTest {
     }
 
     @Test
+    void duplicateCarriesTheGroupingDimension() {
+        Template source = new Template(UUID.randomUUID(), "Standard notes",
+                TemplateDocumentType.RELEASE_NOTES, "Body", true, ChromeFields.empty(),
+                GroupingDimension.COMPONENT, null, List.of(), Instant.now(), "actor-1", Instant.now(), "actor-1");
+        when(repository.findById(source.id())).thenReturn(Optional.of(source));
+        when(repository.findByDocumentType(TemplateDocumentType.RELEASE_NOTES)).thenReturn(List.of(source));
+        when(repository.create(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        Template copy = service.duplicate(source.id(), "actor-2");
+
+        assertThat(copy.groupingDimension()).isEqualTo(GroupingDimension.COMPONENT);
+    }
+
+    @Test
     void deleteOfTheActiveTemplateLeavesNoActiveTemplateForItsType() {
         Template active = new Template(UUID.randomUUID(), "Standard notes",
-                TemplateDocumentType.RELEASE_NOTES, "Body", true, ChromeFields.empty(), null, List.of(),
-                Instant.now(), "actor-1", Instant.now(), "actor-1");
+                TemplateDocumentType.RELEASE_NOTES, "Body", true, ChromeFields.empty(),
+                GroupingDimension.ISSUE_TYPE, null, List.of(), Instant.now(), "actor-1", Instant.now(), "actor-1");
         when(repository.findByDocumentType(TemplateDocumentType.RELEASE_NOTES)).thenReturn(List.of());
 
         service.delete(active.id());

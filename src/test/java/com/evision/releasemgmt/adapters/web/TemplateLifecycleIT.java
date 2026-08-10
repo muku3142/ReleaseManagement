@@ -2,6 +2,7 @@ package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import com.evision.releasemgmt.domain.template.TemplateMalformedException;
@@ -49,12 +50,14 @@ class TemplateLifecycleIT {
 
         // 2. A save with an unknown placeholder warns but does not block.
         String typoBody = "# {{release.name}}\n{{ticket.compnent}}";
-        Template saved = templateService.saveContent(draft.id(), typoBody, ChromeFields.empty(), ACTOR);
+        Template saved = templateService.saveContent(draft.id(), typoBody, ChromeFields.empty(),
+                GroupingDimension.ISSUE_TYPE, ACTOR);
         assertThat(saved.body()).isEqualTo(typoBody);
         assertThat(saved.warnings()).containsExactly("ticket.compnent — Body");
 
         // 3. A save with a disallowed construct is blocked and changes nothing already stored.
-        assertThatThrownBy(() -> templateService.saveContent(draft.id(), "{{>shared}}", ChromeFields.empty(), ACTOR))
+        assertThatThrownBy(() -> templateService.saveContent(draft.id(), "{{>shared}}", ChromeFields.empty(),
+                GroupingDimension.ISSUE_TYPE, ACTOR))
                 .isInstanceOf(TemplateMalformedException.class);
         Template afterBlockedSave = templateService.get(draft.id());
         assertThat(afterBlockedSave.body()).isEqualTo(typoBody);

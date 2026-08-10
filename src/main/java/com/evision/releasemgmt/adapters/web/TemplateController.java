@@ -15,6 +15,7 @@ import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.application.ReleaseViewAssembler;
 import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.PlaceholderCatalog;
 import com.evision.releasemgmt.domain.template.Template;
@@ -94,9 +95,12 @@ public class TemplateController {
     // serves the *data* the browser renders - the same view-model the server render uses - so the two
     // renderers cannot disagree about the data even though D-04-10 accepts that they may disagree about
     // rendering. It is deliberately not a server-side render endpoint; that was deferred.
+    //
+    // D-05-04: this preview is not tied to any one template, so it always previews against the
+    // ISSUE_TYPE default rather than reading a groupingDimension the caller hasn't chosen yet.
     @GetMapping("/render-context/{releaseId}")
     public ReleaseView renderContext(@PathVariable UUID releaseId) {
-        return assembler.assemble(releaseService.get(releaseId));
+        return assembler.assemble(releaseService.get(releaseId), GroupingDimension.ISSUE_TYPE);
     }
 
     @GetMapping("/{templateId}")
@@ -117,8 +121,14 @@ public class TemplateController {
         ChromeFields chrome = new ChromeFields(request.chrome().coverEnabled(), request.chrome().coverTitle(),
                 request.chrome().coverSubtitle(), request.chrome().headerText(),
                 request.chrome().footerText(), request.chrome().pageNumbersEnabled());
+        // D-05-04: null/blank is an older client's payload - default to ISSUE_TYPE rather than
+        // rejecting it. The @Pattern on the request already guarantees this valueOf cannot throw.
+        GroupingDimension groupingDimension = request.groupingDimension() == null
+                || request.groupingDimension().isBlank()
+                ? GroupingDimension.ISSUE_TYPE
+                : GroupingDimension.valueOf(request.groupingDimension());
         return toResponse(templateService.saveContent(templateId, request.body(), chrome,
-                principal.getName()));
+                groupingDimension, principal.getName()));
     }
 
     @PostMapping("/{templateId}/activate")
@@ -177,8 +187,9 @@ public class TemplateController {
                         template.logo().byteSize(), template.logo().width(), template.logo().height(),
                         template.logo().uploadedAt());
         return new TemplateResponse(template.id(), template.name(), template.documentType().name(),
-                template.body(), template.active(), chromeResponse, logoResponse, template.warnings(),
-                template.createdAt(), template.createdBy(), template.updatedAt(), template.updatedBy());
+                template.body(), template.active(), chromeResponse, template.groupingDimension().name(),
+                logoResponse, template.warnings(), template.createdAt(), template.createdBy(),
+                template.updatedAt(), template.updatedBy());
     }
 
     private static TemplateSummaryResponse toSummaryResponse(Template template) {

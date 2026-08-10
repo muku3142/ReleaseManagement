@@ -149,7 +149,8 @@ class DocumentSnapshotPersistenceIT {
         Template base = Template.create("With Logo", TemplateDocumentType.RELEASE_NOTES, "rm@acme.com",
                 Instant.now());
         Template template = templateRepository.create(new Template(base.id(), base.name(),
-                base.documentType(), "Body {{release.name}}", base.active(), chrome(), null, List.of(),
+                base.documentType(), "Body {{release.name}}", base.active(), chrome(),
+                base.groupingDimension(), null, List.of(),
                 base.createdAt(), base.createdBy(), base.updatedAt(), base.updatedBy()));
         templateRepository.saveLogo(template.id(), logo());
 
