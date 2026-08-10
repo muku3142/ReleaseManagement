@@ -48,8 +48,8 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 
 - [ ] **DOC-01**: Release manager can generate release notes for a release from its template
 - [ ] **DOC-02**: Release notes group tickets by issue type by default, and a template can group by component, epic or label instead
-- [ ] **DOC-03**: Release manager can generate a deployment runbook whose data model provides distinct places for deploy steps, post-deploy validation, and a rollback section with explicit trigger conditions
-- [ ] **DOC-04**: Release manager can generate an approval/change document whose data model provides risk, impact and backout-plan fields
+- [ ] **DOC-03**: Release manager can generate a deployment runbook with distinct, clearly-labelled sections for deploy steps, post-deploy validation, and rollback with explicit trigger conditions — authored as template content. Superseded 2026-08-10: originally "whose data model provides distinct places for…"; see the Phase 5 note below
+- [ ] **DOC-04**: Release manager can generate an approval/change document with clearly-labelled risk, impact and backout-plan sections — authored as template content. Superseded 2026-08-10: originally "whose data model provides risk, impact and backout-plan fields"; see the Phase 5 note below
 - [ ] **DOC-05**: Release manager can export any generated document as PDF
 - [ ] **DOC-06**: Release manager can export any generated document as DOCX
 - [ ] **DOC-07**: Each generated document is stored as an immutable snapshot recording the template version, content and generation timestamp, so regenerating creates a new revision instead of altering the previous one
@@ -236,6 +236,24 @@ SVG is XML and can carry script and external entity references; openhtmltopdf's 
 would process it. Template source is already untrusted input by project constraint, and an
 uploaded image is the same class of input — validate type by content rather than by extension,
 and bound dimensions and byte size.
+
+### Runbook and approval content (revised 2026-08-10)
+
+DOC-03 and DOC-04 originally required a **data model** providing runbook and approval fields. During
+the Phase 5 discussion the release manager chose to author that content as **static template text**
+instead — deploy steps, validation, rollback, risk, impact and backout plan are written into the
+runbook and approval templates as ordinary Markdown, not modelled as per-release data.
+
+Both requirements were reworded to match, rather than left as an indefinitely-unmet promise.
+
+**The cost, recorded deliberately so nobody rediscovers it as a surprise:** this content is
+**identical for every release** until someone edits the template. A generated approval document's
+"risk" and "backout plan" are therefore boilerplate, not an assessment of the release being approved.
+Two alternatives were considered and declined for v1 — structured fields on the release (a V5
+migration plus a form screen), and a narrower version adding only the three approval scalars.
+
+**v2 candidate:** per-release values for the approval scalars, which is the case where boilerplate is
+least defensible because a human signs the result.
 
 ### Evidence notes for Phase 1 requirements
 
