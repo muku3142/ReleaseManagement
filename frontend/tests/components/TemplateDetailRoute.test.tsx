@@ -38,6 +38,7 @@ function makeTemplate(overrides: Record<string, unknown> = {}) {
     body: '# {{release.name}}',
     active: true,
     chrome: CHROME,
+    groupingDimension: 'ISSUE_TYPE',
     logo: null,
     warnings: [],
     createdAt: '2026-08-01T00:00:00Z',
@@ -132,6 +133,10 @@ function bodyTextarea(): HTMLTextAreaElement {
 
 function releaseSelect(): HTMLSelectElement {
   return container.querySelector<HTMLSelectElement>('select[aria-label="Preview against"]')!;
+}
+
+function groupBySelect(): HTMLSelectElement {
+  return container.querySelector<HTMLSelectElement>('select[aria-label="Group by"]')!;
 }
 
 // React tracks the native value setter on controlled form elements to distinguish its own
@@ -265,6 +270,74 @@ describe('TemplateDetailRoute', () => {
     await flush();
 
     expect(container.textContent).not.toContain('Unsaved changes');
+  });
+
+  it('groupByDefaultsToIssueTypeFromTheLoadedTemplate', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/releases')) return json(200, { releases: RELEASES });
+      return json(200, makeTemplate({ groupingDimension: 'ISSUE_TYPE' }));
+    });
+
+    await renderRoute();
+
+    expect(groupBySelect().value).toBe('ISSUE_TYPE');
+  });
+
+  it('changingGroupByMarksTheTemplateDirty', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/releases')) return json(200, { releases: RELEASES });
+      return json(200, makeTemplate());
+    });
+
+    await renderRoute();
+    expect(container.textContent).not.toContain('Unsaved changes');
+
+    await act(async () => {
+      groupBySelect().value = 'COMPONENT';
+      groupBySelect().dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Unsaved changes');
+  });
+
+  it('savingSendsTheSelectedGroupingDimension', async () => {
+    let sentBody: string | undefined;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/api/releases')) return json(200, { releases: RELEASES });
+      if (url.endsWith('/api/templates/t1/content') && init?.method === 'PUT') {
+        sentBody = String(init?.body);
+        return json(200, makeTemplate({ groupingDimension: 'COMPONENT' }));
+      }
+      return json(200, makeTemplate());
+    });
+
+    await renderRoute();
+    await act(async () => {
+      groupBySelect().value = 'COMPONENT';
+      groupBySelect().dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    await act(async () => byText('Save template').click());
+    await flush();
+
+    expect(sentBody).toContain('"groupingDimension":"COMPONENT"');
+  });
+
+  it('groupBySelectIsKeyboardReachableAndLabelled', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/api/releases')) return json(200, { releases: RELEASES });
+      return json(200, makeTemplate());
+    });
+
+    await renderRoute();
+
+    const select = container.querySelector<HTMLSelectElement>('[aria-label="Group by"]');
+    expect(select).not.toBeNull();
+    expect(select?.tagName).toBe('SELECT');
   });
 
   it('renders a clean status banner with no amber classes when the save has no warnings', async () => {

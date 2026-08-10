@@ -4,6 +4,8 @@ import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
 import {
   DOCUMENT_TYPE_LABELS,
+  GROUPING_DIMENSIONS,
+  GROUPING_DIMENSION_LABELS,
   useActivateTemplate,
   usePlaceholderCatalog,
   useRenameTemplate,
@@ -11,6 +13,7 @@ import {
   useSaveTemplateContent,
   useTemplate,
   type ChromeFields,
+  type GroupingDimension,
 } from '../api/templates';
 import { useReleases } from '../api/releases';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -32,7 +35,10 @@ export function TemplateDetailRoute() {
 
   const [body, setBody] = useState('');
   const [chrome, setChrome] = useState<ChromeFields | null>(null);
-  const [saved, setSaved] = useState<{ body: string; chrome: ChromeFields } | null>(null);
+  const [groupingDimension, setGroupingDimension] = useState<GroupingDimension>('ISSUE_TYPE');
+  const [saved, setSaved] = useState<
+    { body: string; chrome: ChromeFields; groupingDimension: GroupingDimension } | null
+  >(null);
   const [tab, setTab] = useState<'body' | 'chrome'>('body');
 
   const [renaming, setRenaming] = useState(false);
@@ -60,7 +66,10 @@ export function TemplateDetailRoute() {
   const activate = useActivateTemplate();
 
   const dirty =
-    saved !== null && (body !== saved.body || JSON.stringify(chrome) !== JSON.stringify(saved.chrome));
+    saved !== null &&
+    (body !== saved.body ||
+      JSON.stringify(chrome) !== JSON.stringify(saved.chrome) ||
+      groupingDimension !== saved.groupingDimension);
   // A stale outcome banner never sits above edits it does not describe: becoming dirty again
   // hides it, without needing a second effect racing the seed-from-server effect below.
   const showOutcome = saveOutcome !== null && !dirty;
@@ -82,7 +91,12 @@ export function TemplateDetailRoute() {
     if (!template.data) return;
     setBody(template.data.body);
     setChrome(template.data.chrome);
-    setSaved({ body: template.data.body, chrome: template.data.chrome });
+    setGroupingDimension(template.data.groupingDimension);
+    setSaved({
+      body: template.data.body,
+      chrome: template.data.chrome,
+      groupingDimension: template.data.groupingDimension,
+    });
   }, [template.data?.id, template.data?.updatedAt]);
 
   useEffect(() => {
@@ -231,10 +245,10 @@ export function TemplateDetailRoute() {
   function handleSave() {
     if (!chrome) return;
     save.mutate(
-      { templateId, body, chrome },
+      { templateId, body, chrome, groupingDimension },
       {
         onSuccess: (t) => {
-          setSaved({ body: t.body, chrome: t.chrome });
+          setSaved({ body: t.body, chrome: t.chrome, groupingDimension: t.groupingDimension });
           setSaveOutcome(t.warnings.length === 0 ? 'clean' : 'warnings');
           setWarnings(t.warnings);
         },
@@ -273,6 +287,25 @@ export function TemplateDetailRoute() {
             </>
           )}
           <span className="text-sm text-gray-600">{DOCUMENT_TYPE_LABELS[data.documentType]} template</span>
+          <label htmlFor="groupBy" className="text-sm text-gray-600">
+            Group by
+          </label>
+          <select
+            id="groupBy"
+            aria-label="Group by"
+            value={groupingDimension}
+            onChange={(e) => setGroupingDimension(e.target.value as GroupingDimension)}
+            className="rounded border border-gray-300 px-2 py-1 text-sm focus-visible:ring-2 focus-visible:ring-blue-600"
+          >
+            {GROUPING_DIMENSIONS.map((value) => (
+              <option key={value} value={value}>
+                {GROUPING_DIMENSION_LABELS[value]}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-gray-500">
+            Determines what {'{{groupName}}'} and {'{{#groups}}'} resolve to when this template renders.
+          </span>
           {data.active ? (
             <span className="rounded-full bg-gray-800 px-2 py-0.5 text-sm text-white">Active</span>
           ) : (

@@ -11,6 +11,15 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   APPROVAL: 'Approval',
 };
 
+// D-05-04: a per-template setting. ISSUE_TYPE is the default so every template authored in Phase 4
+// keeps rendering {{#groups}} exactly as it did.
+export const GROUPING_DIMENSIONS = ['ISSUE_TYPE', 'COMPONENT'] as const;
+export type GroupingDimension = (typeof GROUPING_DIMENSIONS)[number];
+export const GROUPING_DIMENSION_LABELS: Record<GroupingDimension, string> = {
+  ISSUE_TYPE: 'Issue type',
+  COMPONENT: 'Component',
+};
+
 export type ChromeFields = {
   coverEnabled: boolean;
   coverTitle: string;
@@ -46,6 +55,7 @@ export type Template = {
   body: string;
   active: boolean;
   chrome: ChromeFields;
+  groupingDimension: GroupingDimension;
   logo: LogoMetadata | null;
   warnings: string[];
   createdAt: string;
@@ -85,6 +95,7 @@ export type ItemView = {
   resolution: string;
   assignee: string;
   reporter: string;
+  component: string;
   description: string;
   category: string;
   comments: { text: string }[];
@@ -176,11 +187,12 @@ export function useRenameTemplate() {
 }
 
 export function useSaveTemplateContent() {
-  return useTemplateMutation((vars: { templateId: string; body: string; chrome: ChromeFields }) =>
-    apiFetch<Template>(`/api/templates/${vars.templateId}/content`, {
-      method: 'PUT',
-      body: JSON.stringify({ body: vars.body, chrome: vars.chrome }),
-    }),
+  return useTemplateMutation(
+    (vars: { templateId: string; body: string; chrome: ChromeFields; groupingDimension: GroupingDimension }) =>
+      apiFetch<Template>(`/api/templates/${vars.templateId}/content`, {
+        method: 'PUT',
+        body: JSON.stringify({ body: vars.body, chrome: vars.chrome, groupingDimension: vars.groupingDimension }),
+      }),
   );
 }
 

@@ -43,6 +43,7 @@ function template(overrides: Partial<Template>): Template {
       footerText: '',
       pageNumbersEnabled: false,
     },
+    groupingDimension: 'ISSUE_TYPE',
     logo: null,
     warnings: [],
     createdAt: '2026-08-09T00:00:00Z',

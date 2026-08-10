@@ -28,6 +28,7 @@ function ticketItem(overrides: Partial<ItemView> = {}): ItemView {
     resolution: 'Fixed',
     assignee: 'Jane Doe',
     reporter: 'Jane Doe',
+    component: '',
     description: 'Duplicate lines appear on the invoice PDF.',
     category: '',
     comments: [],
