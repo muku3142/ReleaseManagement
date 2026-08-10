@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -52,14 +53,20 @@ public class RenderService {
         enforceCollectionCap(view);
         String safeSource = markUnknownTokens(source, scan.unknownTokens());
         Map<String, Object> context = RenderContextMapper.toContext(view);
-        String html = renderBounded(safeSource, context);
+        String html = bounded(() -> engine.render(safeSource, context));
         return new RenderResult(html, scan.unknownTokens());
     }
 
-    // RED stub - deliberately skips enforceCollectionCap so resolveTextEnforcesTheCollectionCap
-    // fails before the real implementation lands.
+    // D-04-11's bounds are not optional for chrome either: a cover subtitle is resolved against the
+    // same view and can breach the same collection cap. This is render() with the flexmark step
+    // removed, not a second, looser path.
     public RenderResult resolveText(String source, ReleaseView view, String field) {
-        return new RenderResult(source, List.of());
+        ScanResult scan = SCANNER.scan(source, field);
+        enforceCollectionCap(view);
+        String safeSource = markUnknownTokens(source, scan.unknownTokens());
+        Map<String, Object> context = RenderContextMapper.toContext(view);
+        String text = bounded(() -> engine.resolve(safeSource, context));
+        return new RenderResult(text, scan.unknownTokens());
     }
 
     @PreDestroy
@@ -67,8 +74,8 @@ public class RenderService {
         executor.shutdown();
     }
 
-    private String renderBounded(String safeSource, Map<String, Object> context) {
-        Future<String> future = executor.submit(() -> engine.render(safeSource, context));
+    private String bounded(Callable<String> work) {
+        Future<String> future = executor.submit(work);
         try {
             return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
