@@ -8,6 +8,7 @@ import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.LogoMetadata;
 import com.evision.releasemgmt.domain.template.LogoRejectedException;
@@ -70,7 +71,8 @@ class TemplateLogoControllerTest {
     private static Template template(UUID id, LogoMetadata logo) {
         Instant now = Instant.parse("2026-08-09T09:00:00Z");
         return new Template(id, "Standard notes", TemplateDocumentType.RELEASE_NOTES, "Body", true,
-                ChromeFields.empty(), logo, List.of(), now, "557058:abc-123", now, "557058:abc-123");
+                ChromeFields.empty(), GroupingDimension.ISSUE_TYPE, logo, List.of(), now, "557058:abc-123",
+                now, "557058:abc-123");
     }
 
     private static byte[] pngBytes() throws Exception {

@@ -6,7 +6,6 @@ import com.evision.releasemgmt.domain.document.NoActiveTemplateException;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.template.ChromeFields;
-import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
@@ -50,7 +49,9 @@ public class DocumentGenerationService {
         // ticket, so this reads only the locally stored release.
         Release release = releaseRepository.findById(releaseId).orElseThrow(ReleaseNotFoundException::new);
         Template template = templateRepository.findActive(documentType).orElseThrow(NoActiveTemplateException::new);
-        ReleaseView view = assembler.assemble(release, GroupingDimension.ISSUE_TYPE);
+        // D-05-04/D-05-53: grouped by the dimension of the template that produced this document, so
+        // the snapshot's grouping always stays self-consistent with its copied templateBody.
+        ReleaseView view = assembler.assemble(release, template.groupingDimension());
 
         // The single bounded render entry point (D-04-11) - do not inline a call to the low-level
         // render engine port or build a second bounded path.

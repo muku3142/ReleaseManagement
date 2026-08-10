@@ -83,6 +83,7 @@ public class TemplateRepositoryAdapter implements TemplateRepository {
         entity.setHeaderText(chrome.headerText());
         entity.setFooterText(chrome.footerText());
         entity.setPageNumbersEnabled(chrome.pageNumbersEnabled());
+        entity.setGroupingDimension(template.groupingDimension());
         entity.setWarnings(template.warnings());
         entity.setUpdatedAt(template.updatedAt());
         entity.setUpdatedBy(template.updatedBy());
@@ -169,6 +170,7 @@ public class TemplateRepositoryAdapter implements TemplateRepository {
         entity.setHeaderText(chrome.headerText());
         entity.setFooterText(chrome.footerText());
         entity.setPageNumbersEnabled(chrome.pageNumbersEnabled());
+        entity.setGroupingDimension(template.groupingDimension());
         entity.setWarnings(template.warnings());
         entity.setCreatedAt(template.createdAt());
         entity.setCreatedBy(template.createdBy());
@@ -181,7 +183,8 @@ public class TemplateRepositoryAdapter implements TemplateRepository {
         ChromeFields chrome = new ChromeFields(e.isCoverEnabled(), e.getCoverTitle(), e.getCoverSubtitle(),
                 e.getHeaderText(), e.getFooterText(), e.isPageNumbersEnabled());
         return new Template(e.getId(), e.getName(), e.getDocumentType(), e.getBody(), e.isActive(), chrome,
-                logo, e.getWarnings(), e.getCreatedAt(), e.getCreatedBy(), e.getUpdatedAt(), e.getUpdatedBy());
+                e.getGroupingDimension(), logo, e.getWarnings(), e.getCreatedAt(), e.getCreatedBy(),
+                e.getUpdatedAt(), e.getUpdatedBy());
     }
 
     private static LogoImage toDomain(TemplateLogoEntity e) {

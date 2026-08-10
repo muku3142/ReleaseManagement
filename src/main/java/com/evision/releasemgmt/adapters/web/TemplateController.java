@@ -121,8 +121,14 @@ public class TemplateController {
         ChromeFields chrome = new ChromeFields(request.chrome().coverEnabled(), request.chrome().coverTitle(),
                 request.chrome().coverSubtitle(), request.chrome().headerText(),
                 request.chrome().footerText(), request.chrome().pageNumbersEnabled());
+        // D-05-04: null/blank is an older client's payload - default to ISSUE_TYPE rather than
+        // rejecting it. The @Pattern on the request already guarantees this valueOf cannot throw.
+        GroupingDimension groupingDimension = request.groupingDimension() == null
+                || request.groupingDimension().isBlank()
+                ? GroupingDimension.ISSUE_TYPE
+                : GroupingDimension.valueOf(request.groupingDimension());
         return toResponse(templateService.saveContent(templateId, request.body(), chrome,
-                principal.getName()));
+                groupingDimension, principal.getName()));
     }
 
     @PostMapping("/{templateId}/activate")
@@ -181,8 +187,9 @@ public class TemplateController {
                         template.logo().byteSize(), template.logo().width(), template.logo().height(),
                         template.logo().uploadedAt());
         return new TemplateResponse(template.id(), template.name(), template.documentType().name(),
-                template.body(), template.active(), chromeResponse, logoResponse, template.warnings(),
-                template.createdAt(), template.createdBy(), template.updatedAt(), template.updatedBy());
+                template.body(), template.active(), chromeResponse, template.groupingDimension().name(),
+                logoResponse, template.warnings(), template.createdAt(), template.createdBy(),
+                template.updatedAt(), template.updatedBy());
     }
 
     private static TemplateSummaryResponse toSummaryResponse(Template template) {

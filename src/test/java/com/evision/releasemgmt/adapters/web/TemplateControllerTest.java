@@ -8,6 +8,7 @@ import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.RenderBoundExceededException;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
@@ -65,7 +66,8 @@ class TemplateControllerTest {
     private static Template template(UUID id, boolean active) {
         Instant now = Instant.parse("2026-08-09T09:00:00Z");
         return new Template(id, "Standard notes", TemplateDocumentType.RELEASE_NOTES, "Body", active,
-                ChromeFields.empty(), null, List.of(), now, "557058:abc-123", now, "557058:abc-123");
+                ChromeFields.empty(), GroupingDimension.ISSUE_TYPE, null, List.of(), now, "557058:abc-123",
+                now, "557058:abc-123");
     }
 
     @Test
@@ -122,7 +124,7 @@ class TemplateControllerTest {
     @Test
     void saveContentWithAMalformedChromeFieldReturns422WithTheFieldNamedInTheDetail() throws Exception {
         UUID id = UUID.randomUUID();
-        when(templateService.saveContent(eq(id), any(), any(), any()))
+        when(templateService.saveContent(eq(id), any(), any(), any(), any()))
                 .thenThrow(new TemplateMalformedException("Cover title",
                         "Partials are not supported: {{>header}}."));
 
@@ -138,7 +140,7 @@ class TemplateControllerTest {
     @Test
     void saveContentWithAMalformedBodyReturnsTheDetailWithNoFieldPrefix() throws Exception {
         UUID id = UUID.randomUUID();
-        when(templateService.saveContent(eq(id), any(), any(), any()))
+        when(templateService.saveContent(eq(id), any(), any(), any(), any()))
                 .thenThrow(new TemplateMalformedException("Body", "Partials are not supported: {{>x}}."));
 
         mockMvc.perform(put("/api/templates/{id}/content", id).with(csrf()).with(authenticated())
@@ -151,7 +153,7 @@ class TemplateControllerTest {
     @Test
     void saveContentWithARenderBoundBreachReturns422RenderBoundExceeded() throws Exception {
         UUID id = UUID.randomUUID();
-        when(templateService.saveContent(eq(id), any(), any(), any()))
+        when(templateService.saveContent(eq(id), any(), any(), any(), any()))
                 .thenThrow(new RenderBoundExceededException());
 
         mockMvc.perform(put("/api/templates/{id}/content", id).with(csrf()).with(authenticated())

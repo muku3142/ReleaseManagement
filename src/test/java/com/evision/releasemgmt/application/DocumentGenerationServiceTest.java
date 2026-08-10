@@ -151,6 +151,20 @@ class DocumentGenerationServiceTest {
         assertThat(snapshotCaptor().chrome().coverTitle()).isEqualTo("Version 2026.08");
     }
 
+    // D-05-04/D-05-53: generation must read the dimension off the same Template instance whose name
+    // and body it copies onto the snapshot - never a hardcoded default.
+    @Test
+    void generationGroupsByTheActiveTemplatesDimension() {
+        Release release = openRelease();
+        Template componentGroupedTemplate = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body",
+                ChromeFields.empty(), GroupingDimension.COMPONENT);
+        stubHappyPath(release, componentGroupedTemplate, 1);
+
+        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, "actor-1");
+
+        verify(assembler).assemble(release, GroupingDimension.COMPONENT);
+    }
+
     @Test
     void boundBreachPropagates() {
         Release release = openRelease();
@@ -178,7 +192,7 @@ class DocumentGenerationServiceTest {
     private void stubHappyPath(Release release, Template template, int nextRevision) {
         when(releaseRepository.findById(release.id())).thenReturn(Optional.of(release));
         when(templateRepository.findActive(template.documentType())).thenReturn(Optional.of(template));
-        when(assembler.assemble(release, GroupingDimension.ISSUE_TYPE)).thenReturn(SampleReleaseView.instance());
+        when(assembler.assemble(release, template.groupingDimension())).thenReturn(SampleReleaseView.instance());
         when(templateRepository.findLogo(template.id())).thenReturn(Optional.empty());
         when(snapshotRepository.nextRevision(release.id(), template.documentType())).thenReturn(nextRevision);
         when(snapshotRepository.create(any(), any())).thenAnswer(inv -> inv.getArgument(0));
@@ -191,8 +205,13 @@ class DocumentGenerationServiceTest {
     }
 
     private static Template activeTemplate(TemplateDocumentType documentType, String body, ChromeFields chrome) {
+        return activeTemplate(documentType, body, chrome, GroupingDimension.ISSUE_TYPE);
+    }
+
+    private static Template activeTemplate(TemplateDocumentType documentType, String body, ChromeFields chrome,
+                                            GroupingDimension groupingDimension) {
         Instant now = Instant.now();
-        return new Template(UUID.randomUUID(), "Standard notes", documentType, body, true, chrome, null,
-                List.of(), now, "actor-0", now, "actor-0");
+        return new Template(UUID.randomUUID(), "Standard notes", documentType, body, true, chrome,
+                groupingDimension, null, List.of(), now, "actor-0", now, "actor-0");
     }
 }
