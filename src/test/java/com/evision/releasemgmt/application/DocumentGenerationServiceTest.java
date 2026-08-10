@@ -7,6 +7,7 @@ import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.RenderBoundExceededException;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
@@ -156,7 +157,7 @@ class DocumentGenerationServiceTest {
         Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body", ChromeFields.empty());
         when(releaseRepository.findById(release.id())).thenReturn(Optional.of(release));
         when(templateRepository.findActive(template.documentType())).thenReturn(Optional.of(template));
-        when(assembler.assemble(release)).thenReturn(SampleReleaseView.instance());
+        when(assembler.assemble(release, GroupingDimension.ISSUE_TYPE)).thenReturn(SampleReleaseView.instance());
         RenderService boundBreachingRenderService = mock(RenderService.class);
         when(boundBreachingRenderService.render(any(), any(), any())).thenThrow(new RenderBoundExceededException());
         DocumentGenerationService serviceWithBoundBreach = new DocumentGenerationService(releaseRepository,
@@ -177,7 +178,7 @@ class DocumentGenerationServiceTest {
     private void stubHappyPath(Release release, Template template, int nextRevision) {
         when(releaseRepository.findById(release.id())).thenReturn(Optional.of(release));
         when(templateRepository.findActive(template.documentType())).thenReturn(Optional.of(template));
-        when(assembler.assemble(release)).thenReturn(SampleReleaseView.instance());
+        when(assembler.assemble(release, GroupingDimension.ISSUE_TYPE)).thenReturn(SampleReleaseView.instance());
         when(templateRepository.findLogo(template.id())).thenReturn(Optional.empty());
         when(snapshotRepository.nextRevision(release.id(), template.documentType())).thenReturn(nextRevision);
         when(snapshotRepository.create(any(), any())).thenAnswer(inv -> inv.getArgument(0));

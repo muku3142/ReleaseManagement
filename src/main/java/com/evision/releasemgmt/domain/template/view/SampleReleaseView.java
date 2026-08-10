@@ -9,17 +9,17 @@ public final class SampleReleaseView {
 
     private static final ItemView TICKET_NO_LINKED_CODE = new ItemView(
             "Fix duplicate invoice lines", false, "CNV-2896", "Bug", "Done", "Fixed",
-            "Dev Person", "Reporter Person",
+            "Dev Person", "Reporter Person", "Matching Module",
             "Invoice lines were duplicated when a shipment was split.", "",
             List.of(new CommentView("Verified on staging.")), List.of(), List.of());
 
     private static final ItemView TICKET_UNRESOLVED = new ItemView(
             "Add export button", false, "CNV-2901", "Story", "Done", "",
-            "", "Reporter Person", "Adds a CSV export.", "",
+            "", "Reporter Person", "", "Adds a CSV export.", "",
             List.of(), List.of(), List.of());
 
     private static final ItemView MANUAL_ITEM = new ItemView(
-            "Run migration V4", true, "", "", "", "", "", "",
+            "Run migration V4", true, "", "", "", "", "", "", "",
             "Apply the template schema migration before deploy.", "Database script",
             List.of(), List.of(), List.of());
 

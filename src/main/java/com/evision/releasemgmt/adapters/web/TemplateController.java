@@ -15,6 +15,7 @@ import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.application.ReleaseViewAssembler;
 import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.domain.template.ChromeFields;
+import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.PlaceholderCatalog;
 import com.evision.releasemgmt.domain.template.Template;
@@ -94,9 +95,12 @@ public class TemplateController {
     // serves the *data* the browser renders - the same view-model the server render uses - so the two
     // renderers cannot disagree about the data even though D-04-10 accepts that they may disagree about
     // rendering. It is deliberately not a server-side render endpoint; that was deferred.
+    //
+    // D-05-04: this preview is not tied to any one template, so it always previews against the
+    // ISSUE_TYPE default rather than reading a groupingDimension the caller hasn't chosen yet.
     @GetMapping("/render-context/{releaseId}")
     public ReleaseView renderContext(@PathVariable UUID releaseId) {
-        return assembler.assemble(releaseService.get(releaseId));
+        return assembler.assemble(releaseService.get(releaseId), GroupingDimension.ISSUE_TYPE);
     }
 
     @GetMapping("/{templateId}")

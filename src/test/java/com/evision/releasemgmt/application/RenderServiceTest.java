@@ -56,7 +56,7 @@ class RenderServiceTest {
         List<CommentView> comments = List.of(
                 new CommentView("one"), new CommentView("two"),
                 new CommentView("three"), new CommentView("four"));
-        ItemView item = new ItemView("Title", false, "KEY-1", "Bug", "Open", "", "", "", "", "",
+        ItemView item = new ItemView("Title", false, "KEY-1", "Bug", "Open", "", "", "", "", "", "",
                 comments, List.of(), List.of());
         ReleaseView view = new ReleaseView("R", "1.0", "OPEN", "", "", "", "",
                 List.of(item), List.of());
@@ -111,7 +111,7 @@ class RenderServiceTest {
     private static ReleaseView releaseViewWithItems(int count) {
         List<ItemView> items = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            items.add(new ItemView("Title " + i, false, "KEY-" + i, "Bug", "Open", "", "", "", "", "",
+            items.add(new ItemView("Title " + i, false, "KEY-" + i, "Bug", "Open", "", "", "", "", "", "",
                     List.of(), List.of(), List.of()));
         }
         return new ReleaseView("R", "1.0", "OPEN", "", "", "", "", items, List.of());

@@ -5,6 +5,7 @@ import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemCategory;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
+import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.view.CommentView;
 import com.evision.releasemgmt.domain.template.view.GroupView;
 import com.evision.releasemgmt.domain.template.view.ItemView;
@@ -24,7 +25,7 @@ import java.util.TreeMap;
 @Service
 public class ReleaseViewAssembler {
 
-    public ReleaseView assemble(Release release) {
+    public ReleaseView assemble(Release release, GroupingDimension dimension) {
         List<ItemView> ticketItems = release.items().stream()
                 .sorted(Comparator.comparing(ReleaseItem::ticketKey))
                 .map(ReleaseViewAssembler::mapTicketItem)
@@ -48,24 +49,24 @@ public class ReleaseViewAssembler {
                 instantOrEmpty(release.frozenAt()),
                 instantOrEmpty(release.lastRefreshedAt()),
                 List.copyOf(items),
-                groups(items));
+                groups(items, dimension));
     }
 
     // D-04-02: Mustache is logic-less and cannot group, so grouping is always a view-model concern.
-    // Issue type is DOC-02's stated default and the only dimension currently fetched (D-02-02);
-    // manual items have a category instead, so they group by that. Phase 5 adds component/epic/label
-    // as further dimensions on this same shape rather than reshaping the view-model.
-    private static List<GroupView> groups(List<ItemView> items) {
+    // Issue type is DOC-02's stated default; Phase 5 (D-05-04) added component as the one other
+    // supported dimension - epic and label were considered and declined (D-05-02). Manual items
+    // always have a category instead, so they group by that regardless of dimension.
+    private static List<GroupView> groups(List<ItemView> items, GroupingDimension dimension) {
         List<GroupView> result = new ArrayList<>();
 
-        // Issue-type groups first, sorted alphabetically by group name.
-        Map<String, List<ItemView>> byIssueType = new TreeMap<>();
+        // Ticket-backed groups first, sorted alphabetically by group name.
+        Map<String, List<ItemView>> byKey = new TreeMap<>();
         for (ItemView item : items) {
             if (!item.isManual()) {
-                byIssueType.computeIfAbsent(item.issueType(), k -> new ArrayList<>()).add(item);
+                byKey.computeIfAbsent(groupKey(item, dimension), k -> new ArrayList<>()).add(item);
             }
         }
-        byIssueType.forEach((issueType, groupItems) -> result.add(new GroupView(issueType, List.copyOf(groupItems))));
+        byKey.forEach((key, groupItems) -> result.add(new GroupView(key, List.copyOf(groupItems))));
 
         // Then manual-category groups, in ManualItemCategory declaration order.
         for (ManualItemCategory category : ManualItemCategory.values()) {
@@ -81,6 +82,16 @@ public class ReleaseViewAssembler {
         return List.copyOf(result);
     }
 
+    // D-05-03: the no-component display default is applied HERE, not in the Jira adapter and not
+    // in the database. The stored snapshot records what Jira actually said - including nothing -
+    // and the view-model is where a display default belongs.
+    private static String groupKey(ItemView item, GroupingDimension dimension) {
+        if (dimension == GroupingDimension.COMPONENT) {
+            return item.component().isBlank() ? "Uncategorised" : item.component();
+        }
+        return item.issueType();
+    }
+
     private static ItemView mapTicketItem(ReleaseItem item) {
         TicketDetail ticket = item.ticket();
         List<CommentView> comments = ticket.comments().stream().map(CommentView::new).toList();
@@ -94,6 +105,7 @@ public class ReleaseViewAssembler {
                 nullToEmpty(ticket.resolution()),
                 nullToEmpty(ticket.assignee()),
                 nullToEmpty(ticket.reporter()),
+                nullToEmpty(ticket.component()),
                 nullToEmpty(ticket.description()),
                 "",
                 comments,
@@ -105,7 +117,7 @@ public class ReleaseViewAssembler {
         return new ItemView(
                 nullToEmpty(item.title()),
                 true,
-                "", "", "", "", "", "",
+                "", "", "", "", "", "", "",
                 nullToEmpty(item.description()),
                 categoryLabel(item.category()),
                 List.of(),

@@ -6,7 +6,7 @@ import java.util.List;
 // loop only the tickets and silently drop every config change and database script from a runbook.
 // Ticket-only fields are "" for manual items; category is "" for ticket items.
 public record ItemView(String title, boolean isManual, String key, String issueType, String status,
-                       String resolution, String assignee, String reporter, String description,
-                       String category, List<CommentView> comments, List<CommitView> commits,
-                       List<PullRequestView> pullRequests) {
+                       String resolution, String assignee, String reporter, String component,
+                       String description, String category, List<CommentView> comments,
+                       List<CommitView> commits, List<PullRequestView> pullRequests) {
 }

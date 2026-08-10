@@ -31,8 +31,7 @@ public final class PlaceholderCatalog {
                     "Loops over every release item, ticket-backed and manual, in one unified collection.",
                     List.of("Body only")),
             new PlaceholderEntry(PlaceholderScope.ROOT, "groups", PlaceholderKind.SECTION, PlaceholderScope.GROUP,
-                    "Loops over the release's items pre-grouped by issue type for tickets and by category "
-                            + "for manual items.",
+                    "Items pre-grouped by this template's chosen dimension (issue type or component).",
                     List.of("Body only")),
 
             // ITEM
@@ -57,6 +56,9 @@ public final class PlaceholderCatalog {
                     List.of("Body only", "Ticket only")),
             new PlaceholderEntry(PlaceholderScope.ITEM, "reporter", PlaceholderKind.VARIABLE, null,
                     "The reporter's display name. Empty for manual items.", List.of("Body only", "Ticket only")),
+            new PlaceholderEntry(PlaceholderScope.ITEM, "component", PlaceholderKind.VARIABLE, null,
+                    "The ticket's Jira component, or 'Uncategorised' if none is set. Empty for "
+                            + "manual items.", List.of("Body only", "Ticket only")),
             new PlaceholderEntry(PlaceholderScope.ITEM, "description", PlaceholderKind.VARIABLE, null,
                     "The ticket description or the manual item's description, already flattened to Markdown.",
                     List.of("Body only")),
