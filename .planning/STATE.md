@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 waves 1-8 executed; Phase 5 context gathered
-last_updated: "2026-08-10T09:00:43.562Z"
+stopped_at: Phase 5 UI-SPEC approved
+last_updated: "2026-08-10T09:40:05.300Z"
 last_activity: 2026-08-09 -- Phase 4 execution started
 progress:
   total_phases: 7
@@ -118,6 +118,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-10T09:00:43.556Z
-Stopped at: Phase 4 waves 1-8 executed; Phase 5 context gathered
-Resume file: .planning/phases/05-document-generation/05-CONTEXT.md
+Last session: 2026-08-10T09:40:05.295Z
+Stopped at: Phase 5 UI-SPEC approved
+Resume file: .planning/phases/05-document-generation/05-UI-SPEC.md
