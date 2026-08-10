@@ -63,6 +63,10 @@ class DocxAstWalker {
     private static final BigInteger NUM_ID_BULLET = BigInteger.valueOf(1);
     private static final BigInteger NUM_ID_DECIMAL = BigInteger.valueOf(2);
     private static final BigInteger LIST_INDENT_TWIPS = BigInteger.valueOf(720);
+    // WR-03: DocxExportAdapter.NUMBERING_XML only defines ilvl 0-4 for each abstractNum - a list
+    // nested deeper than that has no defined numbering level to reference, so depth is capped here
+    // to stay in lockstep with what is actually defined.
+    private static final int MAX_LIST_DEPTH = 4;
 
     private final ObjectFactory factory = Context.getWmlObjectFactory();
 
@@ -201,7 +205,7 @@ class DocxAstWalker {
         }
         PPrBase.NumPr numPr = factory.createPPrBaseNumPr();
         PPrBase.NumPr.Ilvl ilvl = factory.createPPrBaseNumPrIlvl();
-        ilvl.setVal(BigInteger.valueOf(depth));
+        ilvl.setVal(BigInteger.valueOf(Math.min(depth, MAX_LIST_DEPTH)));
         numPr.setIlvl(ilvl);
         PPrBase.NumPr.NumId numIdElement = factory.createPPrBaseNumPrNumId();
         numIdElement.setVal(numId);

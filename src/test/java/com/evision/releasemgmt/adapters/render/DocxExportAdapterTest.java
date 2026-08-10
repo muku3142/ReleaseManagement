@@ -95,6 +95,31 @@ class DocxExportAdapterTest {
         assertThat(numIds).containsExactlyInAnyOrder(1, 2);
     }
 
+    // WR-03: DocxAstWalker.appendListItem sets ilvl = depth for a nested list, so the numbering
+    // definition must actually define a level for every depth the walker can emit - otherwise Word
+    // sees an undefined level reference and nested lists render (or open) incorrectly.
+    @Test
+    void nestedListsUseNumberingLevelsThatAreActuallyDefined() throws Exception {
+        String markdown = "- top\n  - nested\n    - deeper\n";
+        byte[] bytes = adapter.toDocx(markdown, ChromeFields.empty(), null);
+
+        MainDocumentPart mainPart = mainPart(bytes);
+        List<Integer> ilvls = paragraphsOf(mainPart).stream()
+                .filter(p -> p.getPPr() != null && p.getPPr().getNumPr() != null)
+                .map(p -> p.getPPr().getNumPr().getIlvl().getVal().intValue())
+                .toList();
+        assertThat(ilvls).contains(0, 1, 2);
+
+        org.docx4j.wml.Numbering numbering = mainPart.getNumberingDefinitionsPart().getJaxbElement();
+        org.docx4j.wml.Numbering.AbstractNum bulletAbstractNum = numbering.getAbstractNum().stream()
+                .filter(a -> a.getAbstractNumId().equals(java.math.BigInteger.ZERO))
+                .findFirst().orElseThrow();
+        java.util.Set<Integer> definedLevels = bulletAbstractNum.getLvl().stream()
+                .map(lvl -> lvl.getIlvl().intValue())
+                .collect(java.util.stream.Collectors.toSet());
+        assertThat(definedLevels).containsAll(ilvls);
+    }
+
     @Test
     void markdownTableBecomesARealTbl() throws Exception {
         String markdown = """

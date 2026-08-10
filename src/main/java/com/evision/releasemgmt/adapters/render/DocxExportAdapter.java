@@ -53,6 +53,11 @@ public class DocxExportAdapter implements DocxExportPort {
     // mapping, not a safe fit for the fixed ids DocxAstWalker emits. This is the one permitted
     // raw-XML string in the whole export path: a fixed, project-authored constant with no user
     // data ever concatenated into it.
+    //
+    // WR-03: DocxAstWalker.appendListItem recurses into a nested list one ilvl deeper per level,
+    // so ilvl 0 alone is not enough - a Markdown list nested inside a list item would reference an
+    // undefined level. MAX_LIST_DEPTH below caps how deep the walker's ilvl goes to match the
+    // levels defined here (0-4), so the two stay in lockstep.
     private static final String NUMBERING_XML = """
             <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
             <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
@@ -64,6 +69,34 @@ public class DocxExportAdapter implements DocxExportPort {
                   <w:lvlJc w:val="left"/>
                   <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
                 </w:lvl>
+                <w:lvl w:ilvl="1">
+                  <w:start w:val="1"/>
+                  <w:numFmt w:val="bullet"/>
+                  <w:lvlText w:val="&#9702;"/>
+                  <w:lvlJc w:val="left"/>
+                  <w:pPr><w:ind w:left="1440" w:hanging="360"/></w:pPr>
+                </w:lvl>
+                <w:lvl w:ilvl="2">
+                  <w:start w:val="1"/>
+                  <w:numFmt w:val="bullet"/>
+                  <w:lvlText w:val="&#9642;"/>
+                  <w:lvlJc w:val="left"/>
+                  <w:pPr><w:ind w:left="2160" w:hanging="360"/></w:pPr>
+                </w:lvl>
+                <w:lvl w:ilvl="3">
+                  <w:start w:val="1"/>
+                  <w:numFmt w:val="bullet"/>
+                  <w:lvlText w:val="&#8226;"/>
+                  <w:lvlJc w:val="left"/>
+                  <w:pPr><w:ind w:left="2880" w:hanging="360"/></w:pPr>
+                </w:lvl>
+                <w:lvl w:ilvl="4">
+                  <w:start w:val="1"/>
+                  <w:numFmt w:val="bullet"/>
+                  <w:lvlText w:val="&#9702;"/>
+                  <w:lvlJc w:val="left"/>
+                  <w:pPr><w:ind w:left="3600" w:hanging="360"/></w:pPr>
+                </w:lvl>
               </w:abstractNum>
               <w:abstractNum w:abstractNumId="1">
                 <w:lvl w:ilvl="0">
@@ -72,6 +105,34 @@ public class DocxExportAdapter implements DocxExportPort {
                   <w:lvlText w:val="%1."/>
                   <w:lvlJc w:val="left"/>
                   <w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>
+                </w:lvl>
+                <w:lvl w:ilvl="1">
+                  <w:start w:val="1"/>
+                  <w:numFmt w:val="decimal"/>
+                  <w:lvlText w:val="%2."/>
+                  <w:lvlJc w:val="left"/>
+                  <w:pPr><w:ind w:left="1440" w:hanging="360"/></w:pPr>
+                </w:lvl>
+                <w:lvl w:ilvl="2">
+                  <w:start w:val="1"/>
+                  <w:numFmt w:val="decimal"/>
+                  <w:lvlText w:val="%3."/>
+                  <w:lvlJc w:val="left"/>
+                  <w:pPr><w:ind w:left="2160" w:hanging="360"/></w:pPr>
+                </w:lvl>
+                <w:lvl w:ilvl="3">
+                  <w:start w:val="1"/>
+                  <w:numFmt w:val="decimal"/>
+                  <w:lvlText w:val="%4."/>
+                  <w:lvlJc w:val="left"/>
+                  <w:pPr><w:ind w:left="2880" w:hanging="360"/></w:pPr>
+                </w:lvl>
+                <w:lvl w:ilvl="4">
+                  <w:start w:val="1"/>
+                  <w:numFmt w:val="decimal"/>
+                  <w:lvlText w:val="%5."/>
+                  <w:lvlJc w:val="left"/>
+                  <w:pPr><w:ind w:left="3600" w:hanging="360"/></w:pPr>
                 </w:lvl>
               </w:abstractNum>
               <w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>
