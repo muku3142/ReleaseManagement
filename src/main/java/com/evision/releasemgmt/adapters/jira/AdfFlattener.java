@@ -29,6 +29,12 @@ public final class AdfFlattener {
                 walkChildren(node, out, listDepth, depth, state);
                 out.append('\n');
             }
+            case "heading" -> {
+                int level = Math.clamp(node.path("attrs").path("level").asInt(1), 1, 6);
+                out.append("#".repeat(level)).append(' ');
+                walkChildren(node, out, listDepth, depth + 1, state);
+                out.append('\n');
+            }
             case "text" -> out.append(applyMarks(node));
             case "hardBreak" -> out.append('\n');
             case "bulletList", "orderedList" -> walkChildren(node, out, listDepth + 1, depth + 1, state);
@@ -39,6 +45,9 @@ public final class AdfFlattener {
             case "codeBlock" -> {
                 out.append("```\n");
                 walkChildren(node, out, listDepth, depth + 1, state);
+                if (out.charAt(out.length() - 1) != '\n') {
+                    out.append('\n');
+                }
                 out.append("```\n");
             }
             default -> {
