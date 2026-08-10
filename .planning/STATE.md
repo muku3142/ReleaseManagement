@@ -50,7 +50,7 @@ part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
 names, table widening, and frontend tests moved to `frontend/tests/`.
 
 Status: Executing Phase 05
-Last activity: 2026-08-10 -- Phase 05 execution started
+Last activity: 2026-08-10 -- Completed quick task 260810-wc3: Fix AdfFlattener heading and code-block newline defects
 
 Progress: [████████░░] 86%
 
@@ -107,6 +107,12 @@ None yet.
 ### Blockers/Concerns
 
 - Phase 2's Jira→ADO link-discovery spike outcome will determine Phase 6's exact scope (dev-status mechanism vs. commit/PR key-parsing fallback, or both) — revisit Phase 6 plan-phase once the spike lands.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260810-wc3 | Fix AdfFlattener heading and code-block newline defects | 2026-08-10 | 1396ffc | [260810-wc3-fix-adfflattener-heading-and-code-block-](./quick/260810-wc3-fix-adfflattener-heading-and-code-block-/) |
 
 ## Deferred Items
 
