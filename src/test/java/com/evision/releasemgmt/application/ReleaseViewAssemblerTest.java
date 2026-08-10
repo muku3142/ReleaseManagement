@@ -23,11 +23,11 @@ class ReleaseViewAssemblerTest {
 
     private static final TicketDetail BUG_TICKET = new TicketDetail(
             "ABC-2", "Bug summary", "Bug", "Open", null, null, "Reporter Person",
-            List.of(), "Bug description", List.of(), 0);
+            List.of(), null, "Bug description", List.of(), 0);
 
     private static final TicketDetail STORY_TICKET = new TicketDetail(
             "ABC-1", "Story summary", "Story", "Done", "Fixed", "Dev Person", "Reporter Person",
-            List.of(), "Story description", List.of(), 0);
+            List.of(), null, "Story description", List.of(), 0);
 
     @Test
     void producesThreeItemsWithManualLast() {

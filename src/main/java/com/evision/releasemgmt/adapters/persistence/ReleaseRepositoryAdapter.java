@@ -211,6 +211,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         entity.setAssignee(ticket.assignee());
         entity.setReporter(ticket.reporter());
         entity.setFixVersions(ticket.fixVersions());
+        entity.setComponent(ticket.component());
         entity.setDescription(ticket.description());
         entity.setComments(ticket.comments());
         entity.setCommentTotal(ticket.commentTotal());
@@ -250,8 +251,8 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
 
     private static ReleaseItem toDomain(ReleaseTicketItemEntity e) {
         TicketDetail ticket = new TicketDetail(e.getTicketKey(), e.getSummary(), e.getIssueType(), e.getStatus(),
-                e.getResolution(), e.getAssignee(), e.getReporter(), e.getFixVersions(), e.getDescription(),
-                e.getComments(), e.getCommentTotal());
+                e.getResolution(), e.getAssignee(), e.getReporter(), e.getFixVersions(), e.getComponent(),
+                e.getDescription(), e.getComments(), e.getCommentTotal());
         return new ReleaseItem(ticket, e.getAddedAt());
     }
 

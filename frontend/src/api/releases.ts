@@ -42,6 +42,7 @@ export type ReleaseItem = {
   assignee: string | null;
   reporter: string | null;
   fixVersions: string[];
+  component: string | null;
   description: string;
   comments: string[];
   commentTotal: number;

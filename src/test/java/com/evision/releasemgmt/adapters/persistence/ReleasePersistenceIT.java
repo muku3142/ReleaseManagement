@@ -52,8 +52,12 @@ class ReleasePersistenceIT {
     }
 
     private static ReleaseItem item(String key) {
+        return itemWithComponent(key, null);
+    }
+
+    private static ReleaseItem itemWithComponent(String key, String component) {
         return new ReleaseItem(new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed",
-                "Dev Person", "Reporter Person", List.of("2026.08"),
+                "Dev Person", "Reporter Person", List.of("2026.08"), component,
                 "Ship it", List.of("Looks good", "He said \"ship it\""), 2), Instant.now());
     }
 
@@ -188,7 +192,7 @@ class ReleasePersistenceIT {
         Instant addedAt = repository.findById(release.id()).orElseThrow().items().get(0).addedAt();
 
         ReleaseItem updated = new ReleaseItem(new TicketDetail("CNV-1", "Summary CNV-1", "Bug", "In Progress",
-                "Fixed", "Dev Person", "Reporter Person", List.of("2026.08"), "Ship it",
+                "Fixed", "Dev Person", "Reporter Person", List.of("2026.08"), null, "Ship it",
                 List.of("Looks good", "He said \"ship it\""), 2), Instant.now());
         Instant refreshedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
@@ -199,6 +203,53 @@ class ReleasePersistenceIT {
         assertThat(storedItem.ticket().status()).isEqualTo("In Progress");
         assertThat(storedItem.addedAt()).isEqualTo(addedAt);
         assertThat(loaded.lastRefreshedAt()).isEqualTo(refreshedAt);
+    }
+
+    @Test
+    void componentRoundTripsThroughTheSnapshot() {
+        Release release = Release.create("Component Test", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(itemWithComponent("CNV-1", "Matching Module")));
+
+        ReleaseItem loadedItem = repository.findById(release.id()).orElseThrow().items().get(0);
+
+        assertThat(loadedItem.ticket().component()).isEqualTo("Matching Module");
+    }
+
+    @Test
+    void nullComponentRoundTripsAsNull() {
+        Release release = Release.create("Null Component Test", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(itemWithComponent("CNV-1", null)));
+
+        ReleaseItem loadedItem = repository.findById(release.id()).orElseThrow().items().get(0);
+
+        assertThat(loadedItem.ticket().component()).isNull();
+    }
+
+    @Test
+    void refreshOverwritesComponent() {
+        Release release = Release.create("Refresh Component Test", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(itemWithComponent("CNV-1", "Matching Module")));
+
+        repository.replaceItemSnapshots(release.id(),
+                List.of(itemWithComponent("CNV-1", "Security")), Instant.now());
+
+        ReleaseItem loadedItem = repository.findById(release.id()).orElseThrow().items().get(0);
+        assertThat(loadedItem.ticket().component()).isEqualTo("Security");
+    }
+
+    // D-05-03: a row that predates this column (or was written by a path that never learned the
+    // component) must keep NULL rather than something later silently backfilling it.
+    @Test
+    void existingRowsKeepNullComponentAfterMigration() {
+        Release release = Release.create("No Backfill Test", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(item("CNV-1")));
+
+        String component = jdbcTemplate.queryForObject(
+                "SELECT component FROM release_ticket_item WHERE release_id = ? AND ticket_key = 'CNV-1'",
+                String.class, release.id());
+
+        assertThat(component).isNull();
+        assertThat(repository.findById(release.id()).orElseThrow().items().get(0).ticket().component()).isNull();
     }
 
     @Test

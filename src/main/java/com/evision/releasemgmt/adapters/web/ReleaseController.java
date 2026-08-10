@@ -138,8 +138,8 @@ public class ReleaseController {
         return new ReleaseItemResponse(item.ticket().key(), item.ticket().summary(),
                 item.ticket().issueType(), item.ticket().status(), item.ticket().resolution(),
                 item.ticket().assignee(), item.ticket().reporter(), item.ticket().fixVersions(),
-                item.ticket().description(), item.ticket().comments(), item.ticket().commentTotal(),
-                item.addedAt());
+                item.ticket().component(), item.ticket().description(), item.ticket().comments(),
+                item.ticket().commentTotal(), item.addedAt());
     }
 
     private static ManualItemResponse toManualItemResponse(ManualItem item) {

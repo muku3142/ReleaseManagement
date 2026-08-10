@@ -42,7 +42,8 @@ class FieldMetadataServiceTest {
             new JiraField("reporter", "Reporter", false),
             new JiraField("description", "Description", false),
             new JiraField("comment", "Comment", false),
-            new JiraField("fixVersions", "Fix versions", false));
+            new JiraField("fixVersions", "Fix versions", false),
+            new JiraField("components", "Components", false));
 
     @BeforeEach
     void setUp() {
@@ -71,6 +72,7 @@ class FieldMetadataServiceTest {
         assertThat(resolved.get(TicketField.DESCRIPTION)).isEqualTo("description");
         assertThat(resolved.get(TicketField.COMMENT)).isEqualTo("comment");
         assertThat(resolved.get(TicketField.FIX_VERSIONS)).isEqualTo("fixVersions");
+        assertThat(resolved.get(TicketField.COMPONENT)).isEqualTo("components");
     }
 
     @Test
@@ -117,13 +119,14 @@ class FieldMetadataServiceTest {
                 new JiraField("description", "Description", false),
                 new JiraField("comment", "Comment", false),
                 new JiraField("fixVersions", "Fix versions", false),
+                new JiraField("components", "Components", false),
                 new JiraField("customfield_10001", "Story Points", true),
                 new JiraField("customfield_10002", "Story Points", true));
         when(fieldMetadataPort.fetchAllFields(any())).thenReturn(withCollision);
 
         Map<TicketField, String> resolved = service.resolve(Set.of(TicketField.values()));
 
-        assertThat(resolved).hasSize(9);
+        assertThat(resolved).hasSize(10);
     }
 
     @Test
@@ -155,12 +158,13 @@ class FieldMetadataServiceTest {
                 new JiraField("reporter", "Reporter", false),
                 new JiraField("description", "Description", false),
                 new JiraField("comment", "Comment", false),
-                new JiraField("fixVersions", "Fix versions", false));
+                new JiraField("fixVersions", "Fix versions", false),
+                new JiraField("components", "Components", false));
         when(fieldMetadataPort.fetchAllFields(any())).thenReturn(tenantFields);
 
         Map<TicketField, String> resolved = service.resolve(Set.of(TicketField.values()));
 
-        assertThat(resolved).hasSize(9);
+        assertThat(resolved).hasSize(10);
         assertThat(resolved).containsEntry(TicketField.RESOLUTION, "resolution");
     }
 
@@ -190,7 +194,7 @@ class FieldMetadataServiceTest {
 
         assertThatThrownBy(() -> service.resolve(Set.of(TicketField.values())))
                 .isInstanceOf(JiraTicketReadException.class);
-        // One refresh attempt per missing name, then a single throw — not nine separate calls.
-        verify(fieldMetadataPort, times(7)).fetchAllFields(any());
+        // One refresh attempt per missing name, then a single throw — not ten separate calls.
+        verify(fieldMetadataPort, times(8)).fetchAllFields(any());
     }
 }

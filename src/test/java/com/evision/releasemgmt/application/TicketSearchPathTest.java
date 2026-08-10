@@ -57,7 +57,8 @@ class TicketSearchPathTest {
               {"id":"reporter","name":"Reporter","custom":false},
               {"id":"description","name":"Description","custom":false},
               {"id":"comment","name":"Comment","custom":false},
-              {"id":"fixVersions","name":"Fix versions","custom":false}
+              {"id":"fixVersions","name":"Fix versions","custom":false},
+              {"id":"components","name":"Components","custom":false}
             ]
             """;
 
