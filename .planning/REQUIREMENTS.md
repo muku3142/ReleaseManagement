@@ -47,7 +47,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 ### Document Generation
 
 - [ ] **DOC-01**: Release manager can generate release notes for a release from its template
-- [ ] **DOC-02**: Release notes group tickets by issue type by default, and a template can group by component, epic or label instead
+- [ ] **DOC-02**: Release notes group tickets by issue type by default, and a template can group by component instead. Narrowed 2026-08-10 by D-05-02: the original wording also named epic and label; both are out of scope for v1 — see the Phase 5 note below
 - [ ] **DOC-03**: Release manager can generate a deployment runbook with distinct, clearly-labelled sections for deploy steps, post-deploy validation, and rollback with explicit trigger conditions — authored as template content. Superseded 2026-08-10: originally "whose data model provides distinct places for…"; see the Phase 5 note below
 - [ ] **DOC-04**: Release manager can generate an approval/change document with clearly-labelled risk, impact and backout-plan sections — authored as template content. Superseded 2026-08-10: originally "whose data model provides risk, impact and backout-plan fields"; see the Phase 5 note below
 - [ ] **DOC-05**: Release manager can export any generated document as PDF
@@ -82,7 +82,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 
 Quality attributes that apply across every screen rather than mapping to a single phase.
 
-- [ ] **UX-01**: The interface supports drag-and-drop wherever ordering or moving is the natural gesture — reordering deploy steps in a runbook, reordering template sections, and moving items into or between groupings on a release — with a keyboard-accessible equivalent for every drag interaction
+- [x] **UX-01**: RESOLVED 2026-08-10 — moved to v2. Originally: "The interface supports drag-and-drop wherever ordering or moving is the natural gesture — reordering deploy steps in a runbook, reordering template sections, and moving items into or between groupings on a release — with a keyboard-accessible equivalent for every drag interaction." No surface in v1 has a consumer for a stored order; see the Phase 5 note below
 
 ## v2 Requirements
 
@@ -201,11 +201,11 @@ Which phases cover which requirements. Populated during roadmap creation.
 | AUDIT-02 | Phase 7 | Pending |
 | AUDIT-03 | Phase 7 | Pending |
 | AUDIT-04 | Phase 7 | Pending |
-| UX-01 | Phases 2-7 (cross-cutting) | Pending |
+| UX-01 | Phase 5 (resolved) | Deferred to v2 |
 
 **Coverage:**
 - v1 requirements: 47 total (AUTH 4 + JIRA 6 + REL 6 + TMPL 8 + DOC 9 + ADO 5 + DEPL 4 + AUDIT 4 + UX 1) — was 40; added 2026-07-31: TMPL-08/TMPL-09/DOC-08 (document chrome), REL-08 (manual release items), AUDIT-04 (cross-release deployment history), UX-01 (drag-and-drop). Plus DOC-09 (cross-release documentation readiness). Analytics (ANLY-01..06) was raised and then DROPPED the same day — Jira ships those reports; this tool must answer what Jira cannot.
-- Mapped to phases: 47/47 ✓ (UX-01 is cross-cutting by nature and maps to every frontend phase rather than one)
+- Mapped to phases: 47/47 ✓ (UX-01 resolved to v2 in Phase 5 — see the note below)
 - Unmapped: 0 ✓
 
 ### Document chrome (added 2026-07-31)
@@ -254,6 +254,40 @@ migration plus a form screen), and a narrower version adding only the three appr
 
 **v2 candidate:** per-release values for the approval scalars, which is the case where boilerplate is
 least defensible because a human signs the result.
+
+### Grouping dimensions and UX-01 (resolved 2026-08-10)
+
+**DOC-02 narrowed to component only.** D-05-02 takes `component` and nothing else. Component is a
+plain field on the Jira issue needing no parent-link resolution, and it is the dimension the release
+manager's real `Orchstro 4.2.0 Release Notes.docx` actually groups by ("Swift Day Screen",
+"Matching Module", "Security"). Epic needs a parent-link resolution step and label is a free-text
+multi-value field; neither has a document asking for it. Both remain additive if wanted later — the
+`{{#groups}}` / `{{groupName}}` shape does not change, only which field keys the grouping. DOC-02 was
+reworded rather than left partly unmet, the same way DOC-03 and DOC-04 were.
+
+**UX-01 moved to v2, decided rather than deferred again.** UX-01 was deferred from Phase 3 (D-03-04)
+and again from Phase 4 (D-04-04). D-05-11 required a decision this phase rather than a third
+deferral. The decision is to move it to v2, on three grounds:
+
+1. **Its last concretely-scoped consumer is gone.** D-05-01 made runbook deploy steps static template
+   text, so there is no structured list of steps to reorder.
+2. **The remaining candidate was already declined on reasoning that still holds.** D-03-04 declined
+   item reordering because "the ordering that actually matters is the ordering inside a generated
+   document, which is template-driven at generation time". That is now more true, not less: grouping
+   is a per-template setting (D-05-04) and within-group order is deterministic.
+3. **Nothing would read the output.** No stored item order exists in the view-model, in any template,
+   or in any generated document. Building a drag-and-drop reorder whose result nothing consumes is
+   precisely the speculative work CLAUDE.md's engineering principles rule out.
+
+**What v1 does owe, and does deliver:** every interactive element Phase 5 adds — readiness-pill
+links, Generate/Regenerate/Export buttons, the revision `<select>`, the revision-history disclosure —
+is a native HTML element, keyboard-operable with no custom gesture layer. **No drag interaction
+exists anywhere in v1**, so no keyboard equivalent is owed.
+
+**If v2 revives it,** the smallest correct shape is recorded in `05-UI-SPEC.md`: a `position` integer
+on `release_ticket_item`/`release_manual_item`, a reorder endpoint, and per-row "Move up"/"Move down"
+buttons (`aria-label="Move {item} up"`) shipped *alongside* any drag handle, never a drag-only
+control.
 
 ### Evidence notes for Phase 1 requirements
 
