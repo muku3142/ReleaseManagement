@@ -13,6 +13,7 @@ import org.docx4j.openpackaging.parts.WordprocessingML.HeaderPart;
 import org.docx4j.openpackaging.parts.WordprocessingML.MainDocumentPart;
 import org.docx4j.openpackaging.parts.WordprocessingML.NumberingDefinitionsPart;
 import org.docx4j.openpackaging.parts.Part;
+import org.docx4j.openpackaging.parts.PartName;
 import org.docx4j.relationships.Relationship;
 import org.docx4j.wml.Body;
 import org.docx4j.wml.BooleanDefaultTrue;
@@ -199,20 +200,32 @@ public class DocxExportAdapter implements DocxExportPort {
         }
 
         if (chrome.headerText() != null && !chrome.headerText().isBlank()) {
-            HeaderPart defaultHeader = new HeaderPart();
+            // Each header/footer part needs its OWN PartName: the no-arg constructor leaves docx4j
+            // to fall back to one fixed default name per content type, so a second HeaderPart
+            // silently overwrites the first in the package's part map (part name collision), which
+            // then fails at save() with "part store has changed" - not a compile-time or even an
+            // immediately-obvious runtime signal.
+            HeaderPart defaultHeader = new HeaderPart(new PartName("/word/header1.xml"));
             defaultHeader.getContent().add(plainParagraph(chrome.headerText()));
             addHeaderReference(mainDocumentPart, sectPr, defaultHeader, HdrFtrRef.DEFAULT);
         }
         if (chrome.coverEnabled()) {
-            HeaderPart firstHeader = new HeaderPart();
+            HeaderPart firstHeader = new HeaderPart(new PartName("/word/header2.xml"));
+            // An empty HeaderPart never lazily initialises its JAXB element (getContent() is what
+            // triggers that on the DEFAULT header above via its real paragraph) - an untouched part
+            // fails at save() with "part store has changed, and sourcePartStore not set" because
+            // docx4j treats it as an unmodified source part with nowhere to copy raw bytes from.
+            // An empty paragraph is also schema-correct: a header/footer needs at least one block.
+            firstHeader.getContent().add(factory.createP());
             addHeaderReference(mainDocumentPart, sectPr, firstHeader, HdrFtrRef.FIRST);
         }
 
-        FooterPart defaultFooter = new FooterPart();
+        FooterPart defaultFooter = new FooterPart(new PartName("/word/footer1.xml"));
         defaultFooter.getContent().add(footerParagraph(chrome));
         addFooterReference(mainDocumentPart, sectPr, defaultFooter, HdrFtrRef.DEFAULT);
         if (chrome.coverEnabled()) {
-            FooterPart firstFooter = new FooterPart();
+            FooterPart firstFooter = new FooterPart(new PartName("/word/footer2.xml"));
+            firstFooter.getContent().add(factory.createP());
             addFooterReference(mainDocumentPart, sectPr, firstFooter, HdrFtrRef.FIRST);
         }
     }
