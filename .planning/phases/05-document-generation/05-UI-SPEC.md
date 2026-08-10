@@ -101,17 +101,30 @@ reserved-for list is extended to cover the new "stale document" meaning.
 | Accent (10%) | `blue-600` | See reserved-for list below |
 | Destructive | `red-600` | Blocking failures only — see reserved-for list. **No destructive UI action exists in this phase** — see note below |
 | Warning | `amber-600` (text/border), `amber-50` (background) | Non-blocking caution — extended this phase to the "Stale" document-readiness pill, in addition to Phase 4's validation-warning uses |
-| **Success (new)** | `green-700` (text/border), `green-50` (background) | The "Up to date" document-readiness pill **only** — nothing else |
+| **Success (new)** | `green-700` (text/border), `green-50` (background) | The "Up to date" document-readiness pill. Also formalises the pre-existing `green-600` inline confirmation text — see note |
 
 **Why a third small-footprint semantic color, not a shade of blue.** D-05-09 states that "frozen +
 generated" is "the terminal, fully-satisfied state" and should "read as such." Blue is fully
 committed to the accent/primary-action role (links, primary buttons) — using it for a passive status
 pill would blur "click this" with "this is done," the same ambiguity Phase 4 avoided when it
 introduced amber rather than overload red. Green is the conventional "complete, no action needed"
-signal, is used **nowhere else** in the app, so its appearance is always meaningful, and it gives the
-readiness grid the actual at-a-glance scanability the focus area asks for: a manager scanning the
-`/releases` table for outstanding paperwork is looking for the **absence** of green, not the presence
-of a particular gray shade among several similar gray shades.
+signal, and it gives the readiness grid the actual at-a-glance scanability the focus area asks for: a
+manager scanning the `/releases` table for outstanding paperwork is looking for the **absence** of
+green, not the presence of a particular gray shade among several similar gray shades.
+
+> **Correction (checker finding, 2026-08-10).** An earlier draft of this section claimed green was
+> "used nowhere else in the app". That is **false**: `frontend/src/routes/SettingsRoute.tsx:103` and
+> `:139` already render `text-green-600` for save-confirmation text ("Saved."), predating this phase
+> and undeclared in any prior UI-SPEC. It is the same semantic family — success/complete — so there is
+> no meaning collision, but the design-system record must be accurate.
+>
+> **Both shades are hereby declared**, and no third may be introduced:
+> - `green-700` + `green-50` — the "Up to date" readiness **pill** (bordered badge on a tint)
+> - `green-600` — **inline confirmation text** on a white surface, as already used in Settings
+>
+> The two differ because a bordered pill on a `green-50` tint needs a darker text shade to hold
+> contrast, while inline text on white does not. A future phase adding a success state must reuse one
+> of these two, not invent a third.
 
 **No destructive action this phase.** Generated documents are never deleted or overwritten (D-05-06
 — "nothing is ever overwritten or pruned"); Regenerate always *appends*, it never destroys a prior
@@ -443,14 +456,14 @@ keyboard-equivalent work is owed beyond what these native elements already provi
 
 ## Checker Sign-Off
 
-- [ ] Dimension 1 Copywriting: PASS
-- [ ] Dimension 2 Visuals: PASS
-- [ ] Dimension 3 Color: PASS
-- [ ] Dimension 4 Typography: PASS
-- [ ] Dimension 5 Spacing: PASS
-- [ ] Dimension 6 Registry Safety: PASS
+- [x] Dimension 1 Copywriting: PASS
+- [x] Dimension 2 Visuals: PASS
+- [x] Dimension 3 Color: PASS *(was FLAG — the "green used nowhere else" claim was false; corrected above and both shades now declared)*
+- [x] Dimension 4 Typography: PASS
+- [x] Dimension 5 Spacing: PASS
+- [x] Dimension 6 Registry Safety: PASS
 
-**Approval:** pending
+**Approval:** APPROVED 2026-08-10 by `gsd-ui-checker` (6/6, one non-blocking FLAG since applied)
 
 ---
 
