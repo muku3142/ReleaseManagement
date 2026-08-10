@@ -82,9 +82,15 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         // stops two concurrent adds of the same key from surfacing
         // release_ticket_item_key_unique as a 500.
         Set<String> present = Set.copyOf(findTicketKeys(releaseId));
-        insertItems(releaseId, items.stream().filter(i -> !present.contains(i.ticketKey())).toList());
-        stampItemsChanged(entity);
-        jpa.save(entity);
+        List<ReleaseItem> toInsert = items.stream().filter(i -> !present.contains(i.ticketKey())).toList();
+        // "Add tickets already on the release" is an explicitly supported idempotent no-op
+        // (ReleaseAddResult.alreadyPresent) - it must not stamp items_changed_at, or it would
+        // spuriously flip an up-to-date document to stale for content that never changed.
+        if (!toInsert.isEmpty()) {
+            insertItems(releaseId, toInsert);
+            stampItemsChanged(entity);
+            jpa.save(entity);
+        }
         return load(releaseId);
     }
 

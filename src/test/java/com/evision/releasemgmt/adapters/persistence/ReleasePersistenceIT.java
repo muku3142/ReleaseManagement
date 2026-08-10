@@ -172,6 +172,19 @@ class ReleasePersistenceIT {
                 .containsExactly("CNV-1", "CNV-2");
     }
 
+    // WR-01: "add tickets already on the release" is an idempotent no-op the UI relies on - it
+    // must not flip an up-to-date document to stale for content that never actually changed.
+    @Test
+    void addItemsThatAreAllAlreadyPresentDoesNotStampItemsChangedAt() {
+        Release release = Release.create("Noop Add", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(item("CNV-1")));
+        Instant changedAtBefore = repository.findById(release.id()).orElseThrow().itemsChangedAt();
+
+        Release loaded = repository.addItems(release.id(), List.of(item("CNV-1")));
+
+        assertThat(loaded.itemsChangedAt()).isEqualTo(changedAtBefore);
+    }
+
     @Test
     void removeItemDeletesOnlyThatTicket() {
         Release release = Release.create("Remove Item", "1.0", "CNV", "rm@acme.com", Instant.now());
