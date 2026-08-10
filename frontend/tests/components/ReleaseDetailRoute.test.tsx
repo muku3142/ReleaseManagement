@@ -184,4 +184,23 @@ describe('ReleaseDetailRoute', () => {
     expect(container.querySelector('[data-reason="RELEASE_FROZEN"]')).not.toBeNull();
     expect(navigate).not.toHaveBeenCalled();
   });
+
+  // The /releases readiness links (05-10) point at `#documents` on this page - if the section
+  // moves or drops its id, those links silently land nowhere.
+  it('documentsSectionIsRenderedLastWithItsAnchorId', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.startsWith('/api/documents/readiness')) return json(200, { entries: [] });
+      if (url.includes('/revisions')) return json(200, { revisions: [] });
+      return json(200, RELEASE);
+    });
+
+    await renderRoute();
+    await flush();
+
+    const section = container.querySelector('#documents');
+    expect(section).not.toBeNull();
+    const wrapper = container.firstElementChild;
+    expect(wrapper?.lastElementChild).toBe(section);
+  });
 });
