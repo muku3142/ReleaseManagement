@@ -96,4 +96,13 @@ public class DocumentGenerationService {
     public boolean templateStillExists(UUID templateIdOrNull) {
         return templateIdOrNull != null && templateRepository.findById(templateIdOrNull).isPresent();
     }
+
+    /** 1 when this (release, document type) has never been generated, else max(revision) + 1. */
+    public int nextRevision(UUID releaseId, TemplateDocumentType documentType) {
+        return snapshotRepository.nextRevision(releaseId, documentType);
+    }
+
+    public boolean hasLogo(UUID snapshotId) {
+        return snapshotRepository.findLogo(snapshotId).isPresent();
+    }
 }

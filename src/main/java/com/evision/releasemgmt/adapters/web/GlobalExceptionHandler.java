@@ -3,6 +3,8 @@ package com.evision.releasemgmt.adapters.web;
 import com.evision.releasemgmt.adapters.security.SessionRefreshException;
 import com.evision.releasemgmt.application.JiraSiteConfigService.JiraSiteNotConfiguredException;
 import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
+import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
+import com.evision.releasemgmt.domain.document.NoActiveTemplateException;
 import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
@@ -125,6 +127,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.CONFLICT, "Duplicate template name",
                 "A template with this name already exists for this document type. Choose a different name.",
                 "TEMPLATE_DUPLICATE");
+    }
+
+    @ExceptionHandler(DocumentNotFoundException.class)
+    public ProblemDetail handleDocumentNotFound(DocumentNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Document not found",
+                "This document doesn't exist yet.", "DOCUMENT_NOT_FOUND");
+    }
+
+    @ExceptionHandler(NoActiveTemplateException.class)
+    public ProblemDetail handleNoActiveTemplate(NoActiveTemplateException ex) {
+        return problem(HttpStatus.CONFLICT, "No active template",
+                "No active template exists for this document type. Activate one from Templates "
+                        + "before generating.", "NO_ACTIVE_TEMPLATE");
     }
 
     // The one handler in this file whose detail is dynamic: the SPA renders it verbatim after

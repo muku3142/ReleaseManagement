@@ -128,11 +128,13 @@ Complete map as of Phase 4 wave 5. Source column shows where the token is define
 | `404` | `RELEASE_NOT_FOUND` | Unknown release id | `GlobalExceptionHandler` literal |
 | `404` | `MANUAL_ITEM_NOT_FOUND` | Unknown manual item id on that release | `GlobalExceptionHandler` literal |
 | `404` | `TEMPLATE_NOT_FOUND` | Unknown template id | `GlobalExceptionHandler` literal |
+| `404` | `DOCUMENT_NOT_FOUND` | Unknown document/revision for a (release, document type) pair | `GlobalExceptionHandler` literal |
 | `409` | `SITE_NOT_CONFIGURED` | No Jira site configured yet | both literal and enum |
 | `409` | `ACCOUNT_MISMATCH` | Replacement token authenticates as a different Jira account | `JiraAuthFailureReason` |
 | `409` | `RELEASE_FROZEN` | Mutation attempted on a frozen release | `GlobalExceptionHandler` literal |
 | `409` | `RELEASE_DUPLICATE` | `UNIQUE (name, version)` violated | `GlobalExceptionHandler` literal |
 | `409` | `TEMPLATE_DUPLICATE` | Template name already used for that document type | `GlobalExceptionHandler` literal |
+| `409` | `NO_ACTIVE_TEMPLATE` | Generate requested for a document type with zero active templates (D-05-10) | `GlobalExceptionHandler` literal |
 | `413` | `LOGO_TOO_LARGE` | Upload exceeds `app.logo.max-bytes` (2 MiB) | `LogoRejectionReason` + multipart override |
 | `415` | `LOGO_INVALID_TYPE` | Content sniffing says it isn't PNG/JPEG — catches SVG named `.png` | `LogoRejectionReason` |
 | `422` | `RESULT_SET_TOO_LARGE` | Jira query matched more tickets than the paging cap allows | `JiraAuthFailureReason` |
@@ -146,7 +148,7 @@ Complete map as of Phase 4 wave 5. Source column shows where the token is define
 | `503` | `JIRA_UNREACHABLE` | Jira could not be reached | `JiraAuthFailureReason` |
 | *(varies)* | `BAD_REQUEST`, `METHOD_NOT_ALLOWED`, … | Framework-generated problems — backfilled with the status name | `handleExceptionInternal` |
 
-**25 explicit reasons**, plus the backfilled status-name family.
+**27 explicit reasons**, plus the backfilled status-name family.
 
 Status choices worth noting:
 
