@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import Mustache from 'mustache';
 import MarkdownIt from 'markdown-it';
-import type { ItemView, PlaceholderEntry, ReleaseView } from '../api/templates';
+import type { ChromeFields, ItemView, PlaceholderEntry, ReleaseView } from '../api/templates';
 
 // D-04-05 on the client: html:false makes markdown-it escape raw HTML rather than pass it through,
 // which is the same posture the backend takes with flexmark. UI-SPEC treats an inability to suppress
@@ -149,6 +149,51 @@ function chipUnknownMarkers(html: string): string {
   );
 }
 
+// D-04-15's other half: a chrome field gets the exact same mark-unknown-tokens + Mustache.render
+// steps the body uses (TMPL-08 - same placeholder rules, no second expression surface), but never
+// markdown-it - a running header is one line of plain text, not a Markdown document. Unlike the
+// body, resolution failure (unparseable syntax, or the release view not loaded yet) falls back to
+// the raw unresolved field text rather than a dedicated "unavailable" panel per chrome field -
+// there is no test or spec requirement for a per-field failure state, and the body's own
+// "Preview unavailable" panel already covers the mid-typing-syntax-error case for the document
+// as a whole.
+function resolveChromeText(text: string, view: ReleaseView | undefined, validByScope: Map<Scope, Set<string>>): string {
+  if (!view) return text;
+  const marked = markUnknownTokens(text, validByScope);
+  if (!marked.ok) return text;
+  try {
+    return Mustache.render(marked.source, toContext(view));
+  } catch {
+    return text;
+  }
+}
+
+// The React-children counterpart of chipUnknownMarkers: chrome strings are rendered as plain text
+// children, never through the raw-HTML-injection prop the body container below uses, so the
+// marker is split into an array of strings and <code> elements instead of HTML.
+function renderChromeNodes(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  const regex = /\[\[unknown: ([^\]]*)\]\]/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
+    nodes.push(
+      <code key={key++} className="rounded bg-amber-100 px-1 py-0.5 font-mono text-xs text-amber-900">
+        {`[[unknown: ${match[1]}]]`}
+      </code>,
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+}
+
+// D-04-15: this preview is an approximation, not a layout specification. Nothing paginates until
+// Phase 5, so DOC-08's PDF/DOCX parity cannot be verified from what is on screen here.
+const PAGE_NUMBER_PLACEHOLDER = <span className="ml-2 italic text-gray-400">Page X of Y</span>;
+
 type PreviewOutcome =
   | { kind: 'empty' }
   | { kind: 'loading' }
@@ -184,16 +229,9 @@ function computePreview(
   return { kind: 'rendered', html, truncated: view.items.length > PREVIEW_ITEM_CAP, itemCount: view.items.length };
 }
 
-export function TemplatePreview(props: {
-  body: string;
-  view: ReleaseView | undefined;
-  entries: PlaceholderEntry[] | undefined;
-}) {
-  const outcome = useMemo(
-    () => computePreview(props.body, props.view, props.entries),
-    [props.body, props.view, props.entries],
-  );
-
+// The existing body container (plan 04-09), unchanged - factored out only so this plan can wrap it
+// with the cover block and header/footer strips without disturbing its own four outcome states.
+function renderBodyRegion(outcome: PreviewOutcome): ReactNode {
   if (outcome.kind === 'empty') {
     return <p className="p-4 text-sm italic text-gray-500">This template&apos;s body is empty.</p>;
   }
@@ -227,6 +265,58 @@ export function TemplatePreview(props: {
         </p>
       )}
       <div className="prose prose-gray max-w-none p-4" dangerouslySetInnerHTML={{ __html: outcome.html }} />
+    </>
+  );
+}
+
+export function TemplatePreview(props: {
+  body: string;
+  chrome: ChromeFields;
+  view: ReleaseView | undefined;
+  entries: PlaceholderEntry[] | undefined;
+  logoUrl: string | null;
+}) {
+  const outcome = useMemo(
+    () => computePreview(props.body, props.view, props.entries),
+    [props.body, props.view, props.entries],
+  );
+
+  const chrome = props.chrome;
+  const validByScope = useMemo(() => buildValidTokens(props.entries), [props.entries]);
+
+  const resolvedCoverTitle = resolveChromeText(chrome.coverTitle, props.view, validByScope);
+  const resolvedCoverSubtitle = resolveChromeText(chrome.coverSubtitle, props.view, validByScope);
+  const resolvedHeaderText = resolveChromeText(chrome.headerText, props.view, validByScope);
+  const resolvedFooterText = resolveChromeText(chrome.footerText, props.view, validByScope);
+
+  const headerVisible = resolvedHeaderText.trim() !== '';
+  const footerVisible = resolvedFooterText.trim() !== '';
+
+  return (
+    <>
+      {chrome.coverEnabled && (
+        <div className="mb-6 rounded border border-gray-300 bg-white p-8 text-center shadow-sm">
+          {props.logoUrl && <img src={props.logoUrl} alt="" className="mx-auto max-h-20" />}
+          <p className="text-2xl font-semibold">{renderChromeNodes(resolvedCoverTitle)}</p>
+          <p className="mt-2 text-base text-gray-600">{renderChromeNodes(resolvedCoverSubtitle)}</p>
+        </div>
+      )}
+
+      {headerVisible && (
+        <div className="border-b border-gray-300 bg-gray-100 px-4 py-2 text-xs text-gray-700">
+          {renderChromeNodes(resolvedHeaderText)}
+          {chrome.pageNumbersEnabled && PAGE_NUMBER_PLACEHOLDER}
+        </div>
+      )}
+
+      {renderBodyRegion(outcome)}
+
+      {footerVisible && (
+        <div className="border-t border-gray-300 bg-gray-100 px-4 py-2 text-xs text-gray-700">
+          {renderChromeNodes(resolvedFooterText)}
+          {chrome.pageNumbersEnabled && !headerVisible && PAGE_NUMBER_PLACEHOLDER}
+        </div>
+      )}
     </>
   );
 }

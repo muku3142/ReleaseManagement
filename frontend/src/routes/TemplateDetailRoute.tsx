@@ -395,7 +395,15 @@ export function TemplateDetailRoute() {
             </div>
           ) : (
             <div data-testid="preview-content">
-              <TemplatePreview body={body} view={renderContext.data} entries={catalog.data?.entries} />
+              {chrome && (
+                <TemplatePreview
+                  body={body}
+                  chrome={chrome}
+                  view={renderContext.data}
+                  entries={catalog.data?.entries}
+                  logoUrl={data.logo ? `/api/templates/${templateId}/logo?v=${data.logo.uploadedAt}` : null}
+                />
+              )}
             </div>
           )}
         </div>
