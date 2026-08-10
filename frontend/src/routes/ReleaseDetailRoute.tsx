@@ -16,6 +16,7 @@ import {
   type ManualItemCategory,
 } from '../api/releases';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DocumentsSection } from '../components/DocumentsSection';
 
 // D-03-13: idempotent add, honest feedback - never phrased as a warning, because a duplicate
 // add is a success, not a partial failure. A key Jira did not return is neither added nor
@@ -548,6 +549,8 @@ export function ReleaseDetailRoute() {
           </button>
         </form>
       )}
+
+      <DocumentsSection releaseId={data.id} releaseName={data.name} version={data.version} />
     </div>
   );
 }
