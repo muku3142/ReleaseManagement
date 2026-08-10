@@ -15,6 +15,8 @@ import {
 import { useReleases } from '../api/releases';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { TemplatePreview } from '../components/TemplatePreview';
+import { ChromeFieldsForm, type ChromeFieldName } from '../components/ChromeFieldsForm';
+import { LogoUpload } from '../components/LogoUpload';
 
 export function TemplateDetailRoute() {
   const { templateId } = useParams({ from: '/authenticated/templates/$templateId' });
@@ -38,9 +40,9 @@ export function TemplateDetailRoute() {
   const [showWarningDetails, setShowWarningDetails] = useState(false);
 
   const bodyRef = useRef<HTMLTextAreaElement>(null);
-  // Remembers the last cursor position so plan 04-11's placeholder drawer can insert into this
-  // field without a change to the textarea - nothing in this plan reads it yet.
-  const selectionRef = useRef<{ field: 'body'; start: number; end: number } | null>(null);
+  // Remembers the last cursor position of whichever field - body or a chrome input - was last
+  // focused, so plan 04-11's placeholder drawer can insert into it without a change here.
+  const selectionRef = useRef<{ field: 'body' | ChromeFieldName; start: number; end: number } | null>(null);
 
   const rename = useRenameTemplate();
   const save = useSaveTemplateContent();
@@ -167,6 +169,10 @@ export function TemplateDetailRoute() {
       start: e.currentTarget.selectionStart,
       end: e.currentTarget.selectionEnd,
     };
+  }
+
+  function rememberChromeSelection(field: ChromeFieldName, start: number, end: number) {
+    selectionRef.current = { field, start, end };
   }
 
   function handleSave() {
@@ -341,10 +347,11 @@ export function TemplateDetailRoute() {
               />
             </>
           ) : (
-            <>
-              {/* plan 04-10 replaces this with the six chrome fields and the logo control */}
-              <p className="p-4 text-sm text-gray-600">Chrome and logo settings.</p>
-            </>
+            chrome && (
+              <ChromeFieldsForm chrome={chrome} onChange={setChrome} onFieldFocus={rememberChromeSelection}>
+                <LogoUpload templateId={templateId} logo={data.logo} limits={catalog.data?.logoLimits} />
+              </ChromeFieldsForm>
+            )
           )}
         </div>
 
@@ -388,7 +395,15 @@ export function TemplateDetailRoute() {
             </div>
           ) : (
             <div data-testid="preview-content">
-              <TemplatePreview body={body} view={renderContext.data} entries={catalog.data?.entries} />
+              {chrome && (
+                <TemplatePreview
+                  body={body}
+                  chrome={chrome}
+                  view={renderContext.data}
+                  entries={catalog.data?.entries}
+                  logoUrl={data.logo ? `/api/templates/${templateId}/logo?v=${data.logo.uploadedAt}` : null}
+                />
+              )}
             </div>
           )}
         </div>

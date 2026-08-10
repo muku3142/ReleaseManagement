@@ -2,7 +2,18 @@ import { StrictMode, act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { TemplatePreview } from '../../src/components/TemplatePreview';
-import type { ItemView, PlaceholderEntry, ReleaseView } from '../../src/api/templates';
+import type { ChromeFields, ItemView, PlaceholderEntry, ReleaseView } from '../../src/api/templates';
+
+// No cover/header/footer configured - this suite exercises only the body pipeline this plan's
+// chrome extension wraps, unchanged. ChromePreview.test.tsx (plan 04-10) exercises the chrome props.
+const NO_CHROME: ChromeFields = {
+  coverEnabled: false,
+  coverTitle: '',
+  coverSubtitle: '',
+  headerText: '',
+  footerText: '',
+  pageNumbersEnabled: false,
+};
 
 // Mirrors PlaceholderCatalog.ENTRIES's token/scope shape (plan 04-01/04-20) - the pushes() field
 // is never serialized over the wire (PlaceholderEntryResponse omits it), so it is absent here too.
@@ -115,7 +126,7 @@ async function renderPreview(body: string, view: ReleaseView | undefined, entrie
   await act(async () => {
     root.render(
       <StrictMode>
-        <TemplatePreview body={body} view={view} entries={entries} />
+        <TemplatePreview body={body} chrome={NO_CHROME} view={view} entries={entries} logoUrl={null} />
       </StrictMode>,
     );
   });
