@@ -77,6 +77,19 @@
       <artifactId>docx4j-JAXB-ReferenceImpl</artifactId>
       <version>17.0.2</version>
     </dependency>
+    <!-- Pinned explicitly: docx4j 17.0.2 declares fontbox 3.0.8 at a shallower depth than
+         openhtmltopdf-pdfbox's own pdfbox:2.0.24 -> fontbox:2.0.24 dependency, so Maven's nearest-
+         wins mediation picks 3.0.8 project-wide. pdfbox 2.0.24's font classes call a fontbox 2.x-only
+         TTFParser.parse(InputStream) signature that fontbox 3.0.8 no longer has, so every PDF render
+         (even with no custom fonts registered - PdfExportAdapter/RESEARCH.md Pitfall 3) fails with
+         NoSuchMethodError at PDType1Font's static init. A direct, top-level dependency declaration
+         always outranks any transitive one regardless of depth, so this wins back the version
+         pdfbox 2.0.24 actually needs without touching docx4j's own declared version. -->
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>fontbox</artifactId>
+      <version>2.0.24</version>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-security</artifactId>
