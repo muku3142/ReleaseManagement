@@ -10,6 +10,7 @@ export type Ticket = {
   assignee: string | null;
   reporter: string;
   fixVersions: string[];
+  component: string | null;
   description: string;
   comments: string[];
   commentTotal: number;

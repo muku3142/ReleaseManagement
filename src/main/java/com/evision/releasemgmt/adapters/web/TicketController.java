@@ -34,6 +34,7 @@ public class TicketController {
 
     private static TicketResponse toResponse(TicketDetail t) {
         return new TicketResponse(t.key(), t.summary(), t.issueType(), t.status(), t.resolution(),
-                t.assignee(), t.reporter(), t.fixVersions(), t.description(), t.comments(), t.commentTotal());
+                t.assignee(), t.reporter(), t.fixVersions(), t.component(), t.description(), t.comments(),
+                t.commentTotal());
     }
 }
