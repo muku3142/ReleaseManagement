@@ -137,7 +137,43 @@ class AdfFlattenerTest {
                     {"type":"text","text":"var x = 1;"}
                   ]}
                 ]}""");
-        assertThat(flattener.flatten(doc)).isEqualTo("```\nvar x = 1;```\n");
+        assertThat(flattener.flatten(doc)).isEqualTo("```\nvar x = 1;\n```\n");
+    }
+
+    @Test
+    void headingProducesAtxPrefixOnItsOwnLine() {
+        JsonNode doc = json("""
+                {"type":"doc","content":[
+                  {"type":"heading","attrs":{"level":2},"content":[
+                    {"type":"text","text":"Description"}
+                  ]},
+                  {"type":"paragraph","content":[
+                    {"type":"text","text":"Body text"}
+                  ]}
+                ]}""");
+        assertThat(flattener.flatten(doc)).isEqualTo("## Description\nBody text\n");
+    }
+
+    @Test
+    void headingWithoutLevelAttrDefaultsToLevelOne() {
+        JsonNode doc = json("""
+                {"type":"doc","content":[
+                  {"type":"heading","content":[
+                    {"type":"text","text":"Title"}
+                  ]}
+                ]}""");
+        assertThat(flattener.flatten(doc)).isEqualTo("# Title\n");
+    }
+
+    @Test
+    void headingWithOutOfRangeLevelStaysValidMarkdown() {
+        JsonNode doc = json("""
+                {"type":"doc","content":[
+                  {"type":"heading","attrs":{"level":9},"content":[
+                    {"type":"text","text":"Deep"}
+                  ]}
+                ]}""");
+        assertThat(flattener.flatten(doc)).isEqualTo("###### Deep\n");
     }
 
     @Test
