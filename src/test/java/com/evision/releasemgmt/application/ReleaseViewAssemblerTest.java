@@ -83,13 +83,13 @@ class ReleaseViewAssemblerTest {
     void frozenReleaseRendersStatusAndFrozenAtOpenReleaseRendersEmptyFrozenAt() {
         Release frozen = new Release(UUID.randomUUID(), "R", "1.0", ReleaseStatus.FROZEN, "PRJ",
                 Instant.parse("2026-01-01T00:00:00Z"), "actor",
-                Instant.parse("2026-01-02T00:00:00Z"), "actor", null, List.of(), List.of());
+                Instant.parse("2026-01-02T00:00:00Z"), "actor", null, null, List.of(), List.of());
         ReleaseView frozenView = assembler.assemble(frozen, GroupingDimension.ISSUE_TYPE);
         assertThat(frozenView.status()).isEqualTo("FROZEN");
         assertThat(frozenView.frozenAt()).isEqualTo("2026-01-02T00:00:00Z");
 
         Release open = new Release(UUID.randomUUID(), "R", "1.0", ReleaseStatus.OPEN, "PRJ",
-                Instant.parse("2026-01-01T00:00:00Z"), "actor", null, null, null, List.of(), List.of());
+                Instant.parse("2026-01-01T00:00:00Z"), "actor", null, null, null, null, List.of(), List.of());
         ReleaseView openView = assembler.assemble(open, GroupingDimension.ISSUE_TYPE);
         assertThat(openView.frozenAt()).isEmpty();
     }
@@ -196,6 +196,6 @@ class ReleaseViewAssemblerTest {
         Instant now = Instant.now();
         List<ReleaseItem> items = tickets.stream().map(ticket -> new ReleaseItem(ticket, now)).toList();
         return new Release(UUID.randomUUID(), "R", "1.0", ReleaseStatus.OPEN, "PRJ",
-                now, "actor", null, null, null, items, manualItems);
+                now, "actor", null, null, null, null, items, manualItems);
     }
 }

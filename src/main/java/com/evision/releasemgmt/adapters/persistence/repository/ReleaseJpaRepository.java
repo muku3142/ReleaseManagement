@@ -28,6 +28,7 @@ public interface ReleaseJpaRepository extends JpaRepository<ReleaseEntity, UUID>
                    r.frozen_at         AS frozenAt,
                    r.frozen_by         AS frozenBy,
                    r.last_refreshed_at AS lastRefreshedAt,
+                   r.items_changed_at  AS itemsChangedAt,
                    (SELECT count(*) FROM release_ticket_item t WHERE t.release_id = r.id)
                  + (SELECT count(*) FROM release_manual_item m WHERE m.release_id = r.id)
                                        AS itemCount
