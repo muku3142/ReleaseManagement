@@ -7,12 +7,14 @@ import com.samskivert.mustache.MustacheException;
 import com.vladsch.flexmark.ast.HtmlBlockBase;
 import com.vladsch.flexmark.ast.HtmlInlineBase;
 import com.vladsch.flexmark.ast.Text;
+import com.vladsch.flexmark.ext.tables.TablesExtension;
 import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.parser.Parser;
 import com.vladsch.flexmark.util.ast.Document;
 import com.vladsch.flexmark.util.ast.Node;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Map;
 
 @Component
@@ -41,8 +43,17 @@ public class MustacheFlexmarkRenderAdapter implements RenderEnginePort {
         // a key still missing here is a defect in our own RenderContextMapper, not a template
         // author's mistake - jmustache's default behaviour (throw MustacheException) is correct.
 
-        this.markdownParser = Parser.builder().build();
-        this.htmlRenderer = HtmlRenderer.builder().build();
+        // GFM pipe tables are a flexmark EXTENSION, not core CommonMark. Without this the backend
+        // renders "| a | b |" as a literal paragraph while the client markdown-it preview renders a
+        // real table - a divergence Phase 4 shipped and Phase 5's generated documents would inherit.
+        // The extension must be on BOTH builders: the parser produces TableBlock nodes, the renderer
+        // is what knows how to emit them.
+        this.markdownParser = Parser.builder()
+                .extensions(List.of(TablesExtension.create()))
+                .build();
+        this.htmlRenderer = HtmlRenderer.builder()
+                .extensions(List.of(TablesExtension.create()))
+                .build();
     }
 
     @Override
@@ -50,6 +61,11 @@ public class MustacheFlexmarkRenderAdapter implements RenderEnginePort {
         String resolved = resolveMustache(source, context);
         Document document = parseMarkdown(resolved);
         return htmlRenderer.render(document);
+    }
+
+    @Override
+    public String resolve(String source, Map<String, Object> context) {
+        return resolveMustache(source, context);
     }
 
     private String resolveMustache(String source, Map<String, Object> context) {
@@ -66,6 +82,14 @@ public class MustacheFlexmarkRenderAdapter implements RenderEnginePort {
         Document document = markdownParser.parse(markdown);
         neutralizeRawHtml(document);
         return document;
+    }
+
+    // Package-private for the same reason parseMarkdown is: PdfExportAdapter renders the SHARED
+    // Document with the SHARED HtmlRenderer rather than building its own, so the XHTML that becomes
+    // a PDF cannot drift from the HTML the preview and save-time validation already produced
+    // (D-04-04, and the basis of D-05-07's parity argument).
+    String renderHtml(Document document) {
+        return htmlRenderer.render(document);
     }
 
     // D-04-05: flexmark 0.64.8 has no Parser option that stops raw inline HTML ('<script>', '<b>'
