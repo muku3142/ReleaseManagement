@@ -20,6 +20,7 @@ app:
     render:
       timeout: PT2S
       max-collection-size: 500
+      max-concurrent: 64
     logo:
       max-bytes: 2097152
       max-width: 2000

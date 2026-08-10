@@ -33,7 +33,7 @@ class TemplateServiceTest {
 
     private final TemplateRepository repository = mock(TemplateRepository.class);
     private final RenderService renderService =
-            Mockito.spy(new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 500));
+            Mockito.spy(new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 500, 64));
     private final TemplateService service =
             new TemplateService(repository, renderService, new LogoValidator(2097152, 2000, 2000));
 

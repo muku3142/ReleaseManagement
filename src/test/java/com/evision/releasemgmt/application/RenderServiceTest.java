@@ -14,6 +14,8 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -21,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RenderServiceTest {
 
     private final RenderService service =
-            new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 500);
+            new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 500, 64);
 
     @Test
     void unknownVariableRendersAsNamedMarker() {
@@ -44,7 +46,7 @@ class RenderServiceTest {
 
     @Test
     void tooManyItemsTripsTheCollectionCap() {
-        RenderService capped = new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 3);
+        RenderService capped = new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 3, 64);
         ReleaseView view = releaseViewWithItems(4);
         assertThatThrownBy(() -> capped.render("{{release.name}}", view, "Body"))
                 .isInstanceOf(RenderBoundExceededException.class);
@@ -52,7 +54,7 @@ class RenderServiceTest {
 
     @Test
     void tooManyCommentsOnOneItemTripsTheCollectionCap() {
-        RenderService capped = new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 3);
+        RenderService capped = new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 3, 64);
         List<CommentView> comments = List.of(
                 new CommentView("one"), new CommentView("two"),
                 new CommentView("three"), new CommentView("four"));
@@ -82,14 +84,55 @@ class RenderServiceTest {
                 return source;
             }
         };
-        RenderService slow = new RenderService(slowEngine, Duration.ofMillis(1), 500);
+        RenderService slow = new RenderService(slowEngine, Duration.ofMillis(1), 500, 64);
         assertThatThrownBy(() -> slow.render("{{release.name}}", SampleReleaseView.instance(), "Body"))
                 .isInstanceOf(RenderBoundExceededException.class);
     }
 
+    // WR-05: jmustache does not honour interruption, so a render that trips the timeout keeps
+    // running in the background - this proves that orphan is still capped by maxConcurrentRenders
+    // rather than able to accumulate unboundedly: a second request is refused outright while the
+    // first is still actually running, not merely while its caller was still waiting.
+    @Test
+    void aSecondRenderIsRefusedWhileAnOrphanedTimedOutRenderIsStillRunning() throws InterruptedException {
+        BlockingRenderEngine engine = new BlockingRenderEngine();
+        RenderService capped = new RenderService(engine, Duration.ofMillis(50), 500, 1);
+
+        assertThatThrownBy(() -> capped.render("{{release.name}}", SampleReleaseView.instance(), "Body"))
+                .isInstanceOf(RenderBoundExceededException.class);
+        assertThat(engine.started.await(2, TimeUnit.SECONDS)).isTrue();
+
+        assertThatThrownBy(() -> capped.render("{{release.name}}", SampleReleaseView.instance(), "Body"))
+                .isInstanceOf(RenderBoundExceededException.class);
+
+        engine.release.countDown();
+    }
+
+    private static final class BlockingRenderEngine implements RenderEnginePort {
+        private final CountDownLatch started = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        @Override
+        public String render(String source, Map<String, Object> context) {
+            started.countDown();
+            try {
+                release.await();
+            } catch (InterruptedException e) {
+                // jmustache does not honour interruption either - this fake mirrors that so the
+                // background render keeps "running" past its caller's timeout, exactly like WR-05.
+            }
+            return "unused";
+        }
+
+        @Override
+        public String resolve(String source, Map<String, Object> context) {
+            return source;
+        }
+    }
+
     @Test
     void resolveTextEnforcesTheCollectionCap() {
-        RenderService capped = new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 3);
+        RenderService capped = new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 3, 64);
         ReleaseView view = releaseViewWithItems(4);
         assertThatThrownBy(() -> capped.resolveText("{{release.name}}", view, "Header"))
                 .isInstanceOf(RenderBoundExceededException.class);

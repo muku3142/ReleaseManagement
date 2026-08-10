@@ -23,6 +23,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -39,13 +40,23 @@ public class RenderService {
     private final Duration timeout;
     private final int maxCollectionSize;
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+    // WR-05: jmustache does not poll for interruption, so cancel(true) on timeout cannot stop a
+    // pathological render - it can only stop the caller waiting for it. Without this cap, a burst
+    // of requests that each trip the timeout would accumulate an unbounded number of orphaned
+    // virtual threads still burning CPU in the background. This bounds that accumulation: the
+    // permit is released only when the underlying work genuinely finishes (see bounded() below),
+    // not when a caller stops waiting, so at most maxConcurrentRenders renders - orphaned or not -
+    // can ever be running at once.
+    private final Semaphore concurrentRenders;
 
     public RenderService(RenderEnginePort engine,
                           @Value("${app.template.render.timeout}") Duration timeout,
-                          @Value("${app.template.render.max-collection-size}") int maxCollectionSize) {
+                          @Value("${app.template.render.max-collection-size}") int maxCollectionSize,
+                          @Value("${app.template.render.max-concurrent}") int maxConcurrentRenders) {
         this.engine = engine;
         this.timeout = timeout;
         this.maxCollectionSize = maxCollectionSize;
+        this.concurrentRenders = new Semaphore(maxConcurrentRenders);
     }
 
     public RenderResult render(String source, ReleaseView view, String field) {
@@ -75,15 +86,29 @@ public class RenderService {
     }
 
     private String bounded(Callable<String> work) {
-        Future<String> future = executor.submit(work);
+        if (!tryAcquireRenderPermit()) {
+            // Every permit is held by a render that is still actually running - including ones a
+            // past caller already gave up waiting on (see the release in the finally below). Refuse
+            // rather than add yet another accumulating background task.
+            throw new RenderBoundExceededException();
+        }
+        Callable<String> permitReleasingWork = () -> {
+            try {
+                return work.call();
+            } finally {
+                concurrentRenders.release();
+            }
+        };
+        Future<String> future = executor.submit(permitReleasingWork);
         try {
             return future.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             future.cancel(true);
             // cancel(true) interrupts the carrier thread but jmustache does not poll for
             // interruption, so a pathological render may keep running until it finishes. The
-            // collection cap above is what actually bounds the work; the timeout bounds how long a
-            // caller waits for it.
+            // collection cap above is what actually bounds the work; this timeout only bounds how
+            // long THIS caller waits for it - the permit above is what stops such orphaned renders
+            // from accumulating without limit.
             throw new RenderBoundExceededException();
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
@@ -91,6 +116,15 @@ public class RenderService {
                 throw re;
             }
             throw new IllegalStateException(cause);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private boolean tryAcquireRenderPermit() {
+        try {
+            return concurrentRenders.tryAcquire(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException(e);

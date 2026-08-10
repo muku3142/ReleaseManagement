@@ -41,7 +41,7 @@ class DocumentGenerationServiceTest {
     private final DocumentSnapshotRepository snapshotRepository = mock(DocumentSnapshotRepository.class);
     private final ReleaseViewAssembler assembler = mock(ReleaseViewAssembler.class);
     private final RenderService renderService =
-            new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 500);
+            new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 500, 64);
     private final DocumentGenerationService service = new DocumentGenerationService(releaseRepository,
             templateRepository, snapshotRepository, assembler, renderService);
 

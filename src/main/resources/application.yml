@@ -40,6 +40,10 @@ app:
     render:
       timeout: PT2S
       max-collection-size: 500
+      # WR-05: caps how many renders (including ones a caller already timed out waiting on, since
+      # jmustache cannot be interrupted mid-render) can be running at once, bounding the resource
+      # a burst of pathological requests can accumulate.
+      max-concurrent: 64
     logo:
       max-bytes: 2097152
       max-width: 2000
