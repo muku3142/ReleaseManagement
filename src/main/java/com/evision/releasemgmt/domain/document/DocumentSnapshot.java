@@ -16,6 +16,12 @@ import java.util.UUID;
 // and exportable. templateId is carried only so the API can report whether the source still exists.
 // chrome holds RESOLVED text (post-Mustache) - re-resolving it at read time would read today's
 // release data into yesterday's document.
+//
+// CONTENT TYPE, stated here because generation and both exporters must agree and once did not:
+// `markdown` holds Mustache-resolved Markdown - post-Mustache, pre-flexmark (D-05-05). It is never
+// HTML. PdfExportAdapter and DocxExportAdapter both parse it with parseMarkdown, and the document
+// viewer renders it with markdown-it. Anything that puts HTML here makes every export and the
+// viewer display literal escaped tags.
 public record DocumentSnapshot(UUID id, UUID releaseId, TemplateDocumentType documentType,
                                int revision, String markdown, UUID templateId, String templateName,
                                String templateBody, ChromeFields chrome,

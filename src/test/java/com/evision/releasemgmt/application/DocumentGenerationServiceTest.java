@@ -46,16 +46,18 @@ class DocumentGenerationServiceTest {
             templateRepository, snapshotRepository, assembler, renderService);
 
     @Test
-    void generatingStoresRevisionOneWithBodyRenderedThroughRenderService() {
+    void generatingStoresTheResolvedMarkdownBodyNotItsRenderedHtml() {
         Release release = openRelease();
-        Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Release {{release.name}}",
+        Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "# Release {{release.name}}",
                 ChromeFields.empty());
         stubHappyPath(release, template, 1);
 
         service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, "actor-1");
 
-        String expectedMarkdown = renderService.render(template.body(), SampleReleaseView.instance(), "Body").html();
+        String expectedMarkdown =
+                renderService.resolveText(template.body(), SampleReleaseView.instance(), "Body").output();
         assertThat(snapshotCaptor().markdown()).isEqualTo(expectedMarkdown);
+        assertThat(snapshotCaptor().markdown()).startsWith("# Release ").doesNotContain("<h1");
         assertThat(snapshotCaptor().revision()).isEqualTo(1);
     }
 
@@ -173,7 +175,7 @@ class DocumentGenerationServiceTest {
         when(templateRepository.findActive(template.documentType())).thenReturn(Optional.of(template));
         when(assembler.assemble(release, GroupingDimension.ISSUE_TYPE)).thenReturn(SampleReleaseView.instance());
         RenderService boundBreachingRenderService = mock(RenderService.class);
-        when(boundBreachingRenderService.render(any(), any(), any())).thenThrow(new RenderBoundExceededException());
+        when(boundBreachingRenderService.resolveText(any(), any(), any())).thenThrow(new RenderBoundExceededException());
         DocumentGenerationService serviceWithBoundBreach = new DocumentGenerationService(releaseRepository,
                 templateRepository, snapshotRepository, assembler, boundBreachingRenderService);
 

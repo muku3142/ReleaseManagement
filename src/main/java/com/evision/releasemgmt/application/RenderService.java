@@ -59,6 +59,9 @@ public class RenderService {
         this.concurrentRenders = new Semaphore(maxConcurrentRenders);
     }
 
+    // Resolves Mustache placeholders, then parses the result as Markdown and renders it to HTML.
+    // output() is HTML. Save-time validation is the only consumer - document generation must NOT
+    // use this method, see resolveText.
     public RenderResult render(String source, ReleaseView view, String field) {
         ScanResult scan = SCANNER.scan(source, field);
         enforceCollectionCap(view);
@@ -71,6 +74,10 @@ public class RenderService {
     // D-04-11's bounds are not optional for chrome either: a cover subtitle is resolved against the
     // same view and can breach the same collection cap. This is render() with the flexmark step
     // removed, not a second, looser path.
+    //
+    // Resolves Mustache placeholders and stops there. output() is the resolved source text,
+    // unchanged in kind: Markdown in, Markdown out; a one-line chrome string in, a one-line chrome
+    // string out. This is the bounded path that produces a DocumentSnapshot body.
     public RenderResult resolveText(String source, ReleaseView view, String field) {
         ScanResult scan = SCANNER.scan(source, field);
         enforceCollectionCap(view);

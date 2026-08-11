@@ -28,14 +28,14 @@ class RenderServiceTest {
     @Test
     void unknownVariableRendersAsNamedMarker() {
         RenderResult result = service.render("{{ticket.compnent}}", SampleReleaseView.instance(), "Body");
-        assertThat(result.html()).contains("[[unknown: ticket.compnent]]");
+        assertThat(result.output()).contains("[[unknown: ticket.compnent]]");
         assertThat(result.unknownTokens()).containsExactly("ticket.compnent");
     }
 
     @Test
     void unknownSectionRendersMarkerAndKeepsEnclosedContentVisible() {
         RenderResult result = service.render("{{#nope}}inner{{/nope}}", SampleReleaseView.instance(), "Body");
-        assertThat(result.html()).contains("[[unknown: nope]]inner");
+        assertThat(result.output()).contains("[[unknown: nope]]inner");
     }
 
     @Test
@@ -141,7 +141,7 @@ class RenderServiceTest {
     @Test
     void resolveTextMarksUnknownTokensLikeRenderDoes() {
         RenderResult result = service.resolveText("{{nope}}", SampleReleaseView.instance(), "Header text");
-        assertThat(result.html()).isEqualTo("[[unknown: nope]]");
+        assertThat(result.output()).isEqualTo("[[unknown: nope]]");
         assertThat(result.unknownTokens()).containsExactly("nope");
     }
 

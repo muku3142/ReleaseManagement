@@ -55,13 +55,21 @@ public class DocumentGenerationService {
 
         // The single bounded render entry point (D-04-11) - do not inline a call to the low-level
         // render engine port or build a second bounded path.
-        String markdown = renderService.render(template.body(), view, "Body").html();
+        //
+        // D-05-05: the snapshot body is post-Mustache, PRE-flexmark MARKDOWN. resolveText, not
+        // render: render() would additionally run flexmark and hand back HTML, which both export
+        // adapters would then re-parse as Markdown - and MustacheFlexmarkRenderAdapter's
+        // neutralizeRawHtml (a required control, not an option) would escape every tag into visible
+        // text. Both bounds (TMPL-05 timeout, collection cap) are enforced by resolveText exactly as
+        // they are by render - this is the same single bounded entry point (D-04-11), minus the
+        // step that changes the content type.
+        String markdown = renderService.resolveText(template.body(), view, "Body").output();
 
         ChromeFields templateChrome = template.chrome();
-        String coverTitle = renderService.resolveText(templateChrome.coverTitle(), view, "Cover title").html();
-        String coverSubtitle = renderService.resolveText(templateChrome.coverSubtitle(), view, "Cover subtitle").html();
-        String headerText = renderService.resolveText(templateChrome.headerText(), view, "Header text").html();
-        String footerText = renderService.resolveText(templateChrome.footerText(), view, "Footer text").html();
+        String coverTitle = renderService.resolveText(templateChrome.coverTitle(), view, "Cover title").output();
+        String coverSubtitle = renderService.resolveText(templateChrome.coverSubtitle(), view, "Cover subtitle").output();
+        String headerText = renderService.resolveText(templateChrome.headerText(), view, "Header text").output();
+        String footerText = renderService.resolveText(templateChrome.footerText(), view, "Footer text").output();
         ChromeFields resolvedChrome = new ChromeFields(templateChrome.coverEnabled(), coverTitle, coverSubtitle,
                 headerText, footerText, templateChrome.pageNumbersEnabled());
 
