@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 05.1 planned (4 plans, 3 waves) — ready to execute
-last_updated: "2026-08-11T11:59:33.361Z"
-last_activity: 2026-08-11 -- Phase 05.1 planned (4 plans, 3 waves); phases 05.2 and 05.3 inserted with context captured
+status: executing
+stopped_at: Phase 5 UI-SPEC approved
+last_updated: "2026-08-11T12:06:32.260Z"
+last_activity: 2026-08-11 -- Phase 05.1 execution started
 progress:
   total_phases: 10
   completed_phases: 3
@@ -21,12 +21,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-27)
 
 **Core value:** Given a set of Jira tickets, produce accurate and consistent release documentation plus a tracked deployment record — without anyone doing manual release bookkeeping in Jira.
-**Current focus:** Phase 05.1 — per-template logo sizing (planned, ready to execute)
+**Current focus:** Phase 05.1 — per-template-logo-sizing
 
 ## Current Position
 
-Phase: 05.1 (per-template-logo-sizing) — READY TO EXECUTE
-Plan: 0 of 4 across 3 waves — run `/gsd-execute-phase 05.1`
+Phase: 05.1 (per-template-logo-sizing) — EXECUTING
+Plan: 1 of 4
 
 **Three decimal phases are now queued**, all inserted on 2026-08-11, all with CONTEXT.md captured
 directly rather than via `/gsd-discuss-phase`:
@@ -37,13 +37,19 @@ directly rather than via `/gsd-discuss-phase`:
   is regression plus a blocking human parity check. The seam test deliberately uses **15mm, not the
   30mm default** — at 30mm the pre-fix PDF's hard-coded `max-height: 3cm` coincidentally produces the
   right answer, so a default-height assertion would pass against broken code.
-- **05.2 Release Ticket Selection — context captured, not planned.** Hide already-added tickets while
-  assembling (scoped to the target release only, preserving multi-release membership) and add tickets
-  from the release page via the extracted browse surface.
-- **05.3 Actor Identity Display — context captured, not planned.** Every actor field stores the Jira
-  accountId; resolve it to an email at read time. The load-bearing constraint: `findByAccountId`
-  returns a token-bearing record and loading it decrypts `encrypted_token`, so a display path using it
-  would let one unreadable row break unrelated screens. Needs a projection-only lookup.
+
+- **05.2 Release Ticket Selection — PLANNED, 3 plans / 2 waves.** Wave 1 runs the backend filter and
+  the `TicketBrowser` extraction in parallel (`src/**` and `frontend/**` are disjoint); wave 2 adds the
+  release-page dialog on top of both. The filter is threaded as a separate argument to
+  `TicketSearchService.search` rather than as a field on `TicketSearchCriteria`, so `toJql()` is
+  structurally incapable of seeing release membership rather than merely forbidden from using it.
+
+- **05.3 Actor Identity Display — PLANNED, 3 plans / 3 waves.** Wave 1 builds the projection-only
+  lookup, wave 2 wires it into the four controllers, wave 3 proves it across the seam and ends at a
+  human checkpoint. The load-bearing fact, confirmed by pattern mapping rather than inferred:
+  decryption fires because `JiraCredentialEntity.token` carries
+  `@Convert(converter = EncryptedTokenConverter.class)`, so the risk attaches to the entity **type** —
+  any query returning that type can throw on a superseded key, and only a scalar projection avoids it.
 
 **Phase 05 (document-generation) is complete** — 13/13 plans, verified 2026-08-11.
 Both verification gaps were closed by gap-closure plans and the phase's human
@@ -92,8 +98,8 @@ replaced entirely by **sprint** (brings Jira's Agile API into scope, reversing
 part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
 names, table widening, and frontend tests moved to `frontend/tests/`.
 
-Status: Ready to execute Phase 05.1
-Last activity: 2026-08-11 -- Phase 05.1 planned (4 plans, 3 waves); phases 05.2 and 05.3 inserted with context captured
+Status: Executing Phase 05.1
+Last activity: 2026-08-11 -- Phase 05.1 execution started
 
 Progress: [█████████░] 88%
 
@@ -134,18 +140,21 @@ Progress: [█████████░] 88%
   rather than a global config value or a bug-fix-only clamp, so an existing document keeps the size
   it was generated with. Written by hand — `state add-roadmap-evolution` is SDK-only in this CLI
   version and does not run.
+
 - Phase 05.2 inserted after Phase 05.1 on 2026-08-11 — release ticket selection. Two assembly
   frictions the user hit in use: already-added tickets still appear while browsing, and tickets can
   only be added from the browse screen. Filtering scoped to the *target* release only, because
   `release_ticket_item_key_unique (release_id, ticket_key)` deliberately allows one ticket in several
   releases and a global filter would make that state unreachable through the UI while leaving it
   reachable in data. Neither requirement is a correctness fix — `addTickets` already de-duplicates.
+
 - Phase 05.3 inserted after Phase 05.2 on 2026-08-11 — actor identity display. Every actor field
   stores the Jira accountId (not a session id: `AuthenticationService:58` issues the JWT with
   accountId as subject and the email as a separate claim), across 9 capture sites in 5 controllers and
   8 response DTOs. Read-time resolution chosen over storing the email or storing both, because it is
   the only option that fixes already-recorded history — `document_snapshot` is append-only so a stored
   label could never be corrected.
+
 - **The `phase insert` handler places a new decimal section immediately after the *named* phase, not
   in numeric order.** Inserting 05.2 and 05.3 "after 5" put both sections *before* 05.1 in the file,
   and left the top checklist, the Progress table and the `Phases execute in numeric order:` line

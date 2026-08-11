@@ -206,7 +206,7 @@ Plans:
 **Goal**: Release manager assembles a release without re-encountering tickets it already contains, and can add tickets to a release from the release page itself rather than only from the browse screen
 **Requirements**: REL-01, REL-03, JIRA-02
 **Depends on**: Phase 3 (release assembly), Phase 2 (ticket browsing)
-**Plans**: TBD
+**Plans**: 3 across 2 waves
 **UI hint**: yes
 
 **Why this was inserted (requested 2026-08-11):** two assembly frictions the release manager hit in
@@ -245,12 +245,21 @@ making a person do avoidable work.
 - `items_changed_at` document-staleness stamping happens in `ReleaseRepositoryAdapter`, below the
   service layer, so a new entry point cannot bypass it
 
+Plans:
+
+**Wave 1**
+- [ ] 05.2-01 — Server-side release-membership filter on `POST /api/tickets/search`, threaded as a separate argument so `toJql()` structurally cannot see it — REL-01, JIRA-02
+- [ ] 05.2-02 — Extract the browse surface out of `TicketsRoute.tsx` (416 lines) into one reusable `TicketBrowser`; behaviour-preserving, with the existing suite passing untouched as the proof — JIRA-02
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 05.2-03 — The release page's own add-tickets dialog, composing the extracted browser — REL-01, REL-03, JIRA-02
+
 ### Phase 05.3: Actor Identity Display (INSERTED)
 
 **Goal**: Every actor shown in the UI is a person's email rather than an opaque Jira account id, resolved at read time so already-recorded history displays correctly too
 **Requirements**: AUTH-02, DOC-07
 **Depends on**: Phase 1 (credential storage), Phase 5 (document snapshots)
-**Plans**: TBD
+**Plans**: 3 across 3 waves
 **UI hint**: yes
 
 **Why this was inserted (found 2026-08-11):** every actor field in the system stores the signed-in
@@ -294,6 +303,17 @@ style as `findSessionsInvalidatedAt`.
   single-release-manager tool, but the threat model should state the disclosure surface explicitly
   rather than assume it is fine
 
+Plans:
+
+**Wave 1**
+- [ ] 05.3-01 — The read-only actor lookup: a narrow port plus a JPQL scalar projection that never hydrates `JiraCredentialEntity`, so decryption cannot fire on a display path — AUTH-02
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 05.3-02 — Wire resolution into the four controllers that map actor-bearing responses, batched so a list does not issue a query per row — DOC-07
+
+**Wave 3** *(blocked on Wave 2 completion — NOT autonomous, ends at a human checkpoint)*
+- [ ] 05.3-03 — Prove the central claim across the seam: with an undecryptable credential row present, the screens still render — AUTH-02, DOC-07
+
 ### Phase 6: Azure DevOps Enrichment
 **Goal**: Release manager sees each ticket's linked Azure DevOps commits and pull requests where available, with the tool degrading gracefully when a link is absent or enrichment fails, and credentials safely managed against the 2026 PAT retirement
 **Mode:** mvp
@@ -335,8 +355,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 4. Template Authoring | 11/11 | Code merged, awaiting live-tenant verification (04-11 task 3) |  |
 | 5. Document Generation | 13/13 | Complete   | 2026-08-11 |
 | 5.1 Per-Template Logo Sizing | 0/4 | Planned | - |
-| 5.2 Release Ticket Selection | 0/TBD | Not planned | - |
-| 5.3 Actor Identity Display | 0/TBD | Not planned | - |
+| 5.2 Release Ticket Selection | 0/3 | Planned | - |
+| 5.3 Actor Identity Display | 0/3 | Planned | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
 | 8. Release Insights Dashboard | 0/TBD | Not started | - |
