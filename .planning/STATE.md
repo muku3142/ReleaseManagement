@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Phase 05.1 inserted, awaiting planning
-last_updated: "2026-08-11T10:07:38.360Z"
-last_activity: 2026-08-11 -- Phase 05 completed (13/13); Phase 05.1 inserted for per-template logo sizing
+status: planning
+stopped_at: Phase 05.1 planned (4 plans, 3 waves) — ready to execute
+last_updated: "2026-08-11T11:59:33.361Z"
+last_activity: 2026-08-11 -- Phase 05.1 planned (4 plans, 3 waves); phases 05.2 and 05.3 inserted with context captured
 progress:
-  total_phases: 8
+  total_phases: 10
   completed_phases: 3
-  total_plans: 47
+  total_plans: 51
   completed_plans: 45
-  percent: 96
+  percent: 88
 ---
 
 # Project State
@@ -21,12 +21,29 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-27)
 
 **Core value:** Given a set of Jira tickets, produce accurate and consistent release documentation plus a tracked deployment record — without anyone doing manual release bookkeeping in Jira.
-**Current focus:** Phase 05.1 — per-template logo sizing (not planned yet)
+**Current focus:** Phase 05.1 — per-template logo sizing (planned, ready to execute)
 
 ## Current Position
 
-Phase: 05.1 (per-template-logo-sizing) — NOT PLANNED
-Plan: 0 of TBD — run `/gsd-plan-phase 05.1`
+Phase: 05.1 (per-template-logo-sizing) — READY TO EXECUTE
+Plan: 0 of 4 across 3 waves — run `/gsd-execute-phase 05.1`
+
+**Three decimal phases are now queued**, all inserted on 2026-08-11, all with CONTEXT.md captured
+directly rather than via `/gsd-discuss-phase`:
+
+- **05.1 Per-Template Logo Sizing — PLANNED, 4 plans / 3 waves.** Wave 1 runs the backend
+  `ChromeFields` change and the frontend control in parallel (`src/**` and `frontend/**` are genuinely
+  disjoint); wave 2 makes both exporters honour the height with a cross-format seam assertion; wave 3
+  is regression plus a blocking human parity check. The seam test deliberately uses **15mm, not the
+  30mm default** — at 30mm the pre-fix PDF's hard-coded `max-height: 3cm` coincidentally produces the
+  right answer, so a default-height assertion would pass against broken code.
+- **05.2 Release Ticket Selection — context captured, not planned.** Hide already-added tickets while
+  assembling (scoped to the target release only, preserving multi-release membership) and add tickets
+  from the release page via the extracted browse surface.
+- **05.3 Actor Identity Display — context captured, not planned.** Every actor field stores the Jira
+  accountId; resolve it to an email at read time. The load-bearing constraint: `findByAccountId`
+  returns a token-bearing record and loading it decrypts `encrypted_token`, so a display path using it
+  would let one unreadable row break unrelated screens. Needs a projection-only lookup.
 
 **Phase 05 (document-generation) is complete** — 13/13 plans, verified 2026-08-11.
 Both verification gaps were closed by gap-closure plans and the phase's human
@@ -37,12 +54,14 @@ checkpoint was approved against a real PDF and DOCX export:
   `RenderedDocument` module so one markdown-it instance and one set of chrome
   markup serve both the authoring preview and the viewer, and upgraded every
   View affordance from a dead `<a href>` to a typed `<Link>`.
+
 - 05-13 fixed generation storing flexmark HTML in a field named `markdown`,
   which made every exported PDF and DOCX render its own source as escaped tag
   text. `RenderResult.html()` — one accessor returning two different content
   types, which is what made the defect look correct at every call site — is now
   `output()`. `GenerateThenExportSeamTest` crosses generate → export with no
   hand-written fixture on either side; reverting the fix fails 4 of its 4 tests.
+
 - Correction to `05-VERIFICATION.md`: its gap-2 text claimed chrome and both
   export ports were also broken. They were not. Re-validation before planning
   showed chrome already used `resolveText` (Mustache only, no flexmark) and both
@@ -73,10 +92,10 @@ replaced entirely by **sprint** (brings Jira's Agile API into scope, reversing
 part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
 names, table widening, and frontend tests moved to `frontend/tests/`.
 
-Status: Phase 05 complete — Phase 05.1 inserted, awaiting planning
-Last activity: 2026-08-11 -- Phase 05 completed (13/13); Phase 05.1 inserted for per-template logo sizing
+Status: Ready to execute Phase 05.1
+Last activity: 2026-08-11 -- Phase 05.1 planned (4 plans, 3 waves); phases 05.2 and 05.3 inserted with context captured
 
-Progress: [██████████] 96%
+Progress: [█████████░] 88%
 
 ## Performance Metrics
 
@@ -115,6 +134,22 @@ Progress: [██████████] 96%
   rather than a global config value or a bug-fix-only clamp, so an existing document keeps the size
   it was generated with. Written by hand — `state add-roadmap-evolution` is SDK-only in this CLI
   version and does not run.
+- Phase 05.2 inserted after Phase 05.1 on 2026-08-11 — release ticket selection. Two assembly
+  frictions the user hit in use: already-added tickets still appear while browsing, and tickets can
+  only be added from the browse screen. Filtering scoped to the *target* release only, because
+  `release_ticket_item_key_unique (release_id, ticket_key)` deliberately allows one ticket in several
+  releases and a global filter would make that state unreachable through the UI while leaving it
+  reachable in data. Neither requirement is a correctness fix — `addTickets` already de-duplicates.
+- Phase 05.3 inserted after Phase 05.2 on 2026-08-11 — actor identity display. Every actor field
+  stores the Jira accountId (not a session id: `AuthenticationService:58` issues the JWT with
+  accountId as subject and the email as a separate claim), across 9 capture sites in 5 controllers and
+  8 response DTOs. Read-time resolution chosen over storing the email or storing both, because it is
+  the only option that fixes already-recorded history — `document_snapshot` is append-only so a stored
+  label could never be corrected.
+- **The `phase insert` handler places a new decimal section immediately after the *named* phase, not
+  in numeric order.** Inserting 05.2 and 05.3 "after 5" put both sections *before* 05.1 in the file,
+  and left the top checklist, the Progress table and the `Phases execute in numeric order:` line
+  untouched. Four hand fixes per insert. Verify section ordering after every insert.
 
 ### Decisions
 
