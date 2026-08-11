@@ -2,7 +2,7 @@
 phase: 05-document-generation
 verified: 2026-08-11T00:00:00Z
 status: gaps_found
-score: 6/8 roadmap success criteria verified (1 failed, 1 needs human verification)
+score: 5/8 roadmap success criteria verified (2 failed, 1 needs human verification)
 overrides_applied: 0
 gaps:
   - truth: "Release manager can preview any generated document and export it as PDF or DOCX (ROADMAP Success Criterion 4)"
@@ -30,6 +30,38 @@ gaps:
     missing:
       - "A DocumentViewerRoute (or equivalent) component registered at /releases/$releaseId/documents/$documentType that renders a stored DocumentSnapshot's markdown/chrome (reusing TemplatePreview's markdown-it renderer per 05-UI-SPEC.md screen 2), handles the superseded-revision banner, template-deleted note, DOCUMENT_NOT_FOUND state, and the DOC-08 human-verification hint UI-SPEC specified for this screen."
       - "Upgrade of ReadinessPill and DocumentsSection's View links from plain <a href> to typed <Link> once the route exists (already flagged as a pure follow-up by 05-10-SUMMARY.md and 05-11-SUMMARY.md)."
+  - truth: "Release manager can export any generated document as PDF or DOCX with the document's content rendered (DOC-05, DOC-06, ROADMAP Success Criterion 4)"
+    status: failed
+    found_by: user-report during post-execution review, 2026-08-11 (NOT caught by this verification pass, and not caught by the 552-test suite)
+    reason: >
+      Generation and export disagree about the content type of a snapshot's stored body, so every
+      exported PDF and DOCX renders its entire body as literal escaped HTML source text
+      (`<h1>Release 4.3 — 4.3</h1>` visible as text) instead of formatted content.
+      `DocumentGenerationService.java:58` resolves the template with
+      `renderService.render(template.body(), view, "Body").html()` — the `.html()` accessor returns
+      HTML, but the local variable is named `markdown` and that HTML is what is persisted as the
+      snapshot body at line 70. Both export adapters declare their parameter `resolvedMarkdown` and
+      call `renderAdapter.parseMarkdown(...)` on it (`PdfExportAdapter.java:32`, and the DOCX walker
+      equivalently). Parsing HTML as Markdown means the render path's deliberate raw-HTML
+      neutralisation (a required control under the untrusted-template constraint) escapes every tag
+      into visible text. The same `.html()` mismatch applies to the four resolved chrome fields at
+      `DocumentGenerationService.java:61-64`, which feed cover title/subtitle, running header and
+      footer.
+      Each plan was internally consistent; the CONTRACT between 05-04 (generation) and 05-05/05-06
+      (export) was never agreed. Both export adapters were unit-tested with hand-written Markdown
+      fixtures, so they pass in isolation — no test ever feeds an exporter what generation actually
+      stores. This is the parallel-worktree seam failure mode: 552 green tests cannot see it.
+    artifacts:
+      - path: "src/main/java/com/evision/releasemgmt/application/DocumentGenerationService.java"
+        issue: "Line 58 stores .html() output as the snapshot body under a variable named `markdown`; lines 61-64 do the same for the four chrome fields"
+      - path: "src/main/java/com/evision/releasemgmt/adapters/render/PdfExportAdapter.java"
+        issue: "Line 32 calls parseMarkdown() on a body that is actually HTML"
+      - path: "src/main/java/com/evision/releasemgmt/adapters/render/DocxExportAdapter.java"
+        issue: "Same assumption — walks a flexmark AST parsed from what is actually HTML"
+    missing:
+      - "An agreed content-type contract for DocumentSnapshot.content. Recommended: store resolved MARKDOWN (the snapshot is the immutable audit record and Markdown is the authored source of truth), and let each exporter convert. Whichever direction is chosen, the type must be stated on DocumentSnapshot and honoured by generation and both exporters."
+      - "Resolution of the same question for the four chrome fields, which are resolved via resolveText(...).html() and consumed as plain text by both exporters."
+      - "A seam-level regression test that GENERATES a document and then EXPORTS it through the real DocumentExportService, asserting the output contains rendered content and no literal '<h1' / '&lt;' escaped-tag text. Unit tests with hand-written fixtures on either side of this boundary provably cannot catch it."
 human_verification:
   - test: "DOC-08 visual parity: generate a document, export both PDF and DOCX, open them side by side"
     expected: "Cover page, running header, footer text and 'Page X of Y' numbering are visually equivalent between the two formats (same content, same general placement) - not merely both present"
