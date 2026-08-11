@@ -43,6 +43,7 @@ const CHROME = {
   headerText: 'Orchstro',
   footerText: 'Confidential',
   pageNumbersEnabled: true,
+  logoRenderHeightMm: 30,
 };
 
 function generatedDocument(overrides: Record<string, unknown> = {}) {

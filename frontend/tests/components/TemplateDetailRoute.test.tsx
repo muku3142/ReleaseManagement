@@ -28,6 +28,7 @@ const CHROME = {
   headerText: '',
   footerText: '',
   pageNumbersEnabled: false,
+  logoRenderHeightMm: 30,
 };
 
 function makeTemplate(overrides: Record<string, unknown> = {}) {
@@ -137,6 +138,10 @@ function releaseSelect(): HTMLSelectElement {
 
 function groupBySelect(): HTMLSelectElement {
   return container.querySelector<HTMLSelectElement>('select[aria-label="Group by"]')!;
+}
+
+function logoHeightInput(): HTMLInputElement {
+  return container.querySelector<HTMLInputElement>('input[type="number"]')!;
 }
 
 // React tracks the native value setter on controlled form elements to distinguish its own
@@ -324,6 +329,34 @@ describe('TemplateDetailRoute', () => {
     await flush();
 
     expect(sentBody).toContain('"groupingDimension":"COMPONENT"');
+  });
+
+  it('savingSendsTheEditedCoverLogoHeight', async () => {
+    let sentBody: string | undefined;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/api/releases')) return json(200, { releases: RELEASES });
+      if (url.endsWith('/api/templates/t1/content') && init?.method === 'PUT') {
+        sentBody = String(init?.body);
+        return json(200, makeTemplate());
+      }
+      return json(200, makeTemplate());
+    });
+
+    await renderRoute();
+    // Only one tab is mounted at a time, so the chrome form does not exist until this click.
+    await act(async () => byText('Chrome & Logo').click());
+
+    const input = logoHeightInput();
+    expect(input.min).toBe('5');
+    expect(input.max).toBe('120');
+    expect(input.value).toBe('30');
+
+    await act(async () => setNativeValue(input, '65'));
+    await act(async () => byText('Save template').click());
+    await flush();
+
+    expect(sentBody).toContain('"logoRenderHeightMm":65');
   });
 
   it('groupBySelectIsKeyboardReachableAndLabelled', async () => {

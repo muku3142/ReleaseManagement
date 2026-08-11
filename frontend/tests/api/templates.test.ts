@@ -42,6 +42,7 @@ function template(overrides: Partial<Template>): Template {
       headerText: '',
       footerText: '',
       pageNumbersEnabled: false,
+      logoRenderHeightMm: 30,
     },
     groupingDimension: 'ISSUE_TYPE',
     logo: null,
