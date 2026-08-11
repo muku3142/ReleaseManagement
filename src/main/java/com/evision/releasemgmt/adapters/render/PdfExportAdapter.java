@@ -94,7 +94,16 @@ public class PdfExportAdapter implements PdfExportPort {
         css.append(" body { font-family: sans-serif; font-size: 11pt; line-height: 1.45; }");
         css.append(" #running-header { position: running(runningHeader); font-size: 9pt; color: #444; }");
         css.append(" .cover { page-break-after: always; text-align: center; padding-top: 6cm; }");
-        css.append(" .cover img { max-height: 3cm; }");
+        // D-05.1-01: the per-template cap, in mm - openhtmltopdf handles mm natively here, and mm is
+        // the stored unit precisely so no conversion is needed in this renderer, in DOCX's EMU, or in
+        // the browser's inline style. `max-height` alone satisfies D-05.1-06 for free: CSS never scales
+        // an image UP to a max-height and preserves the aspect ratio when it scales one down.
+        //
+        // No escapeCss call, deliberately: logoRenderHeightMm is an int bounded to 5..120 by
+        // ChromeFieldsRequest's @Min/@Max and by V6's CHECK on both columns. escapeCss exists for the
+        // footer, which is an author-supplied STRING entering a CSS string literal; an int cannot carry
+        // CSS syntax, and escapeCss does not even accept one.
+        css.append(" .cover img { max-height: ").append(chrome.logoRenderHeightMm()).append("mm; }");
         css.append(" .cover h1 { font-size: 24pt; margin: 0.6cm 0 0 0; }");
         css.append(" .cover p { font-size: 13pt; color: #555; }");
         css.append(" h1, h2, h3 { page-break-after: avoid; }");

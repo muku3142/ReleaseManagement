@@ -144,6 +144,11 @@ public class DocxExportAdapter implements DocxExportPort {
     // size an inline image from its own decoded pixel dimensions.
     private static final long EMU_PER_PIXEL = 9525L;
 
+    // 1mm in EMUs (914400 EMU/inch / 25.4 mm/inch = 36000 exactly, no rounding) - the conversion for a
+    // chrome dimension authored in mm. Declared as a long so `int mm * EMU_PER_MM` widens rather than
+    // overflowing, regardless of the bound on the mm value.
+    private static final long EMU_PER_MM = 36000L;
+
     private final ObjectFactory factory = Context.getWmlObjectFactory();
     private final MustacheFlexmarkRenderAdapter renderAdapter;
 
@@ -189,20 +194,34 @@ public class DocxExportAdapter implements DocxExportPort {
     private void addCoverPage(WordprocessingMLPackage pkg, MainDocumentPart mainDocumentPart,
                               ChromeFields chrome, LogoImage logo) throws Exception {
         if (logo != null) {
-            mainDocumentPart.getContent().add(logoParagraph(pkg, logo));
+            mainDocumentPart.getContent().add(logoParagraph(pkg, chrome, logo));
         }
         mainDocumentPart.getContent().add(centeredTextParagraph(chrome.coverTitle(), 56));
         mainDocumentPart.getContent().add(centeredTextParagraph(chrome.coverSubtitle(), 32));
         mainDocumentPart.getContent().add(pageBreakParagraph());
     }
 
-    private P logoParagraph(WordprocessingMLPackage pkg, LogoImage logo) throws Exception {
+    private P logoParagraph(WordprocessingMLPackage pkg, ChromeFields chrome, LogoImage logo) throws Exception {
         // T-05-31: width/height come from the stored, content-sniffed LogoMetadata, never from a
         // filename - docx4j itself also determines the embedded content type from the image
         // bytes' own signature, not from any filename string.
         BinaryPartAbstractImage imagePart = BinaryPartAbstractImage.createImagePart(pkg, logo.bytes());
         long widthEmu = (long) logo.metadata().width() * EMU_PER_PIXEL;
         long heightEmu = (long) logo.metadata().height() * EMU_PER_PIXEL;
+        // D-05.1-05, THE DEFECT: createImageInline takes explicit EMU dimensions, so unlike the PDF's
+        // CSS max-height and the browser's, nothing here clamps on our behalf. Without this block a
+        // 2000x2000 upload renders ~20.8in tall on an 11.7in A4 page - wider than the page and nearly
+        // two pages long - while the same logo is 1.2in in the PDF.
+        //
+        // Scale WIDTH by the same ratio (D-05.1-06): a letterboxed or stretched logo is worse than an
+        // oversized one. Only ever DOWN - the `if` is what makes this a maximum rather than a target,
+        // matching how max-height already behaves in the other two renderers.
+        long maxHeightEmu = chrome.logoRenderHeightMm() * EMU_PER_MM;
+        if (heightEmu > maxHeightEmu) {
+            double ratio = (double) maxHeightEmu / heightEmu;
+            widthEmu = Math.round(widthEmu * ratio);
+            heightEmu = maxHeightEmu;
+        }
         Inline inline = imagePart.createImageInline("logo", "Logo", 0, 1, widthEmu, heightEmu, false);
         Drawing drawing = new Drawing();
         drawing.getAnchorOrInline().add(inline);
