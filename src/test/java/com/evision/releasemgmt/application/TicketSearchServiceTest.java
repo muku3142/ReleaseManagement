@@ -8,6 +8,7 @@ import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.jira.TicketField;
 import com.evision.releasemgmt.domain.jira.TicketSearchCriteria;
 import com.evision.releasemgmt.ports.JiraTicketPort;
+import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,6 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -56,11 +58,15 @@ class TicketSearchServiceTest {
     @Mock
     private JiraTicketPort ticketPort;
 
+    @Mock
+    private ReleaseRepository releaseRepository;
+
     private TicketSearchService service;
 
     @BeforeEach
     void setUp() {
-        service = new TicketSearchService(accessContextService, fieldMetadataService, ticketPort);
+        service = new TicketSearchService(accessContextService, fieldMetadataService, ticketPort,
+                releaseRepository);
     }
 
     @Test
@@ -132,6 +138,111 @@ class TicketSearchServiceTest {
                 .isInstanceOf(JiraTicketReadException.class);
 
         verify(ticketPort, never()).searchAll(any(), anyString(), any());
+    }
+
+    @Test
+    void filtersOutTicketsAlreadyOnTheTargetRelease() {
+        UUID releaseId = UUID.randomUUID();
+        List<TicketDetail> fromPort = List.of(ticket("CNV-1"), ticket("CNV-2"), ticket("CNV-3"));
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(fromPort);
+        when(releaseRepository.findTicketKeys(releaseId)).thenReturn(List.of("CNV-2"));
+
+        List<TicketDetail> result =
+                service.search(TicketSearchCriteria.byProject("10023", "10891", null), releaseId);
+
+        assertThat(result).extracting(TicketDetail::key).containsExactly("CNV-1", "CNV-3");
+    }
+
+    @Test
+    void theSameSearchOmitsATicketWithAReleaseScopeAndReturnsItWithout() {
+        UUID releaseId = UUID.randomUUID();
+        List<TicketDetail> fromPort = List.of(ticket("CNV-1"), ticket("CNV-2"));
+        TicketSearchCriteria criteria = TicketSearchCriteria.byProject("10023", "10891", null);
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(fromPort);
+        when(releaseRepository.findTicketKeys(releaseId)).thenReturn(List.of("CNV-2"));
+
+        List<TicketDetail> scoped = service.search(criteria, releaseId);
+        List<TicketDetail> unscoped = service.search(criteria);
+
+        assertThat(scoped).extracting(TicketDetail::key).containsExactly("CNV-1");
+        assertThat(unscoped).extracting(TicketDetail::key).containsExactly("CNV-1", "CNV-2");
+
+        ArgumentCaptor<String> jql = ArgumentCaptor.forClass(String.class);
+        verify(ticketPort, org.mockito.Mockito.times(2)).searchAll(any(), jql.capture(), any());
+        List<String> capturedJql = jql.getAllValues();
+        assertThat(capturedJql.get(0)).isEqualTo(capturedJql.get(1));
+        assertThat(capturedJql.get(0)).doesNotContain(releaseId.toString());
+    }
+
+    @Test
+    void noReleaseScopeNeverQueriesReleaseMembership() {
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(List.of());
+
+        service.search(TicketSearchCriteria.byProject("10023", "10891", null));
+
+        verify(releaseRepository, never()).findTicketKeys(any());
+    }
+
+    @Test
+    void anUnknownReleaseScopeFiltersNothing() {
+        UUID releaseId = UUID.randomUUID();
+        List<TicketDetail> fromPort = List.of(ticket("CNV-1"), ticket("CNV-2"), ticket("CNV-3"));
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(fromPort);
+        when(releaseRepository.findTicketKeys(releaseId)).thenReturn(List.of());
+
+        List<TicketDetail> result =
+                service.search(TicketSearchCriteria.byProject("10023", "10891", null), releaseId);
+
+        assertThat(result).extracting(TicketDetail::key).containsExactly("CNV-1", "CNV-2", "CNV-3");
+    }
+
+    @Test
+    void aMovedIssueIsNotHiddenUnderItsNewKey() {
+        // ReleaseService:81-83 - an issue that moved projects is requested as OLD-1 and comes
+        // back from Jira as NEW-5, so a filter keyed on the release's stored ticket_key cannot
+        // hide it under its new key. The release genuinely does not contain NEW-5.
+        UUID releaseId = UUID.randomUUID();
+        List<TicketDetail> fromPort = List.of(ticket("NEW-5"));
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(fromPort);
+        when(releaseRepository.findTicketKeys(releaseId)).thenReturn(List.of("OLD-1"));
+
+        List<TicketDetail> result =
+                service.search(TicketSearchCriteria.byProject("10023", "10891", null), releaseId);
+
+        assertThat(result).extracting(TicketDetail::key).containsExactly("NEW-5");
+    }
+
+    @Test
+    void aTicketOnADifferentReleaseIsStillVisible() {
+        // D-05.2-01: the filter is per-target-release, never global. The schema's
+        // release_ticket_item_key_unique (release_id, ticket_key) is per-release precisely so a
+        // hotfix can ship in two releases at once - switching this to a global filter would pass
+        // the rest of the suite, which is why this test exists.
+        UUID releaseA = UUID.randomUUID();
+        UUID releaseB = UUID.randomUUID();
+        List<TicketDetail> fromPort = List.of(ticket("CNV-2"));
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(fromPort);
+        // releaseA is never queried by this call - present only to document that its membership
+        // has no bearing on a search scoped to releaseB.
+        org.mockito.Mockito.lenient().when(releaseRepository.findTicketKeys(releaseA)).thenReturn(List.of("CNV-2"));
+        when(releaseRepository.findTicketKeys(releaseB)).thenReturn(List.of());
+
+        List<TicketDetail> result =
+                service.search(TicketSearchCriteria.byProject("10023", "10891", null), releaseB);
+
+        assertThat(result).extracting(TicketDetail::key).containsExactly("CNV-2");
     }
 
     private static TicketDetail ticket(String key) {
