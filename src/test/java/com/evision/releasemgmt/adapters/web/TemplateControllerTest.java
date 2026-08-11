@@ -31,6 +31,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -186,8 +187,44 @@ class TemplateControllerTest {
     }
 
     private static String validContentBody() {
+        return contentBodyWithLogoHeight("45");
+    }
+
+    private static String contentBodyWithLogoHeight(String mm) {
         return "{\"body\":\"Release notes\",\"chrome\":{\"coverEnabled\":false,\"coverTitle\":\"\","
                 + "\"coverSubtitle\":\"\",\"headerText\":\"\",\"footerText\":\"\","
-                + "\"pageNumbersEnabled\":false}}";
+                + "\"pageNumbersEnabled\":false,\"logoRenderHeightMm\":" + mm + "}}";
+    }
+
+    @Test
+    void saveContentRejectsALogoHeightAboveThePrintableBound() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(put("/api/templates/{id}/content", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(contentBodyWithLogoHeight("121")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
+
+        verify(templateService, never()).saveContent(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void saveContentDefaultsAnAbsentLogoHeightInsteadOfRejectingIt() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(templateService.saveContent(any(), any(), any(), any(), any())).thenReturn(template(id, false));
+
+        // A payload from a client build that predates this field - Integer + the controller's default,
+        // not a primitive int that would deserialise to 0 and fail @Min(5).
+        mockMvc.perform(put("/api/templates/{id}/content", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"body\":\"Release notes\",\"chrome\":{\"coverEnabled\":false,"
+                                + "\"coverTitle\":\"\",\"coverSubtitle\":\"\",\"headerText\":\"\","
+                                + "\"footerText\":\"\",\"pageNumbersEnabled\":false}}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<ChromeFields> chrome = ArgumentCaptor.forClass(ChromeFields.class);
+        verify(templateService).saveContent(any(), any(), chrome.capture(), any(), any());
+        assertThat(chrome.getValue().logoRenderHeightMm()).isEqualTo(30);
     }
 }

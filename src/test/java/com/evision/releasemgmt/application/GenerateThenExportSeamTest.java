@@ -119,7 +119,8 @@ class GenerateThenExportSeamTest {
 
     @Test
     void chromeSurvivesTheSeamAsPlainText() throws Exception {
-        ChromeFields chrome = new ChromeFields(true, "Version {{release.version}}", "", "", "", false);
+        ChromeFields chrome = new ChromeFields(true, "Version {{release.version}}", "", "", "", false,
+                ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
         DocumentSnapshot snapshot = generate("Body.", chrome);
 
         byte[] pdf = exportService.toPdf(snapshot);

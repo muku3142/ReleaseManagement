@@ -168,7 +168,7 @@ class PdfExportAdapterTest {
     private static ChromeFields chrome(boolean coverEnabled, String coverTitle, String coverSubtitle,
                                         String headerText, String footerText, boolean pageNumbersEnabled) {
         return new ChromeFields(coverEnabled, coverTitle, coverSubtitle, headerText, footerText,
-                pageNumbersEnabled);
+                pageNumbersEnabled, ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
     }
 
     private static byte[] onePixelPng() throws IOException {
