@@ -160,8 +160,7 @@ Note: engine and view-model design (jmustache integration, `ReleaseView`/`Ticket
 
 ### Phase 05.1: Per-Template Logo Sizing (INSERTED)
 
-**Goal**: Template author controls how large the cover logo renders, as a per-template chrome
-setting stored on the snapshot, and all four renderers agree on that size
+**Goal**: Template author controls how large the cover logo renders, as a per-template chrome setting stored on the snapshot, and all four renderers agree on that size
 **Requirements**: DOC-05, DOC-06, DOC-08, TMPL-08
 **Depends on**: Phase 5
 **Plans**: TBD
