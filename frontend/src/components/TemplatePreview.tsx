@@ -1,12 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import Mustache from 'mustache';
-import MarkdownIt from 'markdown-it';
 import type { ChromeFields, ItemView, PlaceholderEntry, ReleaseView } from '../api/templates';
-
-// D-04-05 on the client: html:false makes markdown-it escape raw HTML rather than pass it through,
-// which is the same posture the backend takes with flexmark. UI-SPEC treats an inability to suppress
-// raw HTML as a blocking library-selection defect, so this option is not negotiable.
-const md = new MarkdownIt({ html: false, linkify: false, typographer: false });
+import { md, chipUnknownMarkers, RenderedDocument } from './RenderedDocument';
 
 // D-04-05 again: mustache.js HTML-escapes interpolated values by default, which would turn an
 // ampersand in a ticket summary into a visible &amp; once markdown-it escapes it a second time.
@@ -138,17 +133,6 @@ function markUnknownTokens(source: string, validByScope: Map<Scope, Set<string>>
   return { ok: true, source: out };
 }
 
-// markdown-it has already escaped <, >, & and " in every text node, so the captured token is safe to
-// interpolate. This is the one place this app builds HTML by hand, and it is confined to replacing a
-// literal marker the renderer itself produced.
-function chipUnknownMarkers(html: string): string {
-  return html.replace(
-    /\[\[unknown: ([^\]]*)\]\]/g,
-    (_m, token: string) =>
-      `<code class="rounded bg-amber-100 px-1 py-0.5 font-mono text-xs text-amber-900">[[unknown: ${token}]]</code>`,
-  );
-}
-
 // D-04-15's other half: a chrome field gets the exact same mark-unknown-tokens + Mustache.render
 // steps the body uses (TMPL-08 - same placeholder rules, no second expression surface), but never
 // markdown-it - a running header is one line of plain text, not a Markdown document. Unlike the
@@ -167,32 +151,6 @@ function resolveChromeText(text: string, view: ReleaseView | undefined, validByS
     return text;
   }
 }
-
-// The React-children counterpart of chipUnknownMarkers: chrome strings are rendered as plain text
-// children, never through the raw-HTML-injection prop the body container below uses, so the
-// marker is split into an array of strings and <code> elements instead of HTML.
-function renderChromeNodes(text: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  const regex = /\[\[unknown: ([^\]]*)\]\]/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let key = 0;
-  while ((match = regex.exec(text)) !== null) {
-    if (match.index > lastIndex) nodes.push(text.slice(lastIndex, match.index));
-    nodes.push(
-      <code key={key++} className="rounded bg-amber-100 px-1 py-0.5 font-mono text-xs text-amber-900">
-        {`[[unknown: ${match[1]}]]`}
-      </code>,
-    );
-    lastIndex = match.index + match[0].length;
-  }
-  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
-  return nodes;
-}
-
-// D-04-15: this preview is an approximation, not a layout specification. Nothing paginates until
-// Phase 5, so DOC-08's PDF/DOCX parity cannot be verified from what is on screen here.
-const PAGE_NUMBER_PLACEHOLDER = <span className="ml-2 italic text-gray-400">Page X of Y</span>;
 
 type PreviewOutcome =
   | { kind: 'empty' }
@@ -284,40 +242,18 @@ export function TemplatePreview(props: {
   const chrome = props.chrome;
   const validByScope = useMemo(() => buildValidTokens(props.entries), [props.entries]);
 
-  const resolvedCoverTitle = resolveChromeText(chrome.coverTitle, props.view, validByScope);
-  const resolvedCoverSubtitle = resolveChromeText(chrome.coverSubtitle, props.view, validByScope);
-  const resolvedHeaderText = resolveChromeText(chrome.headerText, props.view, validByScope);
-  const resolvedFooterText = resolveChromeText(chrome.footerText, props.view, validByScope);
-
-  const headerVisible = resolvedHeaderText.trim() !== '';
-  const footerVisible = resolvedFooterText.trim() !== '';
+  const resolvedChrome: ChromeFields = {
+    ...chrome,
+    coverTitle: resolveChromeText(chrome.coverTitle, props.view, validByScope),
+    coverSubtitle: resolveChromeText(chrome.coverSubtitle, props.view, validByScope),
+    headerText: resolveChromeText(chrome.headerText, props.view, validByScope),
+    footerText: resolveChromeText(chrome.footerText, props.view, validByScope),
+  };
 
   return (
-    <>
-      {chrome.coverEnabled && (
-        <div className="mb-6 rounded border border-gray-300 bg-white p-8 text-center shadow-sm">
-          {props.logoUrl && <img src={props.logoUrl} alt="" className="mx-auto max-h-20" />}
-          <p className="text-2xl font-semibold">{renderChromeNodes(resolvedCoverTitle)}</p>
-          <p className="mt-2 text-base text-gray-600">{renderChromeNodes(resolvedCoverSubtitle)}</p>
-        </div>
-      )}
-
-      {headerVisible && (
-        <div className="border-b border-gray-300 bg-gray-100 px-4 py-2 text-xs text-gray-700">
-          {renderChromeNodes(resolvedHeaderText)}
-          {chrome.pageNumbersEnabled && PAGE_NUMBER_PLACEHOLDER}
-        </div>
-      )}
-
+    <RenderedDocument chrome={resolvedChrome} logoUrl={props.logoUrl}>
       {renderBodyRegion(outcome)}
-
-      {footerVisible && (
-        <div className="border-t border-gray-300 bg-gray-100 px-4 py-2 text-xs text-gray-700">
-          {renderChromeNodes(resolvedFooterText)}
-          {chrome.pageNumbersEnabled && !headerVisible && PAGE_NUMBER_PLACEHOLDER}
-        </div>
-      )}
-    </>
+    </RenderedDocument>
   );
 }
 
