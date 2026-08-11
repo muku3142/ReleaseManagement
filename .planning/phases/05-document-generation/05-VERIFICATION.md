@@ -1,12 +1,21 @@
 ---
 phase: 05-document-generation
 verified: 2026-08-11T00:00:00Z
-status: gaps_found
-score: 6/8 roadmap success criteria verified (1 failed, 1 needs human verification)
+status: passed
+score: 8/8 roadmap success criteria verified (2 gaps closed by plans 05-12 and 05-13, human verification confirmed 2026-08-11)
 overrides_applied: 0
+re_verified: 2026-08-11T12:45:00Z
 gaps:
   - truth: "Release manager can preview any generated document and export it as PDF or DOCX (ROADMAP Success Criterion 4)"
-    status: failed
+    status: resolved
+    resolved_by: 05-12-PLAN.md (commits 07aafc7, a204292, 8c8972d, 68d6cb0, 0f43a5d)
+    resolution: >
+      The viewer route is registered at /releases/$releaseId/documents/$documentType and renders a
+      stored snapshot through a shared RenderedDocument module (one markdown-it instance and one set
+      of chrome markup for both the authoring preview and the viewer). Superseded-revision banner,
+      template-deleted note, DOCUMENT_NOT_FOUND state and the DOC-08 parity hint are all implemented.
+      Both missing[] items are closed: ReadinessPill and DocumentsSection now use typed <Link>, and
+      no plain <a href> to an app route remains in the phase's components. Frontend suite 183 green.
     reason: >
       The document-viewer route that renders a generated document's content
       (`/releases/$releaseId/documents/$documentType`) was designed in 05-UI-SPEC.md as "screen 2" of
@@ -30,8 +39,61 @@ gaps:
     missing:
       - "A DocumentViewerRoute (or equivalent) component registered at /releases/$releaseId/documents/$documentType that renders a stored DocumentSnapshot's markdown/chrome (reusing TemplatePreview's markdown-it renderer per 05-UI-SPEC.md screen 2), handles the superseded-revision banner, template-deleted note, DOCUMENT_NOT_FOUND state, and the DOC-08 human-verification hint UI-SPEC specified for this screen."
       - "Upgrade of ReadinessPill and DocumentsSection's View links from plain <a href> to typed <Link> once the route exists (already flagged as a pure follow-up by 05-10-SUMMARY.md and 05-11-SUMMARY.md)."
+  - truth: "Release manager can export any generated document as PDF or DOCX with the document's content rendered (DOC-05, DOC-06, ROADMAP Success Criterion 4)"
+    status: resolved
+    resolved_by: 05-13-PLAN.md (commits f82319a, 01d2059, f5b44bc)
+    resolution: >
+      Generation now stores Mustache-resolved MARKDOWN (resolveText, not render), the content type is
+      stated on the DocumentSnapshot record itself, and the RenderResult.html() accessor that made
+      storing HTML look correct at every call site is renamed to output() with no occurrence left in
+      src/main or src/test. GenerateThenExportSeamTest crosses generate -> export in both formats with
+      no hand-written fixture on either side; reverting the fix fails 4 of its 4 tests. Backend suite
+      556 green. Confirmed by the user against a real PDF and DOCX export on 2026-08-11.
+    correction_to_reason_below: >
+      This report's reason text below claims the same .html() mismatch broke the four chrome fields at
+      DocumentGenerationService.java:61-64. That claim is WRONG and was re-validated against the code
+      before plan 05-13 was written. Those lines call resolveText(...), which is Mustache-only with no
+      flexmark step, so chrome already held plain resolved text exactly as both exporters consume it.
+      The only defect there was the accessor's misleading name. Likewise the report's second missing[]
+      item ("resolution of the same question for the four chrome fields") had nothing to resolve, and
+      its third claim that PdfExportPort/DocxExportPort needed an agreed contract is wrong - both
+      already carried javadoc stating the parameter is already-resolved Markdown. Generation was the
+      single place that disagreed. See 05-13-SUMMARY.md.
+    found_by: user-report during post-execution review, 2026-08-11 (NOT caught by this verification pass, and not caught by the 552-test suite)
+    reason: >
+      Generation and export disagree about the content type of a snapshot's stored body, so every
+      exported PDF and DOCX renders its entire body as literal escaped HTML source text
+      (`<h1>Release 4.3 — 4.3</h1>` visible as text) instead of formatted content.
+      `DocumentGenerationService.java:58` resolves the template with
+      `renderService.render(template.body(), view, "Body").html()` — the `.html()` accessor returns
+      HTML, but the local variable is named `markdown` and that HTML is what is persisted as the
+      snapshot body at line 70. Both export adapters declare their parameter `resolvedMarkdown` and
+      call `renderAdapter.parseMarkdown(...)` on it (`PdfExportAdapter.java:32`, and the DOCX walker
+      equivalently). Parsing HTML as Markdown means the render path's deliberate raw-HTML
+      neutralisation (a required control under the untrusted-template constraint) escapes every tag
+      into visible text. The same `.html()` mismatch applies to the four resolved chrome fields at
+      `DocumentGenerationService.java:61-64`, which feed cover title/subtitle, running header and
+      footer.
+      Each plan was internally consistent; the CONTRACT between 05-04 (generation) and 05-05/05-06
+      (export) was never agreed. Both export adapters were unit-tested with hand-written Markdown
+      fixtures, so they pass in isolation — no test ever feeds an exporter what generation actually
+      stores. This is the parallel-worktree seam failure mode: 552 green tests cannot see it.
+    artifacts:
+      - path: "src/main/java/com/evision/releasemgmt/application/DocumentGenerationService.java"
+        issue: "Line 58 stores .html() output as the snapshot body under a variable named `markdown`; lines 61-64 do the same for the four chrome fields"
+      - path: "src/main/java/com/evision/releasemgmt/adapters/render/PdfExportAdapter.java"
+        issue: "Line 32 calls parseMarkdown() on a body that is actually HTML"
+      - path: "src/main/java/com/evision/releasemgmt/adapters/render/DocxExportAdapter.java"
+        issue: "Same assumption — walks a flexmark AST parsed from what is actually HTML"
+    missing:
+      - "An agreed content-type contract for DocumentSnapshot.content. Recommended: store resolved MARKDOWN (the snapshot is the immutable audit record and Markdown is the authored source of truth), and let each exporter convert. Whichever direction is chosen, the type must be stated on DocumentSnapshot and honoured by generation and both exporters."
+      - "Resolution of the same question for the four chrome fields, which are resolved via resolveText(...).html() and consumed as plain text by both exporters."
+      - "A seam-level regression test that GENERATES a document and then EXPORTS it through the real DocumentExportService, asserting the output contains rendered content and no literal '<h1' / '&lt;' escaped-tag text. Unit tests with hand-written fixtures on either side of this boundary provably cannot catch it."
 human_verification:
   - test: "DOC-08 visual parity: generate a document, export both PDF and DOCX, open them side by side"
+    status: confirmed
+    confirmed_at: 2026-08-11
+    confirmed_via: 05-13-PLAN.md Task 3 checkpoint (user response "approved and working fine")
     expected: "Cover page, running header, footer text and 'Page X of Y' numbering are visually equivalent between the two formats (same content, same general placement) - not merely both present"
     why_human: "D-05-07 deliberately declined automated parity assertions or golden-image comparison. Chrome is applied by two independent mechanisms (openhtmltopdf CSS @page/counter() vs docx4j titlePg/HdrFtrRef/CTSimpleField) with no shared code path, so a human eyeball check is the only verification this phase built. Automated tests (PdfExportAdapterTest, DocxExportAdapterTest) prove structural presence of cover/header/footer/page-numbering in each format independently, not that the two look alike."
 ---
@@ -43,8 +105,12 @@ and approval documents from templates, with every generated document retained as
 record — working correctly for Jira-only releases with no Azure DevOps data.
 
 **Verified:** 2026-08-11
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Status:** passed (both gaps closed 2026-08-11 by plans 05-12 and 05-13; see the `gaps:` frontmatter for
+what each resolved, and the `correction_to_reason_below` note on gap 2 — this report's chrome diagnosis
+was wrong and the code was re-validated before the fix was planned)
+**Re-verification:** Yes — gap closure re-check. The `gsd-verifier` agent was not re-run because
+`workflow.verifier` is `false` in `.planning/config.json`; the two gaps were re-checked directly
+against the codebase and the full test suites (backend 556 green, frontend 183 green).
 
 **Note on mode:** ROADMAP.md marks this phase `Mode: mvp`, but the phase goal text is not formatted
 as a User Story ("As a X, I want Y, so that Z."). The `gsd-sdk`/`gsd-tools` CLI used to validate that

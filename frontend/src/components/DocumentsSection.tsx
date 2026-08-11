@@ -6,14 +6,13 @@ import {
   readinessFor,
   useDocumentReadiness,
   useDocumentRevisions,
-  useExportDocument,
   useGenerateDocument,
   type DocumentReadinessState,
   type DocumentRevision,
-  type ExportFormat,
 } from '../api/documents';
 import { DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS, type DocumentType } from '../api/templates';
 import { ReadinessPill } from './ReadinessPill';
+import { ExportButtons, Spinner } from './ExportButtons';
 
 type DocumentsSectionProps = {
   releaseId: string;
@@ -46,12 +45,7 @@ export function DocumentsSection({ releaseId, releaseName, version }: DocumentsS
   );
 }
 
-const SPIN_GLYPH = 'h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600';
 const GENERATING_LABEL = 'Generating…';
-
-function Spinner() {
-  return <span className={SPIN_GLYPH} aria-hidden="true" />;
-}
 
 type DocumentRowProps = {
   releaseId: string;
@@ -198,9 +192,6 @@ type DocumentViewLinkProps = {
 };
 
 function DocumentViewLink({ releaseId, documentType, revision, disabled, className }: DocumentViewLinkProps) {
-  // The document viewer route (`/releases/$releaseId/documents/$documentType`) is registered by a
-  // later plan (05-12) - a plain anchor, same convention ReadinessPill already established, rather
-  // than a typed <Link> to a route that doesn't exist in router.tsx yet.
   if (disabled) {
     return (
       <span className={className ?? 'text-sm text-gray-400'} aria-disabled="true">
@@ -208,66 +199,15 @@ function DocumentViewLink({ releaseId, documentType, revision, disabled, classNa
       </span>
     );
   }
-  const base = `/releases/${releaseId}/documents/${documentType}`;
-  const href = revision === undefined ? base : `${base}?revision=${revision}`;
   return (
-    <a href={href} className={className ?? 'text-sm text-blue-600 underline'}>
+    <Link
+      to="/releases/$releaseId/documents/$documentType"
+      params={{ releaseId, documentType }}
+      search={revision === undefined ? undefined : { revision }}
+      className={className ?? 'text-sm text-blue-600 underline'}
+    >
       View
-    </a>
-  );
-}
-
-type ExportButtonsProps = {
-  releaseId: string;
-  releaseName: string;
-  version: string;
-  documentType: DocumentType;
-  revision?: number;
-  disabled: boolean;
-};
-
-// One mutation instance per (row, revision) usage site - each superseded revision in the history
-// disclosure gets its own ExportButtons instance, so its pending/error state never bleeds into the
-// latest revision's export controls or a sibling revision's (D-05-06: every revision exportable).
-function ExportButtons({ releaseId, releaseName, version, documentType, revision, disabled }: ExportButtonsProps) {
-  const exportMutation = useExportDocument();
-
-  const isPending = (format: ExportFormat) => exportMutation.isPending && exportMutation.variables?.format === format;
-
-  const problem =
-    exportMutation.isError && exportMutation.error instanceof ApiError ? exportMutation.error.problem : undefined;
-  const failedFormat = exportMutation.variables?.format;
-
-  function handleExport(format: ExportFormat) {
-    exportMutation.mutate({ releaseId, documentType, revision, format, releaseName, version });
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => handleExport('pdf')}
-        disabled={disabled || isPending('pdf')}
-        className="flex items-center gap-2 rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 disabled:opacity-50"
-      >
-        {isPending('pdf') && <Spinner />}
-        {isPending('pdf') ? 'Exporting PDF…' : 'Export PDF'}
-      </button>
-      <button
-        type="button"
-        onClick={() => handleExport('docx')}
-        disabled={disabled || isPending('docx')}
-        className="flex items-center gap-2 rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 disabled:opacity-50"
-      >
-        {isPending('docx') && <Spinner />}
-        {isPending('docx') ? 'Exporting DOCX…' : 'Export DOCX'}
-      </button>
-      {problem && (
-        <p role="alert" data-reason={problem.reason} className="w-full text-xs text-red-600">
-          {`Couldn't export the ${failedFormat === 'docx' ? 'DOCX' : 'PDF'} — ${messageForReason(problem)} Try again.`}
-        </p>
-      )}
-    </>
+    </Link>
   );
 }
 

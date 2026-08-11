@@ -7,6 +7,7 @@ import { ReleasesRoute } from './routes/ReleasesRoute';
 import { ReleaseDetailRoute } from './routes/ReleaseDetailRoute';
 import { TemplatesRoute } from './routes/TemplatesRoute';
 import { TemplateDetailRoute } from './routes/TemplateDetailRoute';
+import { DocumentViewerRoute } from './routes/DocumentViewerRoute';
 import { LoginRoute } from './routes/LoginRoute';
 import { fetchSessionOrNull } from './api/auth';
 import { queryClient } from './api/queryClient';
@@ -85,6 +86,17 @@ const templateDetailRoute = createRoute({
   component: TemplateDetailRoute,
 });
 
+// 05-12/gap 1: DocumentViewerRoute is a flat sibling of releaseDetailRoute, not nested under it -
+// every View link the phase built (ReadinessPill, DocumentsSection) already points at this path.
+const documentViewerRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/releases/$releaseId/documents/$documentType',
+  validateSearch: (search: Record<string, unknown>): { revision?: number } => ({
+    revision: typeof search.revision === 'number' ? search.revision : undefined,
+  }),
+  component: DocumentViewerRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   authenticatedRoute.addChildren([
     dashboardRoute,
@@ -93,6 +105,7 @@ const routeTree = rootRoute.addChildren([
     releaseDetailRoute,
     templatesRoute,
     templateDetailRoute,
+    documentViewerRoute,
     settingsRoute,
   ]),
   loginRoute,

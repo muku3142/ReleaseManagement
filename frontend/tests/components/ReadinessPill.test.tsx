@@ -4,7 +4,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { ReadinessPill } from '../../src/components/ReadinessPill';
 import type { DocumentReadinessState } from '../../src/api/documents';
 
-type LinkProps = { children?: ReactNode; to?: string; params?: Record<string, string>; hash?: string };
+type LinkProps = {
+  children?: ReactNode;
+  to?: string;
+  params?: Record<string, string>;
+  search?: Record<string, unknown>;
+  hash?: string;
+  className?: string;
+};
 
 vi.mock('@tanstack/react-router', () => ({
   Link: (props: LinkProps) => {
@@ -12,8 +19,15 @@ vi.mock('@tanstack/react-router', () => ({
     for (const [key, value] of Object.entries(props.params ?? {})) {
       href = href.replace(`$${key}`, value);
     }
+    if (props.search) {
+      href += `?${new URLSearchParams(Object.entries(props.search).map(([k, v]) => [k, String(v)])).toString()}`;
+    }
     if (props.hash) href += `#${props.hash}`;
-    return <a href={href}>{props.children}</a>;
+    return (
+      <a href={href} className={props.className}>
+        {props.children}
+      </a>
+    );
   },
 }));
 

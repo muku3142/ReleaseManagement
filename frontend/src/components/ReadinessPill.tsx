@@ -11,29 +11,29 @@ type ReadinessPillProps = {
 // DOC-09/D-05-08: the one four-state pill reused verbatim on /releases and release detail's
 // Documents section. No "frozen" decoration is added here - the release's own Status column
 // already carries that fact, and D-05-09 already makes green either way (open or frozen).
+// UP_TO_DATE and STALE link to the document viewer route (05-12); the other two states link
+// elsewhere (release detail's Documents section, or /templates).
 export function ReadinessPill({ state, releaseId, documentType }: ReadinessPillProps) {
   switch (state) {
     case 'UP_TO_DATE':
       return (
-        // The document viewer route (`/releases/$releaseId/documents/$documentType`) is built in a
-        // later plan (05-11/05-12), so this is a plain anchor rather than a typed <Link> - the href
-        // is already correct and will work once that route exists; nothing here needs to change
-        // when it lands.
-        <a
-          href={`/releases/${releaseId}/documents/${documentType}`}
+        <Link
+          to="/releases/$releaseId/documents/$documentType"
+          params={{ releaseId, documentType }}
           className="rounded border border-green-700 bg-green-50 px-2 py-0.5 text-xs font-semibold text-green-700"
         >
           Up to date
-        </a>
+        </Link>
       );
     case 'STALE':
       return (
-        <a
-          href={`/releases/${releaseId}/documents/${documentType}`}
+        <Link
+          to="/releases/$releaseId/documents/$documentType"
+          params={{ releaseId, documentType }}
           className="rounded border border-amber-600 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-600"
         >
           Stale
-        </a>
+        </Link>
       );
     case 'NOT_GENERATED':
       return (

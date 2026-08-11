@@ -5,7 +5,14 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { DocumentsSection } from '../../src/components/DocumentsSection';
 import type { DocumentReadinessState, DocumentRevision } from '../../src/api/documents';
 
-type LinkProps = { children?: ReactNode; to?: string; params?: Record<string, string>; hash?: string };
+type LinkProps = {
+  children?: ReactNode;
+  to?: string;
+  params?: Record<string, string>;
+  search?: Record<string, unknown>;
+  hash?: string;
+  className?: string;
+};
 
 vi.mock('@tanstack/react-router', () => ({
   Link: (props: LinkProps) => {
@@ -13,8 +20,15 @@ vi.mock('@tanstack/react-router', () => ({
     for (const [key, value] of Object.entries(props.params ?? {})) {
       href = href.replace(`$${key}`, value);
     }
+    if (props.search) {
+      href += `?${new URLSearchParams(Object.entries(props.search).map(([k, v]) => [k, String(v)])).toString()}`;
+    }
     if (props.hash) href += `#${props.hash}`;
-    return <a href={href}>{props.children}</a>;
+    return (
+      <a href={href} className={props.className}>
+        {props.children}
+      </a>
+    );
   },
 }));
 
@@ -451,6 +465,24 @@ describe('DocumentsSection', () => {
     const superseded = [...row.querySelectorAll('ul li')].find((li) => li.textContent?.includes('(superseded)'))!;
     expect(findText(superseded, 'Export PDF')).toBeDefined();
     expect(findText(superseded, 'Export DOCX')).toBeDefined();
+  });
+
+  it('supersededRevisionViewLinkCarriesTheRevisionSearchParam', async () => {
+    mockFetch({
+      readiness: { RELEASE_NOTES: 'UP_TO_DATE' },
+      revisions: {
+        RELEASE_NOTES: [rev(1, false, '2026-08-01T00:00:00Z'), rev(2, true, '2026-08-05T00:00:00Z')],
+      },
+    });
+    await renderSection();
+
+    const row = rowFor('Release Notes');
+    const disclosure = [...row.querySelectorAll('button')].find((b) => b.getAttribute('aria-expanded') !== null)!;
+    await act(async () => disclosure.click());
+
+    const superseded = [...row.querySelectorAll('ul li')].find((li) => li.textContent?.includes('(superseded)'))!;
+    const viewLink = [...superseded.querySelectorAll('a')].find((a) => a.textContent === 'View')!;
+    expect(viewLink.getAttribute('href')).toMatch(/\?revision=1$/);
   });
 
   it('sectionRendersIdenticallyForFrozenReleases', async () => {

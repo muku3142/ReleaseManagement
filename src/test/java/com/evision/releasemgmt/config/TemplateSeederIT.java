@@ -90,7 +90,7 @@ class TemplateSeederIT {
     void releaseNotesStarterRendersRealContentFromTheSampleContext() {
         Template releaseNotes = templateOfType(TemplateDocumentType.RELEASE_NOTES);
 
-        String html = renderService.render(releaseNotes.body(), SampleReleaseView.instance(), "Body").html();
+        String html = renderService.render(releaseNotes.body(), SampleReleaseView.instance(), "Body").output();
 
         assertThat(html).contains("Fix duplicate invoice lines", "CNV-2896", "Run migration V4", "Database script");
     }
@@ -100,7 +100,7 @@ class TemplateSeederIT {
     void runbookStarterRendersTheNoLinkedCodeInvertedSection() {
         Template runbook = templateOfType(TemplateDocumentType.RUNBOOK);
 
-        String html = renderService.render(runbook.body(), SampleReleaseView.instance(), "Body").html();
+        String html = renderService.render(runbook.body(), SampleReleaseView.instance(), "Body").output();
 
         assertThat(html).contains("No linked code for this item.");
     }

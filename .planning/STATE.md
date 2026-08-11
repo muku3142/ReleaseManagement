@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-08-10T12:58:25.821Z"
-last_activity: 2026-08-10 -- Phase 05 execution started
+stopped_at: Phase 05.1 inserted, awaiting planning
+last_updated: "2026-08-11T10:07:38.360Z"
+last_activity: 2026-08-11 -- Phase 05 completed (13/13); Phase 05.1 inserted for per-template logo sizing
 progress:
-  total_phases: 7
-  completed_phases: 2
-  total_plans: 45
-  completed_plans: 32
-  percent: 71
+  total_phases: 8
+  completed_phases: 3
+  total_plans: 47
+  completed_plans: 45
+  percent: 96
 ---
 
 # Project State
@@ -21,17 +21,41 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-27)
 
 **Core value:** Given a set of Jira tickets, produce accurate and consistent release documentation plus a tracked deployment record — without anyone doing manual release bookkeeping in Jira.
-**Current focus:** Phase 05 — document-generation
+**Current focus:** Phase 05.1 — per-template logo sizing (not planned yet)
 
 ## Current Position
 
-Phase: 05 (document-generation) — EXECUTING
-Plan: 1 of 11
-human-action checkpoint needing a live Jira API token to capture CNV-2896's
-dev-status response. Waves 1-5 are complete: 02-01, 02-02, 02-03, 02-05,
-02-06, 02-07. The user confirmed the /tickets screen works against the real
-tenant (projects, sprints, search, table) and elected to move to Phase 3 with
-02-04 outstanding.
+Phase: 05.1 (per-template-logo-sizing) — NOT PLANNED
+Plan: 0 of TBD — run `/gsd-plan-phase 05.1`
+
+**Phase 05 (document-generation) is complete** — 13/13 plans, verified 2026-08-11.
+Both verification gaps were closed by gap-closure plans and the phase's human
+checkpoint was approved against a real PDF and DOCX export:
+
+- 05-12 built the document viewer route the phase designed but never registered
+  (`/releases/$releaseId/documents/$documentType`), extracted the shared
+  `RenderedDocument` module so one markdown-it instance and one set of chrome
+  markup serve both the authoring preview and the viewer, and upgraded every
+  View affordance from a dead `<a href>` to a typed `<Link>`.
+- 05-13 fixed generation storing flexmark HTML in a field named `markdown`,
+  which made every exported PDF and DOCX render its own source as escaped tag
+  text. `RenderResult.html()` — one accessor returning two different content
+  types, which is what made the defect look correct at every call site — is now
+  `output()`. `GenerateThenExportSeamTest` crosses generate → export with no
+  hand-written fixture on either side; reverting the fix fails 4 of its 4 tests.
+- Correction to `05-VERIFICATION.md`: its gap-2 text claimed chrome and both
+  export ports were also broken. They were not. Re-validation before planning
+  showed chrome already used `resolveText` (Mustache only, no flexmark) and both
+  ports already documented Markdown. Generation was the single disagreement.
+
+**Phase 05.1 was inserted after Phase 05 on 2026-08-11**, from a defect found
+while answering a question about controlling logo size: the cover logo is sized
+in three independent places and only two cap it. `DocxExportAdapter.java:204-205`
+multiplies native pixels by `EMU_PER_PIXEL` with no clamp, so a 512×512 logo is
+5.3 in tall in DOCX versus ~1.2 in in the PDF and 80 px in the browser. Uploads
+are accepted up to 2000×2000, making the DOCX worst case ~20.8 in on an 11.7-in
+A4 page. Chosen direction: a per-template `ChromeFields` setting stored on the
+snapshot, so an existing document keeps the size it was generated with.
 
 **Phase 2 is NOT formally complete.** Outstanding before it can be closed:
 
@@ -49,10 +73,10 @@ replaced entirely by **sprint** (brings Jira's Agile API into scope, reversing
 part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
 names, table widening, and frontend tests moved to `frontend/tests/`.
 
-Status: Executing Phase 05
-Last activity: 2026-08-10 -- Completed quick task 260810-wc3: Fix AdfFlattener heading and code-block newline defects
+Status: Phase 05 complete — Phase 05.1 inserted, awaiting planning
+Last activity: 2026-08-11 -- Phase 05 completed (13/13); Phase 05.1 inserted for per-template logo sizing
 
-Progress: [████████░░] 86%
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
@@ -80,6 +104,17 @@ Progress: [████████░░] 86%
 | Phase 01 P07 | 100 | 3 tasks | 22 files |
 
 ## Accumulated Context
+
+### Roadmap Evolution
+
+- Phase 05.1 inserted after Phase 05 on 2026-08-11 (URGENT) — per-template logo sizing and the DOCX
+  cover-logo parity defect. Found after Phase 05 was verified and closed, while answering a question
+  about controlling logo size: `DocxExportAdapter.java:204-205` applies no clamp to the logo, unlike
+  the PDF's `max-height: 3cm` and the browser's `max-h-20`, so the three renderers disagree by up to
+  4.5×. Direction chosen with the user: a per-template `ChromeFields` field stored on the snapshot,
+  rather than a global config value or a bug-fix-only clamp, so an existing document keeps the size
+  it was generated with. Written by hand — `state add-roadmap-evolution` is SDK-only in this CLI
+  version and does not run.
 
 ### Decisions
 
