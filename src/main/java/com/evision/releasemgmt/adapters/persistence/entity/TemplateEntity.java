@@ -53,6 +53,9 @@ public class TemplateEntity {
     @Column(name = "page_numbers_enabled", nullable = false)
     private boolean pageNumbersEnabled;
 
+    @Column(name = "logo_render_height_mm", nullable = false)
+    private int logoRenderHeightMm;
+
     @Column(name = "grouping_dimension", nullable = false)
     @Enumerated(EnumType.STRING)
     private GroupingDimension groupingDimension;
@@ -162,6 +165,14 @@ public class TemplateEntity {
 
     public void setPageNumbersEnabled(boolean pageNumbersEnabled) {
         this.pageNumbersEnabled = pageNumbersEnabled;
+    }
+
+    public int getLogoRenderHeightMm() {
+        return logoRenderHeightMm;
+    }
+
+    public void setLogoRenderHeightMm(int logoRenderHeightMm) {
+        this.logoRenderHeightMm = logoRenderHeightMm;
     }
 
     public GroupingDimension getGroupingDimension() {

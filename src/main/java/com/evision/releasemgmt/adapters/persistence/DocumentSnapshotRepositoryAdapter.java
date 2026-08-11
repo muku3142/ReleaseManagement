@@ -118,6 +118,7 @@ public class DocumentSnapshotRepositoryAdapter implements DocumentSnapshotReposi
         entity.setHeaderText(chrome.headerText());
         entity.setFooterText(chrome.footerText());
         entity.setPageNumbersEnabled(chrome.pageNumbersEnabled());
+        entity.setLogoRenderHeightMm(chrome.logoRenderHeightMm());
         entity.setGeneratedAt(snapshot.generatedAt());
         entity.setGeneratedBy(snapshot.generatedBy());
         return entity;
@@ -125,7 +126,7 @@ public class DocumentSnapshotRepositoryAdapter implements DocumentSnapshotReposi
 
     private static DocumentSnapshot toDomain(DocumentSnapshotEntity e) {
         ChromeFields chrome = new ChromeFields(e.isCoverEnabled(), e.getCoverTitle(), e.getCoverSubtitle(),
-                e.getHeaderText(), e.getFooterText(), e.isPageNumbersEnabled());
+                e.getHeaderText(), e.getFooterText(), e.isPageNumbersEnabled(), e.getLogoRenderHeightMm());
         return new DocumentSnapshot(e.getId(), e.getReleaseId(), e.getDocumentType(), e.getRevision(),
                 e.getMarkdown(), e.getTemplateId(), e.getTemplateName(), e.getTemplateBody(), chrome,
                 e.getGeneratedAt(), e.getGeneratedBy());

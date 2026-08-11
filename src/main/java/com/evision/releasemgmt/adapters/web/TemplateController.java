@@ -118,9 +118,15 @@ public class TemplateController {
     public TemplateResponse saveContent(@PathVariable UUID templateId,
                                         @Valid @RequestBody SaveTemplateContentRequest request,
                                         Principal principal) {
+        // D-05.1-01: an absent logoRenderHeightMm is an older client's payload - default it rather
+        // than reject, the same disposition groupingDimension takes just below. @Min/@Max already
+        // rejected any value that was present but out of range, so there is nothing to clamp here.
+        int logoRenderHeightMm = request.chrome().logoRenderHeightMm() == null
+                ? ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM
+                : request.chrome().logoRenderHeightMm();
         ChromeFields chrome = new ChromeFields(request.chrome().coverEnabled(), request.chrome().coverTitle(),
                 request.chrome().coverSubtitle(), request.chrome().headerText(),
-                request.chrome().footerText(), request.chrome().pageNumbersEnabled());
+                request.chrome().footerText(), request.chrome().pageNumbersEnabled(), logoRenderHeightMm);
         // D-05-04: null/blank is an older client's payload - default to ISSUE_TYPE rather than
         // rejecting it. The @Pattern on the request already guarantees this valueOf cannot throw.
         GroupingDimension groupingDimension = request.groupingDimension() == null
@@ -189,7 +195,7 @@ public class TemplateController {
         ChromeFields chrome = template.chrome();
         ChromeFieldsResponse chromeResponse = new ChromeFieldsResponse(chrome.coverEnabled(),
                 chrome.coverTitle(), chrome.coverSubtitle(), chrome.headerText(), chrome.footerText(),
-                chrome.pageNumbersEnabled());
+                chrome.pageNumbersEnabled(), chrome.logoRenderHeightMm());
         LogoMetadataResponse logoResponse = template.logo() == null ? null
                 : new LogoMetadataResponse(template.logo().contentType(), template.logo().filename(),
                         template.logo().byteSize(), template.logo().width(), template.logo().height(),

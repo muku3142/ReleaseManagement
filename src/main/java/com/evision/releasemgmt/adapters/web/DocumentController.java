@@ -148,7 +148,8 @@ public class DocumentController {
     private DocumentResponse toResponse(DocumentSnapshot snapshot) {
         ChromeFields chrome = snapshot.chrome();
         ChromeFieldsResponse chromeResponse = new ChromeFieldsResponse(chrome.coverEnabled(), chrome.coverTitle(),
-                chrome.coverSubtitle(), chrome.headerText(), chrome.footerText(), chrome.pageNumbersEnabled());
+                chrome.coverSubtitle(), chrome.headerText(), chrome.footerText(), chrome.pageNumbersEnabled(),
+                chrome.logoRenderHeightMm());
         int latestRevision = service.nextRevision(snapshot.releaseId(), snapshot.documentType()) - 1;
         boolean templateDeleted = !service.templateStillExists(snapshot.templateId());
         boolean hasLogo = service.hasLogo(snapshot.id());

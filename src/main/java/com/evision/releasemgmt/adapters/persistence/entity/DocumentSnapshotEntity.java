@@ -58,6 +58,9 @@ public class DocumentSnapshotEntity {
     @Column(name = "page_numbers_enabled", nullable = false)
     private boolean pageNumbersEnabled;
 
+    @Column(name = "logo_render_height_mm", nullable = false)
+    private int logoRenderHeightMm;
+
     @Column(name = "generated_at", nullable = false)
     private Instant generatedAt;
 
@@ -177,6 +180,14 @@ public class DocumentSnapshotEntity {
 
     public void setPageNumbersEnabled(boolean pageNumbersEnabled) {
         this.pageNumbersEnabled = pageNumbersEnabled;
+    }
+
+    public int getLogoRenderHeightMm() {
+        return logoRenderHeightMm;
+    }
+
+    public void setLogoRenderHeightMm(int logoRenderHeightMm) {
+        this.logoRenderHeightMm = logoRenderHeightMm;
     }
 
     public Instant getGeneratedAt() {
