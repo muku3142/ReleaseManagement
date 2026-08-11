@@ -22,6 +22,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 5.3: Actor Identity Display** - Show a person's email instead of an opaque Jira account id, resolved at read time so existing history displays correctly (INSERTED)
 - [ ] **Phase 6: Azure DevOps Enrichment** - Surface linked commits/PRs per ticket, degrading gracefully when absent, with tracked-expiry credentials
 - [ ] **Phase 7: Promotion Tracking & Audit Trail** - Promote releases through the fixed environment ladder with a complete, append-only history
+- [ ] **Phase 8: Release Insights Dashboard** - One screen answering what Jira structurally cannot: outstanding paperwork, ladder position, what went where and when, and how long releases actually take
 
 ## Phase Details
 
@@ -324,7 +325,7 @@ style as `findSessionsInvalidatedAt`.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5.3 → 6 → 7
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5.3 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -338,3 +339,58 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 5.3 Actor Identity Display | 0/TBD | Not planned | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
+| 8. Release Insights Dashboard | 0/TBD | Not started | - |
+
+### Phase 8: Release Insights Dashboard
+**Goal**: Release manager opens one screen and sees what Jira structurally cannot answer — which releases have outstanding paperwork, where each sits on the environment ladder, what went to each environment and when, and how long releases actually take
+**Depends on**: Phase 7 (promotion and ladder data), Phase 6 (enrichment coverage), Phase 5 (documentation readiness)
+**Requirements**: AUDIT-04, INSIGHT-01, INSIGHT-02
+**Plans**: TBD
+**UI hint**: yes
+
+**Why this is Phase 8 and not a decimal after Phase 5 (decided 2026-08-11).** The user asked for
+dashboard insights "not available in Jira". That request does **not** reverse the recorded decision to
+drop analytics — `PROJECT.md:41` drops Jira's *agile reports* (velocity, cycle time, burndown, sprint
+scope change) and in the same breath states that "dashboards here must answer what Jira structurally
+cannot — release documentation status, environment-ladder position, promotion history". This phase is
+exactly that carve-out.
+
+It is sequenced after Phase 7 because of data availability, not preference. Of the three areas that
+entry names, only documentation readiness exists today (`DOC-09`, shipped in Phase 5 as the readiness
+pills). Ladder position (`DEPL-01`) and promotion history (`AUDIT-01`, `DEPL-03`) are Phase 7. Building
+a dashboard earlier would have shown one data source and largely duplicated the releases list, then
+been reworked once Phase 7 landed.
+
+**Requirement bookkeeping this phase performs:**
+- **`AUDIT-04` finds its home here.** It was mapped to Phase 7 in `REQUIREMENTS.md` but **no ROADMAP
+  phase's `Requirements` line claimed it**, so the automated coverage gate could never check it — the
+  same defect class as the known `REL-08` omission in Phase 3. It is a cross-release dashboard
+  requirement ("view deployment history across all releases on one screen, filterable by environment and
+  date range"), so it belongs to this phase and is removed from Phase 7's implicit scope.
+- **`INSIGHT-01` and `INSIGHT-02` are new**, added 2026-08-11 for the two insight areas the user selected
+  that no existing requirement covers. This grows v1 from 47 requirements to 49.
+
+**Success criteria:**
+1. Release manager sees, across all releases on one screen, which of the three documents are generated, stale, or never generated — without opening each release
+2. Release manager sees where every release currently sits on the environment ladder
+3. Release manager can answer "what went to Production, and when" from one screen, filtered by environment and date range, without opening each release (`AUDIT-04`)
+4. Release manager sees how long releases take through their own lifecycle — created to frozen, frozen to production — computed from timestamps this system owns (`INSIGHT-01`)
+5. Release manager sees each release's composition: ticket count, manual versus ticket-backed split, and what share of tickets carry linked Azure DevOps commits or pull requests (`INSIGHT-02`)
+6. Every figure on the dashboard is derived from this system's own database — no new Jira integration surface, and specifically no Agile board/burndown/story-point reads beyond the sprint listing Phase 2 already uses
+
+**Scope notes:**
+- **This phase must not rebuild Jira's reports.** `PROJECT.md:41` is still binding: no velocity, no Jira
+  cycle time, no burndown, no sprint scope change. Criterion 4 measures *this tool's* release process
+  (created → frozen → promoted), which Jira cannot compute because it does not know when a release was
+  frozen or deployed here. That distinction is the whole justification — state it in the plans so a
+  future reader does not mistake criterion 4 for the thing that was dropped.
+- `frontend/src/routes/DashboardRoute.tsx` is currently a 15-line placeholder whose copy still reads
+  "No releases yet. Release assembly arrives in a later phase" — stale since Phase 3 shipped. This phase
+  replaces it.
+- `DOC-09` is still `Pending` in `REQUIREMENTS.md` although Phase 5 shipped the readiness data this
+  phase consumes. Confirm it before building criterion 1 on it.
+- Read-only over existing tables. This phase should need no new write path; whether it needs new
+  read-side projections or aggregate queries is a planning question.
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 8 to break down)

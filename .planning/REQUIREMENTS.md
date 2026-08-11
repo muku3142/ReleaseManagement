@@ -78,6 +78,16 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [ ] **AUDIT-03**: Release and promotion history is append-only — a correction adds a new entry rather than editing or deleting an existing one
 - [ ] **AUDIT-04**: Release manager can view deployment history across all releases on one screen — filterable by environment and date range — not only per-release, so "what went to Production and when" is answerable without opening each release
 
+### Release Insights
+
+Added 2026-08-11. These are the two insight areas the release manager asked for that no existing
+requirement covered. They are deliberately **not** Jira's agile reports, which stay out of scope
+(`PROJECT.md` Out of Scope): both measure this system's own release process, which Jira cannot compute
+because Jira does not know when a release was frozen or deployed here.
+
+- [ ] **INSIGHT-01**: Release manager can see how long releases take through their own lifecycle — created to frozen, and frozen to production — computed from timestamps this system already owns, so slow releases are visible without manual bookkeeping
+- [ ] **INSIGHT-02**: Release manager can see each release's composition on one screen — ticket count, manual versus ticket-backed split, and what share of tickets carry linked Azure DevOps commits or pull requests — so gaps in traceability are visible before the release ships
+
 ### Cross-cutting UX
 
 Quality attributes that apply across every screen rather than mapping to a single phase.
