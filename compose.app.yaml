@@ -55,7 +55,7 @@ services:
       RM_JWT_SECRET: ${RM_JWT_SECRET:?set RM_JWT_SECRET, e.g. openssl rand -base64 32}
       RM_JIRA_DEFAULT_BASE_URL: ${RM_JIRA_DEFAULT_BASE_URL:-https://example.atlassian.net}
     ports:
-      - "${RM_PORT:-8080}:8080"
+      - "${RM_PORT:-9292}:9292"
     restart: unless-stopped
 
 volumes:
