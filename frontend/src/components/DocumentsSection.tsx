@@ -192,9 +192,6 @@ type DocumentViewLinkProps = {
 };
 
 function DocumentViewLink({ releaseId, documentType, revision, disabled, className }: DocumentViewLinkProps) {
-  // The document viewer route (`/releases/$releaseId/documents/$documentType`) is registered by a
-  // later plan (05-12) - a plain anchor, same convention ReadinessPill already established, rather
-  // than a typed <Link> to a route that doesn't exist in router.tsx yet.
   if (disabled) {
     return (
       <span className={className ?? 'text-sm text-gray-400'} aria-disabled="true">
@@ -202,12 +199,15 @@ function DocumentViewLink({ releaseId, documentType, revision, disabled, classNa
       </span>
     );
   }
-  const base = `/releases/${releaseId}/documents/${documentType}`;
-  const href = revision === undefined ? base : `${base}?revision=${revision}`;
   return (
-    <a href={href} className={className ?? 'text-sm text-blue-600 underline'}>
+    <Link
+      to="/releases/$releaseId/documents/$documentType"
+      params={{ releaseId, documentType }}
+      search={revision === undefined ? undefined : { revision }}
+      className={className ?? 'text-sm text-blue-600 underline'}
+    >
       View
-    </a>
+    </Link>
   );
 }
 
