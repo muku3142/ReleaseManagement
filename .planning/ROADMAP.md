@@ -18,6 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Template Authoring** - Author, validate, and live-preview per-document-type templates against a safe, documented view-model (all code merged 2026-08-10; awaiting the 04-11 live-tenant verification)
 - [x] **Phase 5: Document Generation** - Generate, preview, and export release notes, runbooks, and approval documents as immutable snapshots (completed 2026-08-11)
 - [ ] **Phase 5.1: Per-Template Logo Sizing** - Make the cover logo's rendered size a per-template setting and close the DOCX cover-logo parity defect (INSERTED)
+- [ ] **Phase 5.2: Release Ticket Selection** - Hide already-added tickets while assembling, and add tickets from the release page itself (INSERTED)
 - [ ] **Phase 6: Azure DevOps Enrichment** - Surface linked commits/PRs per ticket, degrading gracefully when absent, with tracked-expiry credentials
 - [ ] **Phase 7: Promotion Tracking & Audit Trail** - Promote releases through the fixed environment ladder with a complete, append-only history
 
@@ -195,6 +196,50 @@ shared code path, and that check only catches this when the logo is large enough
 Plans:
 - [ ] TBD (run /gsd-plan-phase 05.1 to break down)
 
+### Phase 05.2: Release Ticket Selection (INSERTED)
+
+**Goal**: Release manager assembles a release without re-encountering tickets it already contains, and can add tickets to a release from the release page itself rather than only from the browse screen
+**Requirements**: REL-01, REL-03, JIRA-02
+**Depends on**: Phase 3 (release assembly), Phase 2 (ticket browsing)
+**Plans**: TBD
+**UI hint**: yes
+
+**Why this was inserted (requested 2026-08-11):** two assembly frictions the release manager hit in
+use. Neither is a correctness bug — the backend already tolerates both situations — they are about not
+making a person do avoidable work.
+
+1. **Already-added tickets keep appearing in browse.** When assembling a release, tickets already on
+   it still show in the ticket table, so the release manager scrolls past and re-selects tickets they
+   have already taken.
+2. **Tickets can only be added from the browse screen.** The flow is browse → select → choose a
+   destination release. There is no way to start from a release and pull tickets into it, which is the
+   natural direction once a release exists.
+
+**Success criteria:**
+1. Browsing tickets in the context of a release does not list tickets that release already contains
+2. Browsing tickets outside any release context still lists everything, unchanged
+3. Release manager can open a release and add tickets to it without leaving that page
+4. The add-from-release flow offers the same project, sprint, status and JQL filtering and the same
+   multi-select as the browse screen — not a reduced second search
+5. The ticket browse surface exists once in the codebase, used by both entry points
+6. A frozen release offers no add affordance at all, rather than failing after tickets are chosen
+
+**Scope notes:**
+- Filtering is scoped to the *target* release only. The schema's
+  `release_ticket_item_key_unique UNIQUE (release_id, ticket_key)` deliberately allows one ticket in
+  several releases (a hotfix legitimately ships in two), and that capability is preserved
+- Filtering happens server-side, after `JiraTicketPort.searchAll` returns, so the count the UI reports
+  is honest. It must NOT be expressed in JQL — Jira knows nothing about our releases
+- `searchAll` already exhausts Jira's cursor pagination server-side (`JIRA-03`) and returns a complete
+  `List<TicketDetail>`, so no cursor or page-top-up logic is involved
+- `ReleaseRepository.findTicketKeys(releaseId)` already exists (`ReleaseService.addTickets:70` uses it
+  for its own de-duplication) — the filter reuses it rather than adding a query
+- The add path already guards frozen releases (`ReleaseService.addTickets:67` calls
+  `release.requireOpen()`) and already treats an all-already-present selection as success with honest
+  counts (`D-03-13`), which stays as the race safety net
+- `items_changed_at` document-staleness stamping happens in `ReleaseRepositoryAdapter`, below the
+  service layer, so a new entry point cannot bypass it
+
 ### Phase 6: Azure DevOps Enrichment
 **Goal**: Release manager sees each ticket's linked Azure DevOps commits and pull requests where available, with the tool degrading gracefully when a link is absent or enrichment fails, and credentials safely managed against the 2026 PAT retirement
 **Mode:** mvp
@@ -226,7 +271,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 6 → 7
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -235,6 +280,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 6 → 7
 | 3. Release Assembly | 8/8 | Complete   | 2026-08-06 |
 | 4. Template Authoring | 11/11 | Code merged, awaiting live-tenant verification (04-11 task 3) |  |
 | 5. Document Generation | 13/13 | Complete   | 2026-08-11 |
-| 5.1 Per-Template Logo Sizing | 0/TBD | Not planned | - |
+| 5.1 Per-Template Logo Sizing | 0/TBD | Planning in progress | - |
+| 5.2 Release Ticket Selection | 0/TBD | Not planned | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
