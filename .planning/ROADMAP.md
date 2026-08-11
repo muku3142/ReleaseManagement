@@ -19,6 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Document Generation** - Generate, preview, and export release notes, runbooks, and approval documents as immutable snapshots (completed 2026-08-11)
 - [ ] **Phase 5.1: Per-Template Logo Sizing** - Make the cover logo's rendered size a per-template setting and close the DOCX cover-logo parity defect (INSERTED)
 - [ ] **Phase 5.2: Release Ticket Selection** - Hide already-added tickets while assembling, and add tickets from the release page itself (INSERTED)
+- [ ] **Phase 5.3: Actor Identity Display** - Show a person's email instead of an opaque Jira account id, resolved at read time so existing history displays correctly (INSERTED)
 - [ ] **Phase 6: Azure DevOps Enrichment** - Surface linked commits/PRs per ticket, degrading gracefully when absent, with tracked-expiry credentials
 - [ ] **Phase 7: Promotion Tracking & Audit Trail** - Promote releases through the fixed environment ladder with a complete, append-only history
 
@@ -164,7 +165,7 @@ Note: engine and view-model design (jmustache integration, `ReleaseView`/`Ticket
 **Goal**: Template author controls how large the cover logo renders, as a per-template chrome setting stored on the snapshot, and all four renderers agree on that size
 **Requirements**: DOC-05, DOC-06, DOC-08, TMPL-08
 **Depends on**: Phase 5
-**Plans**: TBD
+**Plans**: 4 across 3 waves
 **UI hint**: yes
 
 **Why this was inserted (found 2026-08-11, after Phase 5 was verified):** the cover logo is sized in
@@ -194,7 +195,10 @@ shared code path, and that check only catches this when the logo is large enough
 - The DOCX clamp is a defect fix and is required regardless of the per-template setting
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 05.1 to break down)
+- [ ] 05.1-01-PLAN.md — ChromeFields gains logoRenderHeightMm: V6 migration on both tables, threaded through persistence, DTOs, controllers, generation and the seeder (wave 1)
+- [ ] 05.1-02-PLAN.md — The "Cover logo height (mm)" control, the TypeScript mirror, and mm-based cover-logo sizing in the shared preview/viewer component (wave 1)
+- [ ] 05.1-03-PLAN.md — Both exporters honour the stored height, proportionally and downward only, plus the cross-format seam assertion (wave 2)
+- [ ] 05.1-04-PLAN.md — Full regression, V6 against pre-phase rows, and the human parity check across PDF/DOCX/viewer (wave 3)
 
 ### Phase 05.2: Release Ticket Selection (INSERTED)
 
@@ -240,6 +244,55 @@ making a person do avoidable work.
 - `items_changed_at` document-staleness stamping happens in `ReleaseRepositoryAdapter`, below the
   service layer, so a new entry point cannot bypass it
 
+### Phase 05.3: Actor Identity Display (INSERTED)
+
+**Goal**: Every actor shown in the UI is a person's email rather than an opaque Jira account id, resolved at read time so already-recorded history displays correctly too
+**Requirements**: AUTH-02, DOC-07
+**Depends on**: Phase 1 (credential storage), Phase 5 (document snapshots)
+**Plans**: TBD
+**UI hint**: yes
+
+**Why this was inserted (found 2026-08-11):** every actor field in the system stores the signed-in
+user's **Jira account id**, and the API returns it verbatim, so the UI shows values like
+`5f5f5f58aba9660071082b49` where a person belongs. `AuthenticationService.java:58` issues the JWT as
+`jwtTokenService.issue(identity.accountId(), email)` — the subject is the accountId and the email is a
+separate `CLAIM_EMAIL` claim — so `principal.getName()` yields the accountId at all **9 capture sites
+across 5 controllers**: `DocumentController:56` (`generatedBy`), `ReleaseController:54,86` (`createdBy`,
+`frozenBy`), `TemplateController:80,114,131,136,142` (`createdBy`, `updatedBy`),
+`JiraSiteConfigController:35` (`updatedBy`). Eight response DTOs carry these fields.
+
+**Direction chosen: resolve at read time, keep storing the accountId.** The accountId is the *right*
+thing to persist — it is stable, whereas an email can change, and `document_snapshot` is append-only
+(`D-05-06`/`DOC-07`) so a stored label could never be corrected afterwards. Resolving for display
+instead fixes every already-generated document with no migration and without touching immutability.
+Rejected: storing the email going forward (leaves every existing row opaque, loses the stable
+identifier) and storing both (schema change across four tables, still does not fix history).
+
+**The trap this phase must not fall into.** `JiraCredentialRepository.findByAccountId` returns a
+`JiraCredential` carrying `apiToken`, and loading that entity **decrypts** `encrypted_token`. The
+adapter deliberately uses JPQL for `upsert`, `findSessionsInvalidatedAt` and `markSessionsInvalidated`
+specifically to avoid that (see the comment at `JiraCredentialRepositoryAdapter.java:33`) because a
+rotated `RM_CREDENTIAL_KEY` throws on stale ciphertext — a bug that once locked every user out of the
+very sign-in that would have replaced the unreadable token. Using `findByAccountId` on a display path
+would let a decryption failure break an unrelated screen such as a document list. This phase needs a
+**projection-only** lookup returning `(account_id, email)` without loading the entity, in the same
+style as `findSessionsInvalidatedAt`.
+
+**Success criteria:**
+1. Every actor field in every API response resolves to an email when that account's credential row exists
+2. Documents, releases and templates recorded *before* this phase display correctly, with no migration and no stored value rewritten
+3. An account whose credential row no longer exists degrades to showing the account id — never a blank, an error, or a crash
+4. No display path can trigger token decryption: a rotated or unreadable `RM_CREDENTIAL_KEY` cannot break a document, release or template screen
+5. Resolving many actors on a list screen does not issue one query per row
+
+**Scope notes:**
+- Nothing stored changes. No migration. No write path is touched.
+- The stored API token must never be read, decrypted or returned on this path (`AUTH-03`/`D-13`: the
+  token is never returned to the client in any form)
+- An email is PII. It is already exposed for the signed-in user via the session endpoint and this is a
+  single-release-manager tool, but the threat model should state the disclosure surface explicitly
+  rather than assume it is fine
+
 ### Phase 6: Azure DevOps Enrichment
 **Goal**: Release manager sees each ticket's linked Azure DevOps commits and pull requests where available, with the tool degrading gracefully when a link is absent or enrichment fails, and credentials safely managed against the 2026 PAT retirement
 **Mode:** mvp
@@ -271,7 +324,7 @@ making a person do avoidable work.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 6 → 7
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5.3 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -280,7 +333,8 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 6
 | 3. Release Assembly | 8/8 | Complete   | 2026-08-06 |
 | 4. Template Authoring | 11/11 | Code merged, awaiting live-tenant verification (04-11 task 3) |  |
 | 5. Document Generation | 13/13 | Complete   | 2026-08-11 |
-| 5.1 Per-Template Logo Sizing | 0/TBD | Planning in progress | - |
+| 5.1 Per-Template Logo Sizing | 0/4 | Planned | - |
 | 5.2 Release Ticket Selection | 0/TBD | Not planned | - |
+| 5.3 Actor Identity Display | 0/TBD | Not planned | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
