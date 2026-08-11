@@ -17,6 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Release Assembly** - Create, freeze, and manage named/versioned releases built from browsed tickets (completed 2026-08-06)
 - [ ] **Phase 4: Template Authoring** - Author, validate, and live-preview per-document-type templates against a safe, documented view-model (all code merged 2026-08-10; awaiting the 04-11 live-tenant verification)
 - [x] **Phase 5: Document Generation** - Generate, preview, and export release notes, runbooks, and approval documents as immutable snapshots (completed 2026-08-11)
+- [ ] **Phase 5.1: Per-Template Logo Sizing** - Make the cover logo's rendered size a per-template setting and close the DOCX cover-logo parity defect (INSERTED)
 - [ ] **Phase 6: Azure DevOps Enrichment** - Surface linked commits/PRs per ticket, degrading gracefully when absent, with tracked-expiry credentials
 - [ ] **Phase 7: Promotion Tracking & Audit Trail** - Promote releases through the fixed environment ladder with a complete, append-only history
 
@@ -157,6 +158,44 @@ Note: engine and view-model design (jmustache integration, `ReleaseView`/`Ticket
 **Plans**: 11 across 5 waves
 **UI hint**: yes
 
+### Phase 05.1: Per-Template Logo Sizing (INSERTED)
+
+**Goal**: Template author controls how large the cover logo renders, as a per-template chrome
+setting stored on the snapshot, and all four renderers agree on that size
+**Requirements**: DOC-05, DOC-06, DOC-08, TMPL-08
+**Depends on**: Phase 5
+**Plans**: TBD
+**UI hint**: yes
+
+**Why this was inserted (found 2026-08-11, after Phase 5 was verified):** the cover logo is sized in
+three independent places and only two of them cap it.
+
+| Surface | Current sizing | A 512×512 logo renders at |
+|---------|----------------|---------------------------|
+| PDF | `PdfExportAdapter.java:97` — `.cover img { max-height: 3cm }` | ~1.2 in |
+| Browser preview + viewer | `RenderedDocument.tsx:62` — `max-h-20` | 80 px |
+| DOCX | `DocxExportAdapter.java:204-205` — native px × `EMU_PER_PIXEL`, **no clamp** | 5.3 in |
+
+`LogoValidator` accepts uploads up to 2000×2000 px, so the DOCX worst case is ~20.8 in tall on an
+11.7-in A4 page. This is a DOC-08 parity defect: `D-05-07` deliberately left cross-format parity to a
+human eyeball check because PDF and DOCX apply chrome through completely separate mechanisms with no
+shared code path, and that check only catches this when the logo is large enough to notice.
+
+**Success criteria:**
+1. A template author can set the cover logo's rendered height and see the change in the authoring preview
+2. The chosen size is stored on the snapshot, so an existing document keeps the size it was generated with when re-exported
+3. A generated document's logo is the same size in the PDF, the DOCX and the document viewer
+4. A logo larger than the configured height is scaled down with its aspect ratio preserved, in every renderer
+5. No logo can exceed the page's printable area in either export format
+
+**Scope notes:**
+- Adds a field to `ChromeFields` (`TMPL-08`/`D-04-15` — structured chrome fields, not a second free-form template), so it needs a V6 migration on both `templates` and `document_snapshots`
+- Append-only snapshots (`D-05-06`/`DOC-07`) are unchanged: existing rows get the migration's default, and are not rewritten
+- The DOCX clamp is a defect fix and is required regardless of the per-template setting
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 05.1 to break down)
+
 ### Phase 6: Azure DevOps Enrichment
 **Goal**: Release manager sees each ticket's linked Azure DevOps commits and pull requests where available, with the tool degrading gracefully when a link is absent or enrichment fails, and credentials safely managed against the 2026 PAT retirement
 **Mode:** mvp
@@ -188,7 +227,7 @@ Note: engine and view-model design (jmustache integration, `ReleaseView`/`Ticket
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 6 → 7
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -197,5 +236,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7
 | 3. Release Assembly | 8/8 | Complete   | 2026-08-06 |
 | 4. Template Authoring | 11/11 | Code merged, awaiting live-tenant verification (04-11 task 3) |  |
 | 5. Document Generation | 13/13 | Complete   | 2026-08-11 |
+| 5.1 Per-Template Logo Sizing | 0/TBD | Not planned | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
