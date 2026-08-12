@@ -2,7 +2,9 @@ package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.security.CookieBearerTokenResolver;
 import com.evision.releasemgmt.adapters.security.ProblemDetailAuthenticationEntryPoint;
+import com.evision.releasemgmt.application.ActorResolutionService;
 import com.evision.releasemgmt.application.ReleaseService;
+import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
@@ -32,6 +34,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -40,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
@@ -63,8 +67,16 @@ class ReleaseControllerTest {
     @MockitoBean
     private ReleaseService service;
 
+    @MockitoBean
+    private ActorResolutionService actorResolution;
+
     private static RequestPostProcessor authenticated() {
         return jwt().jwt(b -> b.subject("557058:abc-123").claim("token_type", "access"));
+    }
+
+    private void stubActors() {
+        when(actorResolution.resolve(any(String[].class)))
+                .thenReturn(new ResolvedActors(Map.of("557058:abc-123", "rm@acme.com")));
     }
 
     private static Release release(UUID id, ReleaseStatus status) {
@@ -80,6 +92,7 @@ class ReleaseControllerTest {
         UUID id = UUID.randomUUID();
         when(service.createWithTickets(any(), any(), any(), any(), any()))
                 .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 0, 0, 0));
+        stubActors();
 
         mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -148,6 +161,7 @@ class ReleaseControllerTest {
         UUID id = UUID.randomUUID();
         when(service.createWithTickets(any(), any(), any(), any(), any()))
                 .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 0, 0, 0));
+        stubActors();
 
         mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -160,6 +174,7 @@ class ReleaseControllerTest {
         UUID id = UUID.randomUUID();
         when(service.createWithTickets(any(), any(), any(), any(), any()))
                 .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 2, 0, 0));
+        stubActors();
 
         mockMvc.perform(post("/api/releases").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -196,6 +211,7 @@ class ReleaseControllerTest {
                 Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null, null, null,
                 List.of(item), List.of(manual));
         when(service.get(id)).thenReturn(release);
+        stubActors();
 
         mockMvc.perform(get("/api/releases/{id}", id).with(authenticated()))
                 .andExpect(status().isOk())
@@ -230,11 +246,68 @@ class ReleaseControllerTest {
                 ReleaseStatus.FROZEN, "CNV", Instant.parse("2026-07-04T09:00:00Z"), "557058:abc-123",
                 Instant.parse("2026-07-05T09:00:00Z"), "557058:abc-123", null, null, 5);
         when(service.search(any())).thenReturn(List.of(first, second));
+        stubActors();
 
         mockMvc.perform(get("/api/releases").with(authenticated()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.releases.length()").value(2))
                 .andExpect(jsonPath("$.releases[0].itemCount").value(3));
+    }
+
+    @Test
+    void listResolvesEveryRowFromASingleLookup() throws Exception {
+        ReleaseSummary first = new ReleaseSummary(UUID.randomUUID(), "Sprint 42", "2026.08",
+                ReleaseStatus.OPEN, "CNV", Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123",
+                null, null, null, null, 3);
+        ReleaseSummary second = new ReleaseSummary(UUID.randomUUID(), "Sprint 41", "2026.07",
+                ReleaseStatus.OPEN, "CNV", Instant.parse("2026-07-04T09:00:00Z"), "557058:def-456",
+                null, null, null, null, 5);
+        when(service.search(any())).thenReturn(List.of(first, second));
+        when(actorResolution.resolve(any(String[].class))).thenReturn(new ResolvedActors(
+                Map.of("557058:abc-123", "rm@acme.com", "557058:def-456", "other@acme.com")));
+
+        mockMvc.perform(get("/api/releases").with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.releases[0].createdBy").value("rm@acme.com"))
+                .andExpect(jsonPath("$.releases[1].createdBy").value("other@acme.com"));
+
+        verify(actorResolution, times(1)).resolve(any(String[].class));
+    }
+
+    @Test
+    void anUnresolvedCreatorFallsBackToTheAccountId() throws Exception {
+        ReleaseSummary first = new ReleaseSummary(UUID.randomUUID(), "Sprint 42", "2026.08",
+                ReleaseStatus.OPEN, "CNV", Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123",
+                null, null, null, null, 3);
+        when(service.search(any())).thenReturn(List.of(first));
+        when(actorResolution.resolve(any(String[].class))).thenReturn(new ResolvedActors(Map.of()));
+
+        mockMvc.perform(get("/api/releases").with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.releases[0].createdBy").value("557058:abc-123"));
+    }
+
+    @Test
+    void createdByAndFrozenByAreResolvedEmails() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.get(id)).thenReturn(release(id, ReleaseStatus.FROZEN));
+        stubActors();
+
+        mockMvc.perform(get("/api/releases/{id}", id).with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.createdBy").value("rm@acme.com"))
+                .andExpect(jsonPath("$.frozenBy").value("rm@acme.com"));
+    }
+
+    @Test
+    void frozenByStaysNullOnAnUnfrozenRelease() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.get(id)).thenReturn(release(id, ReleaseStatus.OPEN));
+        stubActors();
+
+        mockMvc.perform(get("/api/releases/{id}", id).with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.frozenBy").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test
@@ -266,6 +339,7 @@ class ReleaseControllerTest {
         UUID id = UUID.randomUUID();
         when(service.addTickets(eq(id), any()))
                 .thenReturn(new AddTicketsResult(release(id, ReleaseStatus.OPEN), 1, 1, 2));
+        stubActors();
 
         mockMvc.perform(post("/api/releases/{id}/items", id).with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -341,6 +415,7 @@ class ReleaseControllerTest {
     void removeTicketReturnsTheUpdatedRelease() throws Exception {
         UUID id = UUID.randomUUID();
         when(service.removeTicket(id, "CNV-1")).thenReturn(release(id, ReleaseStatus.OPEN));
+        stubActors();
 
         mockMvc.perform(delete("/api/releases/{id}/items/CNV-1", id).with(csrf()).with(authenticated()))
                 .andExpect(status().isOk());
@@ -353,6 +428,7 @@ class ReleaseControllerTest {
                 Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null,
                 Instant.parse("2026-08-05T09:00:00Z"), null, List.of(), List.of());
         when(service.refresh(id)).thenReturn(refreshed);
+        stubActors();
 
         mockMvc.perform(post("/api/releases/{id}/refresh", id).with(csrf()).with(authenticated()))
                 .andExpect(status().isOk())
@@ -383,6 +459,7 @@ class ReleaseControllerTest {
     void freezeReturnsTheFrozenReleaseAndRecordsTheActor() throws Exception {
         UUID id = UUID.randomUUID();
         when(service.freeze(eq(id), any())).thenReturn(release(id, ReleaseStatus.FROZEN));
+        stubActors();
 
         mockMvc.perform(post("/api/releases/{id}/freeze", id).with(csrf()).with(authenticated()))
                 .andExpect(status().isOk())
@@ -464,6 +541,7 @@ class ReleaseControllerTest {
         UUID id = UUID.randomUUID();
         when(service.addManualItem(eq(id), any(), any(), any()))
                 .thenReturn(releaseWithManualItem(id, ManualItemCategory.DATABASE_SCRIPT));
+        stubActors();
 
         mockMvc.perform(post("/api/releases/{id}/manual-items", id).with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -565,6 +643,7 @@ class ReleaseControllerTest {
         UUID id = UUID.randomUUID();
         when(service.addManualItem(eq(id), any(), any(), any()))
                 .thenReturn(releaseWithManualItem(id, ManualItemCategory.OTHER));
+        stubActors();
 
         mockMvc.perform(post("/api/releases/{id}/manual-items", id).with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -578,6 +657,7 @@ class ReleaseControllerTest {
         UUID itemId = UUID.randomUUID();
         when(service.updateManualItem(eq(id), eq(itemId), any(), any(), any()))
                 .thenReturn(releaseWithManualItem(id, ManualItemCategory.INFRASTRUCTURE));
+        stubActors();
 
         mockMvc.perform(put("/api/releases/{id}/manual-items/{itemId}", id, itemId)
                         .with(csrf()).with(authenticated())
@@ -594,6 +674,7 @@ class ReleaseControllerTest {
         UUID id = UUID.randomUUID();
         UUID itemId = UUID.randomUUID();
         when(service.removeManualItem(id, itemId)).thenReturn(release(id, ReleaseStatus.OPEN));
+        stubActors();
 
         mockMvc.perform(delete("/api/releases/{id}/manual-items/{itemId}", id, itemId)
                         .with(csrf()).with(authenticated()))

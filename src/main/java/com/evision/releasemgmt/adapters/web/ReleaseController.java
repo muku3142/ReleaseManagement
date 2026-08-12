@@ -9,7 +9,9 @@ import com.evision.releasemgmt.adapters.web.dto.ReleaseItemResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseSearchResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseSummaryResponse;
+import com.evision.releasemgmt.application.ActorResolutionService;
 import com.evision.releasemgmt.application.ReleaseService;
+import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.Release;
@@ -31,15 +33,18 @@ import org.springframework.web.bind.annotation.RestController;
 import java.security.Principal;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 @RestController
 @RequestMapping("/api/releases")
 public class ReleaseController {
 
     private final ReleaseService service;
+    private final ActorResolutionService actorResolution;
 
-    public ReleaseController(ReleaseService service) {
+    public ReleaseController(ReleaseService service, ActorResolutionService actorResolution) {
         this.service = service;
+        this.actorResolution = actorResolution;
     }
 
     @PostMapping
@@ -56,8 +61,14 @@ public class ReleaseController {
 
     @GetMapping
     public ReleaseSearchResponse list(@RequestParam(name = "query", defaultValue = "") String query) {
-        return new ReleaseSearchResponse(service.search(query).stream()
-                .map(ReleaseController::toSummaryResponse).toList());
+        List<ReleaseSummary> summaries = service.search(query);
+        // D-05.3-05: this is the phase's worst N+1 site - two actors per row. One call for the page,
+        // and toSummaryResponse stays static so a row cannot resolve for itself.
+        ResolvedActors actors = actorResolution.resolve(summaries.stream()
+                .flatMap(s -> Stream.of(s.createdBy(), s.frozenBy()))
+                .toArray(String[]::new));
+        return new ReleaseSearchResponse(summaries.stream()
+                .map(s -> toSummaryResponse(s, actors)).toList());
     }
 
     @GetMapping("/{releaseId}")
@@ -114,24 +125,26 @@ public class ReleaseController {
         return toResponse(service.removeManualItem(releaseId, manualItemId));
     }
 
-    private static ReleaseAddResultResponse toAddResult(AddTicketsResult result) {
+    private ReleaseAddResultResponse toAddResult(AddTicketsResult result) {
         return new ReleaseAddResultResponse(toResponse(result.release()), result.added(),
                 result.alreadyPresent(), result.notFound());
     }
 
-    private static ReleaseResponse toResponse(Release release) {
+    private ReleaseResponse toResponse(Release release) {
+        ResolvedActors actors = actorResolution.resolve(release.createdBy(), release.frozenBy());
         return new ReleaseResponse(release.id(), release.name(), release.version(),
                 release.status().name(), release.jiraProjectKey(), release.createdAt(),
-                release.createdBy(), release.frozenAt(), release.frozenBy(), release.lastRefreshedAt(),
+                actors.display(release.createdBy()), release.frozenAt(),
+                actors.display(release.frozenBy()), release.lastRefreshedAt(),
                 release.items().stream().map(ReleaseController::toItemResponse).toList(),
                 release.manualItems().stream().map(ReleaseController::toManualItemResponse).toList());
     }
 
-    private static ReleaseSummaryResponse toSummaryResponse(ReleaseSummary summary) {
+    private static ReleaseSummaryResponse toSummaryResponse(ReleaseSummary summary, ResolvedActors actors) {
         return new ReleaseSummaryResponse(summary.id(), summary.name(), summary.version(),
                 summary.status().name(), summary.jiraProjectKey(), summary.createdAt(),
-                summary.createdBy(), summary.frozenAt(), summary.frozenBy(), summary.lastRefreshedAt(),
-                summary.itemCount());
+                actors.display(summary.createdBy()), summary.frozenAt(),
+                actors.display(summary.frozenBy()), summary.lastRefreshedAt(), summary.itemCount());
     }
 
     private static ReleaseItemResponse toItemResponse(ReleaseItem item) {
