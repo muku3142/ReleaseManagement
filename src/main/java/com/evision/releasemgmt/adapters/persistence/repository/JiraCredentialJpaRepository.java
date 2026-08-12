@@ -7,6 +7,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -39,4 +41,17 @@ public interface JiraCredentialJpaRepository extends JpaRepository<JiraCredentia
     @Modifying
     @Query("update JiraCredentialEntity e set e.sessionsInvalidatedAt = :at where e.jiraAccountId = :accountId")
     int markSessionsInvalidated(@Param("accountId") String accountId, @Param("at") Instant at);
+
+    @Query("""
+            select e.jiraAccountId as accountId, e.jiraEmail as email
+              from JiraCredentialEntity e
+             where e.jiraAccountId in :accountIds
+            """)
+    List<AccountEmail> findEmailsByAccountIdIn(@Param("accountIds") Collection<String> accountIds);
+
+    /** A Spring Data interface projection: two scalar columns, no entity, so no converter runs. */
+    interface AccountEmail {
+        String getAccountId();
+        String getEmail();
+    }
 }
