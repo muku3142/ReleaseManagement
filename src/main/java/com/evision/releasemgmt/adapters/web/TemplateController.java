@@ -11,8 +11,10 @@ import com.evision.releasemgmt.adapters.web.dto.SaveTemplateContentRequest;
 import com.evision.releasemgmt.adapters.web.dto.TemplateListResponse;
 import com.evision.releasemgmt.adapters.web.dto.TemplateResponse;
 import com.evision.releasemgmt.adapters.web.dto.TemplateSummaryResponse;
+import com.evision.releasemgmt.application.ActorResolutionService;
 import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.application.ReleaseViewAssembler;
+import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.domain.template.ChromeFields;
 import com.evision.releasemgmt.domain.template.GroupingDimension;
@@ -50,18 +52,20 @@ public class TemplateController {
     private final TemplateService templateService;
     private final ReleaseService releaseService;
     private final ReleaseViewAssembler assembler;
+    private final ActorResolutionService actorResolution;
     private final long logoMaxBytes;
     private final int logoMaxWidth;
     private final int logoMaxHeight;
 
     public TemplateController(TemplateService templateService, ReleaseService releaseService,
-                              ReleaseViewAssembler assembler,
+                              ReleaseViewAssembler assembler, ActorResolutionService actorResolution,
                               @Value("${app.template.logo.max-bytes}") long logoMaxBytes,
                               @Value("${app.template.logo.max-width}") int logoMaxWidth,
                               @Value("${app.template.logo.max-height}") int logoMaxHeight) {
         this.templateService = templateService;
         this.releaseService = releaseService;
         this.assembler = assembler;
+        this.actorResolution = actorResolution;
         this.logoMaxBytes = logoMaxBytes;
         this.logoMaxWidth = logoMaxWidth;
         this.logoMaxHeight = logoMaxHeight;
@@ -191,7 +195,7 @@ public class TemplateController {
                 .body(image.bytes());
     }
 
-    private static TemplateResponse toResponse(Template template) {
+    private TemplateResponse toResponse(Template template) {
         ChromeFields chrome = template.chrome();
         ChromeFieldsResponse chromeResponse = new ChromeFieldsResponse(chrome.coverEnabled(),
                 chrome.coverTitle(), chrome.coverSubtitle(), chrome.headerText(), chrome.footerText(),
@@ -200,10 +204,11 @@ public class TemplateController {
                 : new LogoMetadataResponse(template.logo().contentType(), template.logo().filename(),
                         template.logo().byteSize(), template.logo().width(), template.logo().height(),
                         template.logo().uploadedAt());
+        ResolvedActors actors = actorResolution.resolve(template.createdBy(), template.updatedBy());
         return new TemplateResponse(template.id(), template.name(), template.documentType().name(),
                 template.body(), template.active(), chromeResponse, template.groupingDimension().name(),
-                logoResponse, template.warnings(), template.createdAt(), template.createdBy(),
-                template.updatedAt(), template.updatedBy());
+                logoResponse, template.warnings(), template.createdAt(), actors.display(template.createdBy()),
+                template.updatedAt(), actors.display(template.updatedBy()));
     }
 
     private static TemplateSummaryResponse toSummaryResponse(Template template) {

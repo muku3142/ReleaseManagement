@@ -2,8 +2,10 @@ package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.security.CookieBearerTokenResolver;
 import com.evision.releasemgmt.adapters.security.ProblemDetailAuthenticationEntryPoint;
+import com.evision.releasemgmt.application.ActorResolutionService;
 import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.application.ReleaseViewAssembler;
+import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
@@ -30,6 +32,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -64,8 +67,16 @@ class TemplateLogoControllerTest {
     @MockitoBean
     private ReleaseViewAssembler assembler;
 
+    @MockitoBean
+    private ActorResolutionService actorResolution;
+
     private static RequestPostProcessor authenticated() {
         return jwt().jwt(b -> b.subject("557058:abc-123").claim("token_type", "access"));
+    }
+
+    private void stubActors() {
+        when(actorResolution.resolve(any(String[].class)))
+                .thenReturn(new ResolvedActors(Map.of("557058:abc-123", "rm@acme.com")));
     }
 
     private static Template template(UUID id, LogoMetadata logo) {
@@ -88,6 +99,7 @@ class TemplateLogoControllerTest {
         Instant now = Instant.parse("2026-08-09T09:00:00Z");
         LogoMetadata metadata = new LogoMetadata("image/png", "logo.png", 123, 10, 10, now);
         when(templateService.uploadLogo(eq(id), any(), any())).thenReturn(template(id, metadata));
+        stubActors();
 
         MockMultipartFile file = new MockMultipartFile("file", "logo.png", "image/png", pngBytes());
 
@@ -144,6 +156,7 @@ class TemplateLogoControllerTest {
     void removingALogoReturns200WithNoLogo() throws Exception {
         UUID id = UUID.randomUUID();
         when(templateService.removeLogo(id)).thenReturn(template(id, null));
+        stubActors();
 
         mockMvc.perform(delete("/api/templates/{id}/logo", id).with(csrf()).with(authenticated()))
                 .andExpect(status().isOk())
