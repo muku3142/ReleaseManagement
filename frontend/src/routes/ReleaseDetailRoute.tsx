@@ -14,7 +14,9 @@ import {
   useRemoveTicketItem,
   useUpdateManualItem,
   type ManualItemCategory,
+  type ReleaseAddResult,
 } from '../api/releases';
+import { AddTicketsToReleaseDialog } from '../components/AddTicketsToReleaseDialog';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DocumentsSection } from '../components/DocumentsSection';
 
@@ -49,6 +51,8 @@ export function ReleaseDetailRoute() {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const showBanner = !bannerDismissed && added !== undefined && alreadyPresent !== undefined;
+  const [addOpen, setAddOpen] = useState(false);
+  const [addOutcome, setAddOutcome] = useState<ReleaseAddResult | null>(null);
 
   const refresh = useRefreshRelease();
   const freeze = useFreezeRelease();
@@ -200,6 +204,14 @@ export function ReleaseDetailRoute() {
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
+              onClick={() => setAddOpen(true)}
+              disabled={busy}
+              className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              Add tickets
+            </button>
+            <button
+              type="button"
               onClick={() => refresh.mutate(data.id)}
               disabled={busy}
               className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 disabled:opacity-50"
@@ -276,6 +288,15 @@ export function ReleaseDetailRoute() {
         onCancel={() => setConfirming(null)}
       />
 
+      <AddTicketsToReleaseDialog
+        open={addOpen}
+        releaseId={data.id}
+        releaseName={data.name}
+        version={data.version}
+        onAdded={setAddOutcome}
+        onClose={() => setAddOpen(false)}
+      />
+
       {showBanner && (
         <div
           role="status"
@@ -286,6 +307,31 @@ export function ReleaseDetailRoute() {
             type="button"
             aria-label="Dismiss"
             onClick={() => setBannerDismissed(true)}
+            className="ml-3 rounded px-2 text-blue-900 focus-visible:ring-2 focus-visible:ring-blue-600"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {addOutcome !== null && (
+        <div
+          role="status"
+          className="mt-4 flex items-start justify-between rounded border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900"
+        >
+          <p>
+            {addResultMessage(
+              addOutcome.added,
+              addOutcome.alreadyPresent,
+              addOutcome.notFound,
+              data.name,
+              data.version,
+            )}
+          </p>
+          <button
+            type="button"
+            aria-label="Dismiss added tickets"
+            onClick={() => setAddOutcome(null)}
             className="ml-3 rounded px-2 text-blue-900 focus-visible:ring-2 focus-visible:ring-blue-600"
           >
             ×

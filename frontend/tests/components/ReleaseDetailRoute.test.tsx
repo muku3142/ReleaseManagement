@@ -2,7 +2,8 @@ import { StrictMode, act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ReleaseDetailRoute } from '../../src/routes/ReleaseDetailRoute';
+import { ReleaseDetailRoute, addResultMessage } from '../../src/routes/ReleaseDetailRoute';
+import type { Release } from '../../src/api/releases';
 
 const navigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
@@ -12,7 +13,7 @@ vi.mock('@tanstack/react-router', () => ({
   Link: (props: { children?: ReactNode }) => <a href="/releases">{props.children}</a>,
 }));
 
-const RELEASE = {
+const RELEASE: Release = {
   id: 'r1',
   name: 'Sprint 42',
   version: '2026.08',
@@ -69,6 +70,32 @@ function byText(text: string): HTMLButtonElement {
   const button = [...container.querySelectorAll('button')].find((b) => b.textContent === text);
   expect(button, `no button labelled "${text}"`).toBeDefined();
   return button!;
+}
+
+function findByText(text: string): HTMLButtonElement | undefined {
+  return [...container.querySelectorAll('button')].find((b) => b.textContent === text);
+}
+
+// Catch-all fetch mock for the add-tickets flow: the dialog's TicketBrowser fires
+// jira/projects, jira sprints and tickets/search once opened, and DocumentsSection fires its
+// own readiness/revisions calls regardless of whether the dialog is ever opened.
+function mockAddTicketsApi(
+  release: Release,
+  overrides: { tickets?: unknown[]; addResponse?: Response } = {},
+) {
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const url = String(input);
+    const method = init?.method ?? 'GET';
+    if (url === '/api/jira/projects') return json(200, [{ id: '10023', key: 'CNV', name: 'Convergence' }]);
+    if (url.match(/^\/api\/jira\/projects\/[^/]+\/sprints$/)) return json(200, []);
+    if (url === '/api/tickets/search' && method === 'POST') return json(200, { tickets: overrides.tickets ?? [] });
+    if (url === `/api/releases/${release.id}/items` && method === 'POST') {
+      return overrides.addResponse ?? json(200, { release, added: 0, alreadyPresent: 0, notFound: 0 });
+    }
+    if (url.startsWith('/api/documents/readiness')) return json(200, { entries: [] });
+    if (url.includes('/revisions')) return json(200, { revisions: [] });
+    return json(200, release);
+  });
 }
 
 describe('ReleaseDetailRoute', () => {
@@ -202,5 +229,82 @@ describe('ReleaseDetailRoute', () => {
     expect(section).not.toBeNull();
     const wrapper = container.firstElementChild;
     expect(wrapper?.lastElementChild).toBe(section);
+  });
+
+  it('anOpenReleaseOffersAnAddTicketsAffordance', async () => {
+    mockAddTicketsApi(RELEASE);
+    await renderRoute();
+
+    await act(async () => byText('Add tickets').click());
+    await flush();
+
+    const dialogs = [...container.querySelectorAll('dialog')];
+    expect(dialogs.some((d) => d.open)).toBe(true);
+  });
+
+  // ROADMAP criterion 6 / REL-03: the refusal happens before any work, not as a 409 after
+  // tickets are chosen. The server-side refusal (ReleaseService.addTickets:67) is already
+  // covered by Phase 3's tests and is not re-asserted here.
+  it('aFrozenReleaseOffersNoAddTicketsAffordanceAtAll', async () => {
+    const frozen: Release = {
+      ...RELEASE,
+      status: 'FROZEN',
+      frozenAt: '2026-08-06T00:00:00Z',
+      frozenBy: 'rm@acme.com',
+    };
+    mockAddTicketsApi(frozen);
+    await renderRoute();
+
+    expect(findByText('Add tickets')).toBeUndefined();
+    expect([...container.querySelectorAll('dialog')].every((d) => !d.open)).toBe(true);
+  });
+
+  it('aSuccessfulAddShowsTheOutcomeBanner', async () => {
+    const TICKETS = [
+      {
+        key: 'CNV-9',
+        summary: 'Some fix',
+        issueType: 'Bug',
+        status: 'Done',
+        resolution: 'Fixed',
+        assignee: null,
+        reporter: 'Bob',
+        fixVersions: [],
+        component: null,
+        description: '',
+        comments: [],
+        commentTotal: 0,
+      },
+    ];
+    mockAddTicketsApi(RELEASE, {
+      tickets: TICKETS,
+      addResponse: json(200, { release: RELEASE, added: 1, alreadyPresent: 0, notFound: 0 }),
+    });
+
+    await renderRoute();
+    await act(async () => byText('Add tickets').click());
+    await flush();
+
+    const projectSelect = container.querySelector<HTMLSelectElement>('#projectId')!;
+    await act(async () => {
+      projectSelect.value = '10023';
+      projectSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await flush();
+    await act(async () => byText('Load tickets').click());
+    await flush();
+
+    const ticketCheckbox = container.querySelector<HTMLInputElement>(
+      'input[aria-label="Select ticket CNV-9"]',
+    )!;
+    await act(async () => ticketCheckbox.click());
+    await flush();
+
+    await act(async () => byText('Add to this release').click());
+    await flush();
+
+    const statusEl = container.querySelector('[role="status"] p');
+    expect(statusEl?.textContent).toBe(addResultMessage(1, 0, 0, RELEASE.name, RELEASE.version));
+    expect([...container.querySelectorAll('dialog')].every((d) => !d.open)).toBe(true);
   });
 });
