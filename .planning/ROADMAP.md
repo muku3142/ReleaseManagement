@@ -17,7 +17,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Release Assembly** - Create, freeze, and manage named/versioned releases built from browsed tickets (completed 2026-08-06)
 - [ ] **Phase 4: Template Authoring** - Author, validate, and live-preview per-document-type templates against a safe, documented view-model (all code merged 2026-08-10; awaiting the 04-11 live-tenant verification)
 - [x] **Phase 5: Document Generation** - Generate, preview, and export release notes, runbooks, and approval documents as immutable snapshots (completed 2026-08-11)
-- [ ] **Phase 5.1: Per-Template Logo Sizing** - Make the cover logo's rendered size a per-template setting and close the DOCX cover-logo parity defect (INSERTED)
+- [x] **Phase 5.1: Per-Template Logo Sizing** - Make the cover logo's rendered size a per-template setting and close the DOCX cover-logo parity defect (INSERTED, completed 2026-08-12)
 - [x] **Phase 5.2: Release Ticket Selection** - Hide already-added tickets while assembling, and add tickets from the release page itself (INSERTED, completed 2026-08-12)
 - [ ] **Phase 5.3: Actor Identity Display** - Show a person's email instead of an opaque Jira account id, resolved at read time so existing history displays correctly (INSERTED)
 - [ ] **Phase 5.4: Template Selection At Generation Time** - Choose which template produces a document when generating, instead of relying on whichever template is active (INSERTED)
@@ -197,10 +197,10 @@ shared code path, and that check only catches this when the logo is large enough
 - The DOCX clamp is a defect fix and is required regardless of the per-template setting
 
 Plans:
-- [ ] 05.1-01-PLAN.md — ChromeFields gains logoRenderHeightMm: V6 migration on both tables, threaded through persistence, DTOs, controllers, generation and the seeder (wave 1)
-- [ ] 05.1-02-PLAN.md — The "Cover logo height (mm)" control, the TypeScript mirror, and mm-based cover-logo sizing in the shared preview/viewer component (wave 1)
-- [ ] 05.1-03-PLAN.md — Both exporters honour the stored height, proportionally and downward only, plus the cross-format seam assertion (wave 2)
-- [ ] 05.1-04-PLAN.md — Full regression, V6 against pre-phase rows, and the human parity check across PDF/DOCX/viewer (wave 3)
+- [x] 05.1-01-PLAN.md — ChromeFields gains logoRenderHeightMm: V6 migration on both tables, threaded through persistence, DTOs, controllers, generation and the seeder (wave 1)
+- [x] 05.1-02-PLAN.md — The "Cover logo height (mm)" control, the TypeScript mirror, and mm-based cover-logo sizing in the shared preview/viewer component (wave 1)
+- [x] 05.1-03-PLAN.md — Both exporters honour the stored height, proportionally and downward only, plus the cross-format seam assertion (wave 2)
+- [x] 05.1-04-PLAN.md — Full regression, V6 against pre-phase rows, and the human parity check across PDF/DOCX/viewer (wave 3)
 
 ### Phase 05.2: Release Ticket Selection (INSERTED)
 
@@ -401,9 +401,10 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 3. Release Assembly | 8/8 | Complete   | 2026-08-06 |
 | 4. Template Authoring | 11/11 | Code merged, awaiting live-tenant verification (04-11 task 3) |  |
 | 5. Document Generation | 13/13 | Complete   | 2026-08-11 |
-| 5.1 Per-Template Logo Sizing | 0/4 | Planned | - |
+| 5.1 Per-Template Logo Sizing | 4/4 | Complete   | 2026-08-12 |
 | 5.2 Release Ticket Selection | 3/3 | Complete   | 2026-08-12 |
-| 5.3 Actor Identity Display | 0/3 | Planned | - |
+| 5.3 Actor Identity Display | 2/3 | In Progress|  |
+| 5.4 Template Selection At Generation Time | 0/TBD | Not planned | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
 | 8. Release Insights Dashboard | 0/TBD | Not started | - |

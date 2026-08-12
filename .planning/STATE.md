@@ -31,17 +31,19 @@ Plan: 3 of 3
 Current baselines: **backend 590 tests, frontend 210 tests**, `tsc -b` clean, full `mvn clean test`
 BUILD SUCCESS.
 
-**Two things need a human before their phases can close:**
+**One thing needs a human before its phase can close:**
 
-1. **05.1's blocking checkpoint** — plan 05.1-04 is parked awaiting a visual comparison of an oversized
-   logo across the viewer, PDF and DOCX. All 05.1 code is merged and green; only the checkpoint and its
-   SUMMARY remain.
-
-2. **05.2's live-Jira verification** — every automated test stubs `JiraTicketPort` or mocks
+1. **05.2's live-Jira verification** — every automated test stubs `JiraTicketPort` or mocks
    `useTicketSearch`, so nothing proves the release scope survives a real HTTP round trip. Recorded in
    `05.2-VERIFICATION.md` frontmatter as `human_needed`, not silently passed.
 
-- **05.1 Per-Template Logo Sizing — EXECUTED, 3 of 4 plans complete.** `ChromeFields` carries
+- **05.1 Per-Template Logo Sizing — COMPLETE, 4/4 plans, closed 2026-08-12.** The plan 05.1-04
+  human-verify gate was closed **on the user's assertion** that they had run it and everything passed;
+  the six per-step observations the plan required were requested twice and not supplied, so
+  cross-format visual parity is **asserted, not observed**. The evidence that does exist is
+  dimensional: `GenerateThenExportSeamTest` at 15mm, proven to fail against the pre-fix adapters. The
+  re-runnable six-step procedure is still in `05.1-04-PLAN.md`'s `<how-to-verify>` block if that gap
+  is ever worth closing. Detail in `05.1-04-SUMMARY.md`. `ChromeFields` carries
   `logoRenderHeightMm` (mm, default 30, bounds 5..120) through V6 and the full stack; both exporters
   clamp proportionally and downward-only; the cross-format seam test uses **15mm, not the 30mm
   default**, because at 30mm the pre-fix PDF's hard-coded `max-height: 3cm` coincidentally produces the
