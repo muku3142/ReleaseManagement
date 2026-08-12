@@ -2,7 +2,9 @@ package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.web.dto.JiraSiteConfigResponse;
 import com.evision.releasemgmt.adapters.web.dto.UpdateJiraSiteConfigRequest;
+import com.evision.releasemgmt.application.ActorResolutionService;
 import com.evision.releasemgmt.application.JiraSiteConfigService;
+import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.domain.jira.JiraSiteConfig;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,9 +20,11 @@ import java.security.Principal;
 public class JiraSiteConfigController {
 
     private final JiraSiteConfigService service;
+    private final ActorResolutionService actorResolution;
 
-    public JiraSiteConfigController(JiraSiteConfigService service) {
+    public JiraSiteConfigController(JiraSiteConfigService service, ActorResolutionService actorResolution) {
         this.service = service;
+        this.actorResolution = actorResolution;
     }
 
     @GetMapping
@@ -36,6 +40,8 @@ public class JiraSiteConfigController {
     }
 
     private JiraSiteConfigResponse toResponse(JiraSiteConfig config) {
-        return new JiraSiteConfigResponse(config.baseUrl(), config.updatedAt(), config.updatedBy());
+        ResolvedActors actors = actorResolution.resolve(config.updatedBy());
+        return new JiraSiteConfigResponse(config.baseUrl(), config.updatedAt(),
+                actors.display(config.updatedBy()));
     }
 }
