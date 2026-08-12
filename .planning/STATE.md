@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 5 UI-SPEC approved
-last_updated: "2026-08-11T12:06:32.260Z"
-last_activity: 2026-08-11 -- Phase 05.1 execution started
+stopped_at: Phase 05.2 complete; 05.1 parked at its human checkpoint
+last_updated: "2026-08-12T08:04:12.747Z"
+last_activity: 2026-08-12 -- Phase 05.2 executed (3/3); backend 571, frontend 210
 progress:
-  total_phases: 10
-  completed_phases: 3
-  total_plans: 51
-  completed_plans: 45
-  percent: 88
+  total_phases: 11
+  completed_phases: 4
+  total_plans: 57
+  completed_plans: 51
+  percent: 89
 ---
 
 # Project State
@@ -21,33 +21,45 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-27)
 
 **Core value:** Given a set of Jira tickets, produce accurate and consistent release documentation plus a tracked deployment record — without anyone doing manual release bookkeeping in Jira.
-**Current focus:** Phase 05.1 — per-template-logo-sizing
+**Current focus:** Phase 05.3 — actor identity display (planned, ready to execute)
 
 ## Current Position
 
-Phase: 05.1 (per-template-logo-sizing) — EXECUTING
-Plan: 1 of 4
+Phase: 05.3 (actor-identity-display) — READY TO EXECUTE
+Plan: 0 of 3 across 3 waves — run `/gsd-execute-phase 05.3`
 
-**Three decimal phases are now queued**, all inserted on 2026-08-11, all with CONTEXT.md captured
-directly rather than via `/gsd-discuss-phase`:
+Current baselines: **backend 571 tests, frontend 210 tests**, `tsc -b` clean, full `mvn clean test`
+BUILD SUCCESS.
 
-- **05.1 Per-Template Logo Sizing — PLANNED, 4 plans / 3 waves.** Wave 1 runs the backend
-  `ChromeFields` change and the frontend control in parallel (`src/**` and `frontend/**` are genuinely
-  disjoint); wave 2 makes both exporters honour the height with a cross-format seam assertion; wave 3
-  is regression plus a blocking human parity check. The seam test deliberately uses **15mm, not the
-  30mm default** — at 30mm the pre-fix PDF's hard-coded `max-height: 3cm` coincidentally produces the
-  right answer, so a default-height assertion would pass against broken code.
+**Two things need a human before their phases can close:**
 
-- **05.2 Release Ticket Selection — PLANNED, 3 plans / 2 waves.** Wave 1 runs the backend filter and
-  the `TicketBrowser` extraction in parallel (`src/**` and `frontend/**` are disjoint); wave 2 adds the
-  release-page dialog on top of both. The filter is threaded as a separate argument to
-  `TicketSearchService.search` rather than as a field on `TicketSearchCriteria`, so `toJql()` is
-  structurally incapable of seeing release membership rather than merely forbidden from using it.
+1. **05.1's blocking checkpoint** — plan 05.1-04 is parked awaiting a visual comparison of an oversized
+   logo across the viewer, PDF and DOCX. All 05.1 code is merged and green; only the checkpoint and its
+   SUMMARY remain.
+2. **05.2's live-Jira verification** — every automated test stubs `JiraTicketPort` or mocks
+   `useTicketSearch`, so nothing proves the release scope survives a real HTTP round trip. Recorded in
+   `05.2-VERIFICATION.md` frontmatter as `human_needed`, not silently passed.
 
-- **05.3 Actor Identity Display — PLANNED, 3 plans / 3 waves.** Wave 1 builds the projection-only
-  lookup, wave 2 wires it into the four controllers, wave 3 proves it across the seam and ends at a
-  human checkpoint. The load-bearing fact, confirmed by pattern mapping rather than inferred:
-  decryption fires because `JiraCredentialEntity.token` carries
+- **05.1 Per-Template Logo Sizing — EXECUTED, 3 of 4 plans complete.** `ChromeFields` carries
+  `logoRenderHeightMm` (mm, default 30, bounds 5..120) through V6 and the full stack; both exporters
+  clamp proportionally and downward-only; the cross-format seam test uses **15mm, not the 30mm
+  default**, because at 30mm the pre-fix PDF's hard-coded `max-height: 3cm` coincidentally produces the
+  right answer and a default-height assertion would pass against broken code. Reverting the fix failed
+  4 of 4 seam tests (observed `expected: 540000L but was: 2857500L`).
+
+- **05.2 Release Ticket Selection — COMPLETE, 3/3 plans, verified 2026-08-12.** Backend 561→571,
+  frontend 185→210. The release scope is threaded as a **separate argument** to
+  `TicketSearchService.search(criteria, releaseId)` rather than as a field on `TicketSearchCriteria`, so
+  `toJql()` is structurally incapable of leaking release membership into a Jira query. `TicketBrowser`
+  is now the single browse surface — exactly one file in the app declares the results `<table>` — used
+  by both `/tickets` and the new `AddTicketsToReleaseDialog`. A frozen release renders no add affordance
+  at all (the button sits inside `{isOpen && ...}`), so refusal happens before the work rather than as a
+  409 after tickets are chosen.
+
+- **05.3 Actor Identity Display — PLANNED, 3 plans / 3 waves, not started.** Wave 1 builds the
+  projection-only lookup, wave 2 wires it into the four controllers, wave 3 proves it across the seam
+  and ends at a human checkpoint. The load-bearing fact, confirmed by pattern mapping rather than
+  inferred: decryption fires because `JiraCredentialEntity.token` carries
   `@Convert(converter = EncryptedTokenConverter.class)`, so the risk attaches to the entity **type** —
   any query returning that type can throw on a superseded key, and only a scalar projection avoids it.
 
@@ -98,10 +110,10 @@ replaced entirely by **sprint** (brings Jira's Agile API into scope, reversing
 part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
 names, table widening, and frontend tests moved to `frontend/tests/`.
 
-Status: Executing Phase 05.1
-Last activity: 2026-08-11 -- Phase 05.1 execution started
+Status: Phase 05.2 complete — 05.3 ready to execute
+Last activity: 2026-08-12 -- Phase 05.2 executed (3/3); backend 571, frontend 210
 
-Progress: [█████████░] 88%
+Progress: [█████████░] 89%
 
 ## Performance Metrics
 

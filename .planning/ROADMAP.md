@@ -18,7 +18,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 4: Template Authoring** - Author, validate, and live-preview per-document-type templates against a safe, documented view-model (all code merged 2026-08-10; awaiting the 04-11 live-tenant verification)
 - [x] **Phase 5: Document Generation** - Generate, preview, and export release notes, runbooks, and approval documents as immutable snapshots (completed 2026-08-11)
 - [ ] **Phase 5.1: Per-Template Logo Sizing** - Make the cover logo's rendered size a per-template setting and close the DOCX cover-logo parity defect (INSERTED)
-- [ ] **Phase 5.2: Release Ticket Selection** - Hide already-added tickets while assembling, and add tickets from the release page itself (INSERTED)
+- [x] **Phase 5.2: Release Ticket Selection** - Hide already-added tickets while assembling, and add tickets from the release page itself (INSERTED, completed 2026-08-12)
 - [ ] **Phase 5.3: Actor Identity Display** - Show a person's email instead of an opaque Jira account id, resolved at read time so existing history displays correctly (INSERTED)
 - [ ] **Phase 6: Azure DevOps Enrichment** - Surface linked commits/PRs per ticket, degrading gracefully when absent, with tracked-expiry credentials
 - [ ] **Phase 7: Promotion Tracking & Audit Trail** - Promote releases through the fixed environment ladder with a complete, append-only history
@@ -248,11 +248,11 @@ making a person do avoidable work.
 Plans:
 
 **Wave 1**
-- [ ] 05.2-01 — Server-side release-membership filter on `POST /api/tickets/search`, threaded as a separate argument so `toJql()` structurally cannot see it — REL-01, JIRA-02
-- [ ] 05.2-02 — Extract the browse surface out of `TicketsRoute.tsx` (416 lines) into one reusable `TicketBrowser`; behaviour-preserving, with the existing suite passing untouched as the proof — JIRA-02
+- [x] 05.2-01 — Server-side release-membership filter on `POST /api/tickets/search`, threaded as a separate argument so `toJql()` structurally cannot see it — REL-01, JIRA-02
+- [x] 05.2-02 — Extract the browse surface out of `TicketsRoute.tsx` (416 lines) into one reusable `TicketBrowser`; behaviour-preserving, with the existing suite passing untouched as the proof — JIRA-02
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 05.2-03 — The release page's own add-tickets dialog, composing the extracted browser — REL-01, REL-03, JIRA-02
+- [x] 05.2-03 — The release page's own add-tickets dialog, composing the extracted browser — REL-01, REL-03, JIRA-02
 
 ### Phase 05.3: Actor Identity Display (INSERTED)
 
@@ -355,7 +355,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 4. Template Authoring | 11/11 | Code merged, awaiting live-tenant verification (04-11 task 3) |  |
 | 5. Document Generation | 13/13 | Complete   | 2026-08-11 |
 | 5.1 Per-Template Logo Sizing | 0/4 | Planned | - |
-| 5.2 Release Ticket Selection | 0/3 | Planned | - |
+| 5.2 Release Ticket Selection | 3/3 | Complete   | 2026-08-12 |
 | 5.3 Actor Identity Display | 0/3 | Planned | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
