@@ -61,4 +61,31 @@ class ArchitectureBoundaryTest {
                 .allowEmptyShould(true);
         rule.check(classes);
     }
+
+    /**
+     * The display path must not be able to reach the token-bearing port. Loading JiraCredential
+     * decrypts encrypted_token, so a controller that resolved an actor through findByAccountId would
+     * let one row encrypted under a superseded RM_CREDENTIAL_KEY take down the document, release and
+     * template screens (D-05.3-03). ActorDirectory exists so this is a compile-time impossibility
+     * rather than a convention; these rules stop the convention being quietly abandoned.
+     */
+    @Test
+    void theWebAdapterCannotReachTheTokenBearingCredentialPort() {
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..adapters.web..")
+                .should().dependOnClassesThat()
+                .haveFullyQualifiedName("com.evision.releasemgmt.ports.JiraCredentialRepository")
+                .allowEmptyShould(true);
+        rule.check(classes);
+    }
+
+    @Test
+    void actorResolutionResolvesThroughActorDirectoryOnly() {
+        ArchRule rule = noClasses()
+                .that().haveSimpleName("ActorResolutionService")
+                .should().dependOnClassesThat()
+                .haveFullyQualifiedName("com.evision.releasemgmt.ports.JiraCredentialRepository")
+                .allowEmptyShould(true);
+        rule.check(classes);
+    }
 }
