@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.mockito.ArgumentCaptor;
 
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -53,7 +54,7 @@ class TicketControllerTest {
 
     @Test
     void pickerSearchReturnsTicketsAndDefaultsToDoneOnly() throws Exception {
-        when(service.search(any())).thenReturn(List.of(ticket("CNV-1")));
+        when(service.search(any(), any())).thenReturn(List.of(ticket("CNV-1")));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -62,14 +63,14 @@ class TicketControllerTest {
                 .andExpect(jsonPath("$.tickets[0].key").value("CNV-1"));
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
-        verify(service).search(criteria.capture());
+        verify(service).search(criteria.capture(), any());
         assertThat(criteria.getValue().toJql())
                 .isEqualTo("project = 10023 AND sprint = 10891 AND statusCategory IN (\"Done\") ORDER BY key ASC");
     }
 
     @Test
     void jqlSearchForwardsQueryVerbatim() throws Exception {
-        when(service.search(any())).thenReturn(List.of(ticket("CNV-1")));
+        when(service.search(any(), any())).thenReturn(List.of(ticket("CNV-1")));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -77,7 +78,7 @@ class TicketControllerTest {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
-        verify(service).search(criteria.capture());
+        verify(service).search(criteria.capture(), any());
         assertThat(criteria.getValue().toJql()).isEqualTo("project = CNV AND status = Done");
     }
 
@@ -89,7 +90,7 @@ class TicketControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
 
-        verify(service, never()).search(any());
+        verify(service, never()).search(any(), any());
     }
 
     @Test
@@ -109,12 +110,12 @@ class TicketControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.projectId").exists());
 
-        verify(service, never()).search(any());
+        verify(service, never()).search(any(), any());
     }
 
     @Test
     void projectWithoutSprintIsAValidSearch() throws Exception {
-        when(service.search(any())).thenReturn(List.of(ticket("CNV-1")));
+        when(service.search(any(), any())).thenReturn(List.of(ticket("CNV-1")));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -122,7 +123,7 @@ class TicketControllerTest {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
-        verify(service).search(criteria.capture());
+        verify(service).search(criteria.capture(), any());
         assertThat(criteria.getValue().toJql())
                 .isEqualTo("project = 10023 AND statusCategory IN (\"Done\") ORDER BY key ASC");
     }
@@ -135,7 +136,7 @@ class TicketControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
 
-        verify(service, never()).search(any());
+        verify(service, never()).search(any(), any());
     }
 
     @Test
@@ -145,12 +146,12 @@ class TicketControllerTest {
                         .content("{\"sprintId\":\"10891\",\"jql\":\"project = CNV\"}"))
                 .andExpect(status().isBadRequest());
 
-        verify(service, never()).search(any());
+        verify(service, never()).search(any(), any());
     }
 
     @Test
     void emptyResultIsASuccessNotAnError() throws Exception {
-        when(service.search(any())).thenReturn(List.of());
+        when(service.search(any(), any())).thenReturn(List.of());
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -162,7 +163,7 @@ class TicketControllerTest {
 
     @Test
     void resultSetTooLargeMapsToUnprocessableEntity() throws Exception {
-        when(service.search(any()))
+        when(service.search(any(), any()))
                 .thenThrow(new JiraTicketReadException(JiraAuthFailureReason.RESULT_SET_TOO_LARGE));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
@@ -174,7 +175,7 @@ class TicketControllerTest {
 
     @Test
     void rateLimitedMapsToTooManyRequests() throws Exception {
-        when(service.search(any()))
+        when(service.search(any(), any()))
                 .thenThrow(new JiraTicketReadException(JiraAuthFailureReason.JIRA_RATE_LIMITED));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
@@ -186,7 +187,7 @@ class TicketControllerTest {
 
     @Test
     void unreachableMapsToServiceUnavailable() throws Exception {
-        when(service.search(any()))
+        when(service.search(any(), any()))
                 .thenThrow(new JiraTicketReadException(JiraAuthFailureReason.JIRA_UNREACHABLE));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
@@ -207,7 +208,7 @@ class TicketControllerTest {
 
     @Test
     void nullResolutionAndAssigneeSerialiseAsJsonNulls() throws Exception {
-        when(service.search(any())).thenReturn(List.of(
+        when(service.search(any(), any())).thenReturn(List.of(
                 new TicketDetail("CNV-9", "Unresolved", "Task", "In Progress", null, null, "Reporter Person",
                         List.of(), null, "", List.of(), 0)));
 
@@ -221,7 +222,7 @@ class TicketControllerTest {
 
     @Test
     void explicitStatusCategoriesAreComposedIntoTheQuery() throws Exception {
-        when(service.search(any())).thenReturn(List.of());
+        when(service.search(any(), any())).thenReturn(List.of());
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -230,7 +231,7 @@ class TicketControllerTest {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
-        verify(service).search(criteria.capture());
+        verify(service).search(criteria.capture(), any());
         assertThat(criteria.getValue().toJql()).contains("statusCategory IN (\"To Do\", \"In Progress\")");
         assertThat(criteria.getValue().toJql()).doesNotContain("\"Done\"");
     }
@@ -243,6 +244,52 @@ class TicketControllerTest {
                                 + "\"statusCategories\":[\"NOPE\"]}"))
                 .andExpect(status().isBadRequest());
 
-        verify(service, never()).search(any());
+        verify(service, never()).search(any(), any());
+    }
+
+    @Test
+    void releaseIdInTheBodyReachesTheServiceAsASeparateArgument() throws Exception {
+        when(service.search(any(), any())).thenReturn(List.of());
+
+        mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"projectId\":\"10023\","
+                                + "\"releaseId\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
+        ArgumentCaptor<UUID> releaseId = ArgumentCaptor.forClass(UUID.class);
+        verify(service).search(criteria.capture(), releaseId.capture());
+        assertThat(releaseId.getValue()).isEqualTo(UUID.fromString("3f2504e0-4f89-11d3-9a0c-0305e82c3301"));
+        assertThat(criteria.getValue().toJql()).doesNotContain("3f2504e0");
+    }
+
+    @Test
+    void absentReleaseIdReachesTheServiceAsNull() throws Exception {
+        when(service.search(any(), any())).thenReturn(List.of());
+
+        mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"projectId\":\"10023\"}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<UUID> releaseId = ArgumentCaptor.forClass(UUID.class);
+        verify(service).search(any(), releaseId.capture());
+        assertThat(releaseId.getValue()).isNull();
+    }
+
+    @Test
+    void aReleaseScopeAlongsideRawJqlIsAccepted() throws Exception {
+        when(service.search(any(), any())).thenReturn(List.of());
+
+        mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"jql\":\"project = CNV\","
+                                + "\"releaseId\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<UUID> releaseId = ArgumentCaptor.forClass(UUID.class);
+        verify(service).search(any(), releaseId.capture());
+        assertThat(releaseId.getValue()).isEqualTo(UUID.fromString("3f2504e0-4f89-11d3-9a0c-0305e82c3301"));
     }
 }

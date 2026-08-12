@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.util.Set;
+import java.util.UUID;
 
 public record TicketSearchRequest(
         @Pattern(regexp = "^[0-9]+$", message = "must be a numeric Jira project id")
@@ -17,7 +18,11 @@ public record TicketSearchRequest(
         @Size(max = 2000, message = "must be at most 2000 characters")
         String jql,
 
-        Set<StatusCategory> statusCategories) {
+        Set<StatusCategory> statusCategories,
+
+        // Optional and orthogonal to the filter mode: present means "hide what this release already
+        // holds", absent means the unfiltered browse screen (D-05.2-05).
+        UUID releaseId) {
 
     @AssertTrue(message = "supply either projectId (sprintId optional), or jql - not both")
     public boolean isExactlyOneFilterMode() {

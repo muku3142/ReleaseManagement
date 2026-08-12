@@ -29,7 +29,7 @@ public class TicketController {
                 : TicketSearchCriteria.byProject(request.projectId(), request.sprintId(),
                         request.statusCategories());
         return new TicketSearchResponse(
-                service.search(criteria).stream().map(TicketController::toResponse).toList());
+                service.search(criteria, request.releaseId()).stream().map(TicketController::toResponse).toList());
     }
 
     private static TicketResponse toResponse(TicketDetail t) {

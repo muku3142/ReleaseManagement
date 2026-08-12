@@ -2,6 +2,7 @@ package com.evision.releasemgmt.adapters.persistence;
 
 import com.evision.releasemgmt.adapters.persistence.crypto.EncryptedTokenConverter;
 import com.evision.releasemgmt.domain.auth.JiraCredential;
+import com.evision.releasemgmt.ports.ActorDirectory;
 import com.evision.releasemgmt.ports.JiraCredentialRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,9 +15,12 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
 @Testcontainers
@@ -28,6 +32,9 @@ class JiraCredentialPersistenceIT {
 
     @Autowired
     private JiraCredentialRepository repository;
+
+    @Autowired
+    private ActorDirectory directory;
 
     @Autowired
     private JdbcTemplate jdbcTemplate;
@@ -150,5 +157,49 @@ class JiraCredentialPersistenceIT {
         assertThat(first.get().apiToken()).isEqualTo("ATATT3xFfGF0-first");
         assertThat(repository.findByAccountId("557058:second").orElseThrow().apiToken())
                 .isEqualTo("ATATT3xFfGF0-second");
+    }
+
+    /**
+     * The whole point of the ActorDirectory port. Actor display reads this table on the document,
+     * release and template screens; if it hydrated JiraCredentialEntity, one row encrypted under a
+     * superseded RM_CREDENTIAL_KEY would break three screens that have nothing to do with
+     * credentials. A cosmetic improvement would become an outage.
+     */
+    @Test
+    void actorDirectoryResolvesEmailWithoutDecryptingTheStoredToken() {
+        repository.upsert("557058:actor-rotated", "actor@acme.com", "token-under-old-key");
+        byte[] undecryptable = new byte[1 + 12 + 32];
+        undecryptable[0] = 1;
+        jdbcTemplate.update(
+                "UPDATE jira_credential SET encrypted_token = ? WHERE jira_account_id = ?",
+                Base64.getEncoder().encodeToString(undecryptable), "557058:actor-rotated");
+
+        // Deliberately broad: the assertion that matters is that SOMETHING is thrown, proving the row
+        // really is unreadable. Hibernate may or may not wrap the converter's IllegalStateException, and
+        // pinning the wrapper type would make this test fail on a Hibernate upgrade for no good reason.
+        assertThatThrownBy(() -> repository.findByAccountId("557058:actor-rotated"))
+                .isInstanceOf(RuntimeException.class);
+
+        assertThat(directory.findEmailsByAccountId(List.of("557058:actor-rotated")))
+                .containsEntry("557058:actor-rotated", "actor@acme.com");
+    }
+
+    @Test
+    void actorDirectoryOmitsAnAccountIdWithNoCredentialRow() {
+        assertThat(directory.findEmailsByAccountId(List.of("557058:never-existed")))
+                .doesNotContainKey("557058:never-existed");
+    }
+
+    @Test
+    void actorDirectoryResolvesSeveralAccountIdsInOneCall() {
+        repository.upsert("557058:actor-one", "one@acme.com", "token-one");
+        repository.upsert("557058:actor-two", "two@acme.com", "token-two");
+
+        Map<String, String> emails = directory.findEmailsByAccountId(
+                List.of("557058:actor-one", "557058:actor-two"));
+
+        assertThat(emails)
+                .containsEntry("557058:actor-one", "one@acme.com")
+                .containsEntry("557058:actor-two", "two@acme.com");
     }
 }

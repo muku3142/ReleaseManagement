@@ -10,7 +10,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 ### Authentication
 
 - [x] **AUTH-01**: Release manager can sign in by supplying their Jira email and API token, which the system validates against Jira before granting access
-- [ ] **AUTH-02**: All Jira reads are performed with the signed-in user's own credential, so the tool never sees tickets the user could not see in Jira
+- [x] **AUTH-02**: All Jira reads are performed with the signed-in user's own credential, so the tool never sees tickets the user could not see in Jira
 - [x] **AUTH-03**: Stored Jira credentials are encrypted at rest and never returned to the client after being saved
 - [ ] **AUTH-04**: Release manager can replace an expired or revoked Jira token without losing existing releases, templates or history
 
@@ -52,7 +52,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [ ] **DOC-04**: Release manager can generate an approval/change document with clearly-labelled risk, impact and backout-plan sections — authored as template content. Superseded 2026-08-10: originally "whose data model provides risk, impact and backout-plan fields"; see the Phase 5 note below
 - [ ] **DOC-05**: Release manager can export any generated document as PDF
 - [ ] **DOC-06**: Release manager can export any generated document as DOCX
-- [ ] **DOC-07**: Each generated document is stored as an immutable snapshot recording the template version, content and generation timestamp, so regenerating creates a new revision instead of altering the previous one
+- [x] **DOC-07**: Each generated document is stored as an immutable snapshot recording the template version, content and generation timestamp, so regenerating creates a new revision instead of altering the previous one
 - [ ] **DOC-08**: Both the PDF and DOCX export of a document render that template's cover page, running header, footer and page numbering, with the two formats visually equivalent rather than merely both present
 - [ ] **DOC-09**: Release manager can see across all releases which of the three documents have been generated, which are **stale** relative to the release's current ticket set, and which were never generated — so outstanding release paperwork is visible without opening each release one at a time
 
@@ -77,6 +77,16 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [ ] **AUDIT-02**: Release manager can view every document generated for a release, including superseded revisions
 - [ ] **AUDIT-03**: Release and promotion history is append-only — a correction adds a new entry rather than editing or deleting an existing one
 - [ ] **AUDIT-04**: Release manager can view deployment history across all releases on one screen — filterable by environment and date range — not only per-release, so "what went to Production and when" is answerable without opening each release
+
+### Release Insights
+
+Added 2026-08-11. These are the two insight areas the release manager asked for that no existing
+requirement covered. They are deliberately **not** Jira's agile reports, which stay out of scope
+(`PROJECT.md` Out of Scope): both measure this system's own release process, which Jira cannot compute
+because Jira does not know when a release was frozen or deployed here.
+
+- [ ] **INSIGHT-01**: Release manager can see how long releases take through their own lifecycle — created to frozen, and frozen to production — computed from timestamps this system already owns, so slow releases are visible without manual bookkeeping
+- [ ] **INSIGHT-02**: Release manager can see each release's composition on one screen — ticket count, manual versus ticket-backed split, and what share of tickets carry linked Azure DevOps commits or pull requests — so gaps in traceability are visible before the release ships
 
 ### Cross-cutting UX
 
@@ -185,7 +195,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | DOC-04 | Phase 5 | Pending |
 | DOC-05 | Phase 5 | Pending |
 | DOC-06 | Phase 5 | Pending |
-| DOC-07 | Phase 5 | Pending |
+| DOC-07 | Phase 5 | Complete |
 | DOC-08 | Phase 5 | Pending |
 | DOC-09 | Phase 5 | Pending |
 | ADO-01 | Phase 6 | Pending |

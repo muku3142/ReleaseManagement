@@ -61,6 +61,7 @@ function chrome(overrides: Partial<ChromeFields> = {}): ChromeFields {
     headerText: '',
     footerText: '',
     pageNumbersEnabled: false,
+    logoRenderHeightMm: 30,
     ...overrides,
   };
 }
@@ -158,11 +159,24 @@ describe('TemplatePreview chrome rendering', () => {
     expect(code?.className).toContain('bg-amber-100');
   });
 
-  it('renders a max-h-20 logo image when logoUrl is set, none when null', async () => {
+  it('renders the cover logo image when logoUrl is set, none when null', async () => {
     await renderPreview({ chromeFields: chrome({ coverEnabled: true }), logoUrl: '/api/templates/t1/logo' });
-    expect(container.querySelector('img.max-h-20')).not.toBeNull();
+    expect(container.querySelector('img.mx-auto')).not.toBeNull();
 
     await renderPreview({ chromeFields: chrome({ coverEnabled: true }), logoUrl: null });
-    expect(container.querySelector('img.max-h-20')).toBeNull();
+    expect(container.querySelector('img.mx-auto')).toBeNull();
+  });
+
+  it('sizes the cover logo from chrome.logoRenderHeightMm, in mm, not a fixed Tailwind step', async () => {
+    await renderPreview({
+      chromeFields: chrome({ coverEnabled: true, logoRenderHeightMm: 55 }),
+      logoUrl: '/api/templates/t1/logo',
+    });
+
+    const img = container.querySelector<HTMLImageElement>('img')!;
+    expect(img.style.maxHeight).toBe('55mm');
+    // The old fixed cap must not be reachable by any path: a class-based max-height would silently
+    // win over or fight with the inline style depending on specificity.
+    expect(img.className).not.toContain('max-h-');
   });
 });

@@ -70,8 +70,13 @@ public class DocumentGenerationService {
         String coverSubtitle = renderService.resolveText(templateChrome.coverSubtitle(), view, "Cover subtitle").output();
         String headerText = renderService.resolveText(templateChrome.headerText(), view, "Header text").output();
         String footerText = renderService.resolveText(templateChrome.footerText(), view, "Footer text").output();
+        // D-05.1-03: logoRenderHeightMm is copied through UNRESOLVED, exactly like coverEnabled and
+        // pageNumbersEnabled - it carries no {{ }} placeholders, so it never goes near resolveText.
+        // Copying it (rather than leaving the exporters to read the template) is what makes a
+        // re-export of this revision reproduce the size it was generated with.
         ChromeFields resolvedChrome = new ChromeFields(templateChrome.coverEnabled(), coverTitle, coverSubtitle,
-                headerText, footerText, templateChrome.pageNumbersEnabled());
+                headerText, footerText, templateChrome.pageNumbersEnabled(),
+                templateChrome.logoRenderHeightMm());
 
         int revision = snapshotRepository.nextRevision(releaseId, documentType);
         LogoImage logo = templateRepository.findLogo(template.id()).orElse(null);

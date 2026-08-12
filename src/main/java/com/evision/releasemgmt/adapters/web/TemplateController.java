@@ -11,8 +11,10 @@ import com.evision.releasemgmt.adapters.web.dto.SaveTemplateContentRequest;
 import com.evision.releasemgmt.adapters.web.dto.TemplateListResponse;
 import com.evision.releasemgmt.adapters.web.dto.TemplateResponse;
 import com.evision.releasemgmt.adapters.web.dto.TemplateSummaryResponse;
+import com.evision.releasemgmt.application.ActorResolutionService;
 import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.application.ReleaseViewAssembler;
+import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.domain.template.ChromeFields;
 import com.evision.releasemgmt.domain.template.GroupingDimension;
@@ -50,18 +52,20 @@ public class TemplateController {
     private final TemplateService templateService;
     private final ReleaseService releaseService;
     private final ReleaseViewAssembler assembler;
+    private final ActorResolutionService actorResolution;
     private final long logoMaxBytes;
     private final int logoMaxWidth;
     private final int logoMaxHeight;
 
     public TemplateController(TemplateService templateService, ReleaseService releaseService,
-                              ReleaseViewAssembler assembler,
+                              ReleaseViewAssembler assembler, ActorResolutionService actorResolution,
                               @Value("${app.template.logo.max-bytes}") long logoMaxBytes,
                               @Value("${app.template.logo.max-width}") int logoMaxWidth,
                               @Value("${app.template.logo.max-height}") int logoMaxHeight) {
         this.templateService = templateService;
         this.releaseService = releaseService;
         this.assembler = assembler;
+        this.actorResolution = actorResolution;
         this.logoMaxBytes = logoMaxBytes;
         this.logoMaxWidth = logoMaxWidth;
         this.logoMaxHeight = logoMaxHeight;
@@ -118,9 +122,15 @@ public class TemplateController {
     public TemplateResponse saveContent(@PathVariable UUID templateId,
                                         @Valid @RequestBody SaveTemplateContentRequest request,
                                         Principal principal) {
+        // D-05.1-01: an absent logoRenderHeightMm is an older client's payload - default it rather
+        // than reject, the same disposition groupingDimension takes just below. @Min/@Max already
+        // rejected any value that was present but out of range, so there is nothing to clamp here.
+        int logoRenderHeightMm = request.chrome().logoRenderHeightMm() == null
+                ? ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM
+                : request.chrome().logoRenderHeightMm();
         ChromeFields chrome = new ChromeFields(request.chrome().coverEnabled(), request.chrome().coverTitle(),
                 request.chrome().coverSubtitle(), request.chrome().headerText(),
-                request.chrome().footerText(), request.chrome().pageNumbersEnabled());
+                request.chrome().footerText(), request.chrome().pageNumbersEnabled(), logoRenderHeightMm);
         // D-05-04: null/blank is an older client's payload - default to ISSUE_TYPE rather than
         // rejecting it. The @Pattern on the request already guarantees this valueOf cannot throw.
         GroupingDimension groupingDimension = request.groupingDimension() == null
@@ -185,19 +195,20 @@ public class TemplateController {
                 .body(image.bytes());
     }
 
-    private static TemplateResponse toResponse(Template template) {
+    private TemplateResponse toResponse(Template template) {
         ChromeFields chrome = template.chrome();
         ChromeFieldsResponse chromeResponse = new ChromeFieldsResponse(chrome.coverEnabled(),
                 chrome.coverTitle(), chrome.coverSubtitle(), chrome.headerText(), chrome.footerText(),
-                chrome.pageNumbersEnabled());
+                chrome.pageNumbersEnabled(), chrome.logoRenderHeightMm());
         LogoMetadataResponse logoResponse = template.logo() == null ? null
                 : new LogoMetadataResponse(template.logo().contentType(), template.logo().filename(),
                         template.logo().byteSize(), template.logo().width(), template.logo().height(),
                         template.logo().uploadedAt());
+        ResolvedActors actors = actorResolution.resolve(template.createdBy(), template.updatedBy());
         return new TemplateResponse(template.id(), template.name(), template.documentType().name(),
                 template.body(), template.active(), chromeResponse, template.groupingDimension().name(),
-                logoResponse, template.warnings(), template.createdAt(), template.createdBy(),
-                template.updatedAt(), template.updatedBy());
+                logoResponse, template.warnings(), template.createdAt(), actors.display(template.createdBy()),
+                template.updatedAt(), actors.display(template.updatedBy()));
     }
 
     private static TemplateSummaryResponse toSummaryResponse(Template template) {

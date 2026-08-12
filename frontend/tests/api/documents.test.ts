@@ -39,6 +39,7 @@ function generatedDocument(overrides: Partial<GeneratedDocument> = {}): Generate
       headerText: '',
       footerText: '',
       pageNumbersEnabled: false,
+      logoRenderHeightMm: 30,
     },
     generatedAt: '2026-08-10T09:00:00Z',
     generatedBy: 'rm@acme.com',

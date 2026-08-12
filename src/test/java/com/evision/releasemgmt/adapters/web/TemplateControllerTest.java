@@ -2,8 +2,10 @@ package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.security.CookieBearerTokenResolver;
 import com.evision.releasemgmt.adapters.security.ProblemDetailAuthenticationEntryPoint;
+import com.evision.releasemgmt.application.ActorResolutionService;
 import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.application.ReleaseViewAssembler;
+import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
@@ -26,12 +28,16 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
@@ -59,6 +65,9 @@ class TemplateControllerTest {
     @MockitoBean
     private ReleaseViewAssembler assembler;
 
+    @MockitoBean
+    private ActorResolutionService actorResolution;
+
     private static RequestPostProcessor authenticated() {
         return jwt().jwt(b -> b.subject("557058:abc-123").claim("token_type", "access"));
     }
@@ -68,6 +77,11 @@ class TemplateControllerTest {
         return new Template(id, "Standard notes", TemplateDocumentType.RELEASE_NOTES, "Body", active,
                 ChromeFields.empty(), GroupingDimension.ISSUE_TYPE, null, List.of(), now, "557058:abc-123",
                 now, "557058:abc-123");
+    }
+
+    private void stubActors() {
+        when(actorResolution.resolve(any(String[].class)))
+                .thenReturn(new ResolvedActors(Map.of("557058:abc-123", "rm@acme.com")));
     }
 
     @Test
@@ -86,9 +100,22 @@ class TemplateControllerTest {
     }
 
     @Test
+    void templateListStillCarriesNoActorField() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(templateService.list()).thenReturn(List.of(template(id, true)));
+
+        mockMvc.perform(get("/api/templates").with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.templates[0].createdBy").doesNotExist());
+
+        verifyNoInteractions(actorResolution);
+    }
+
+    @Test
     void createReturns201AndRecordsTheAuthenticatedPrincipalAsActor() throws Exception {
         UUID id = UUID.randomUUID();
         when(templateService.create(any(), any(), any())).thenReturn(template(id, false));
+        stubActors();
 
         mockMvc.perform(post("/api/templates").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -119,6 +146,31 @@ class TemplateControllerTest {
         mockMvc.perform(get("/api/templates/{id}", id).with(authenticated()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.reason").value("TEMPLATE_NOT_FOUND"));
+    }
+
+    @Test
+    void createdByAndUpdatedByAreResolvedEmails() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(templateService.get(id)).thenReturn(template(id, true));
+        stubActors();
+
+        mockMvc.perform(get("/api/templates/{id}", id).with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.createdBy").value("rm@acme.com"))
+                .andExpect(jsonPath("$.updatedBy").value("rm@acme.com"));
+
+        verify(actorResolution, times(1)).resolve(any(String[].class));
+    }
+
+    @Test
+    void anUnresolvedTemplateAuthorFallsBackToTheAccountId() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(templateService.get(id)).thenReturn(template(id, true));
+        when(actorResolution.resolve(any(String[].class))).thenReturn(new ResolvedActors(Map.of()));
+
+        mockMvc.perform(get("/api/templates/{id}", id).with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.createdBy").value("557058:abc-123"));
     }
 
     @Test
@@ -186,8 +238,45 @@ class TemplateControllerTest {
     }
 
     private static String validContentBody() {
+        return contentBodyWithLogoHeight("45");
+    }
+
+    private static String contentBodyWithLogoHeight(String mm) {
         return "{\"body\":\"Release notes\",\"chrome\":{\"coverEnabled\":false,\"coverTitle\":\"\","
                 + "\"coverSubtitle\":\"\",\"headerText\":\"\",\"footerText\":\"\","
-                + "\"pageNumbersEnabled\":false}}";
+                + "\"pageNumbersEnabled\":false,\"logoRenderHeightMm\":" + mm + "}}";
+    }
+
+    @Test
+    void saveContentRejectsALogoHeightAboveThePrintableBound() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(put("/api/templates/{id}/content", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(contentBodyWithLogoHeight("121")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
+
+        verify(templateService, never()).saveContent(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void saveContentDefaultsAnAbsentLogoHeightInsteadOfRejectingIt() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(templateService.saveContent(any(), any(), any(), any(), any())).thenReturn(template(id, false));
+        stubActors();
+
+        // A payload from a client build that predates this field - Integer + the controller's default,
+        // not a primitive int that would deserialise to 0 and fail @Min(5).
+        mockMvc.perform(put("/api/templates/{id}/content", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"body\":\"Release notes\",\"chrome\":{\"coverEnabled\":false,"
+                                + "\"coverTitle\":\"\",\"coverSubtitle\":\"\",\"headerText\":\"\","
+                                + "\"footerText\":\"\",\"pageNumbersEnabled\":false}}"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<ChromeFields> chrome = ArgumentCaptor.forClass(ChromeFields.class);
+        verify(templateService).saveContent(any(), any(), chrome.capture(), any(), any());
+        assertThat(chrome.getValue().logoRenderHeightMm()).isEqualTo(30);
     }
 }

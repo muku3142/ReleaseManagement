@@ -99,7 +99,8 @@ class TemplateServiceTest {
         Template existing = existingTemplate();
         when(repository.findById(existing.id())).thenReturn(Optional.of(existing));
         when(repository.update(any())).thenAnswer(inv -> inv.getArgument(0));
-        ChromeFields chrome = new ChromeFields(true, "{{nope}}", "", "", "", false);
+        ChromeFields chrome = new ChromeFields(true, "{{nope}}", "", "", "", false,
+                ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
 
         Template saved = service.saveContent(existing.id(), "", chrome, GroupingDimension.ISSUE_TYPE, "actor-2");
 
@@ -123,7 +124,8 @@ class TemplateServiceTest {
     void saveContentWithAMalformedHeaderTextThrowsMalformedForHeaderText() {
         Template existing = existingTemplate();
         when(repository.findById(existing.id())).thenReturn(Optional.of(existing));
-        ChromeFields chrome = new ChromeFields(false, "", "", "{{#items}}", "", false);
+        ChromeFields chrome = new ChromeFields(false, "", "", "{{#items}}", "", false,
+                ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
 
         assertThatThrownBy(() -> service.saveContent(existing.id(), "", chrome, GroupingDimension.ISSUE_TYPE,
                 "actor-2"))

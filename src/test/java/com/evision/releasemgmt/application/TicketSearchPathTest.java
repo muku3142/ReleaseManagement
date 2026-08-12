@@ -6,6 +6,7 @@ import com.evision.releasemgmt.domain.auth.JiraAccessContext;
 import com.evision.releasemgmt.domain.jira.StatusCategory;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.jira.TicketSearchCriteria;
+import com.evision.releasemgmt.ports.ReleaseRepository;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,7 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.UUID;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
@@ -29,6 +31,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 /**
@@ -42,6 +45,9 @@ class TicketSearchPathTest {
 
     @Mock
     private JiraAccessContextService accessContextService;
+
+    @Mock
+    private ReleaseRepository releaseRepository;
 
     // The tenant's real shape: 'Resolution' is carried by the system field plus two custom
     // fields, which is what made every search fail with JIRA_ERROR.
@@ -79,7 +85,8 @@ class TicketSearchPathTest {
         return new TicketSearchService(
                 accessContextService,
                 new FieldMetadataService(accessContextService, new JiraFieldMetadataAdapter(restClient)),
-                new JiraRestTicketAdapter(restClient, 100, 50));
+                new JiraRestTicketAdapter(restClient, 100, 50),
+                releaseRepository);
     }
 
     @Test
@@ -129,5 +136,44 @@ class TicketSearchPathTest {
         // "does it mention fixVersion" check would be meaningless here.
         verify(postRequestedFor(urlEqualTo("/rest/api/3/search/jql")).withRequestBody(containing(
                 "project = 10023 AND sprint = 10891 AND statusCategory IN (\\\"Done\\\") ORDER BY key ASC")));
+    }
+
+    @Test
+    void releaseScopedSearchHidesMembersWithoutChangingTheQuerySentToJira(WireMockRuntimeInfo wm) {
+        stubFor(get(urlEqualTo("/rest/api/3/field")).willReturn(okJson(TENANT_FIELDS)));
+        stubFor(post(urlEqualTo("/rest/api/3/search/jql")).willReturn(okJson("""
+                {"issues":[{"key":"CNV-2896","fields":{
+                  "summary":"Ship the thing",
+                  "issuetype":{"name":"Story"},
+                  "status":{"name":"Done"},
+                  "resolution":{"name":"Fixed"},
+                  "assignee":{"displayName":"Dev Person"},
+                  "reporter":{"displayName":"Release Manager"},
+                  "fixVersions":[{"name":"2026.1"}],
+                  "description":null,
+                  "comment":{"comments":[],"total":0}
+                }},{"key":"CNV-2897","fields":{
+                  "summary":"Ship the other thing",
+                  "issuetype":{"name":"Story"},
+                  "status":{"name":"Done"},
+                  "resolution":{"name":"Fixed"},
+                  "assignee":{"displayName":"Dev Person"},
+                  "reporter":{"displayName":"Release Manager"},
+                  "fixVersions":[{"name":"2026.1"}],
+                  "description":null,
+                  "comment":{"comments":[],"total":0}
+                }}]}
+                """)));
+        when(releaseRepository.findTicketKeys(any())).thenReturn(List.of("CNV-2896"));
+
+        List<TicketDetail> tickets = service(wm).search(
+                TicketSearchCriteria.byProject("10023", null, EnumSet.of(StatusCategory.DONE)),
+                UUID.randomUUID());
+
+        assertThat(tickets).hasSize(1);
+        assertThat(tickets.get(0).key()).isEqualTo("CNV-2897");
+
+        verify(postRequestedFor(urlEqualTo("/rest/api/3/search/jql")).withRequestBody(containing(
+                "project = 10023 AND statusCategory IN (\\\"Done\\\") ORDER BY key ASC")));
     }
 }

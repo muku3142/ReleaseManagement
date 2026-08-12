@@ -2,8 +2,10 @@ package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.security.CookieBearerTokenResolver;
 import com.evision.releasemgmt.adapters.security.ProblemDetailAuthenticationEntryPoint;
+import com.evision.releasemgmt.application.ActorResolutionService;
 import com.evision.releasemgmt.application.JiraSiteConfigService;
 import com.evision.releasemgmt.application.JiraSiteConfigService.JiraSiteNotConfiguredException;
+import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.jira.JiraSiteConfig;
@@ -16,6 +18,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.Map;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -40,13 +43,30 @@ class JiraSiteConfigControllerTest {
     @MockitoBean
     private JiraSiteConfigService service;
 
+    @MockitoBean
+    private ActorResolutionService actorResolution;
+
     @Test
     void getReturnsStoredBaseUrl() throws Exception {
         when(service.get()).thenReturn(new JiraSiteConfig("https://acme.atlassian.net", Instant.now(), "seed"));
+        when(actorResolution.resolve(any(String[].class)))
+                .thenReturn(new ResolvedActors(Map.of("seed", "seed")));
 
         mockMvc.perform(get("/api/settings/jira-site"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.baseUrl").value("https://acme.atlassian.net"));
+    }
+
+    @Test
+    void updatedByIsTheResolvedEmail() throws Exception {
+        when(service.get()).thenReturn(new JiraSiteConfig("https://acme.atlassian.net", Instant.now(),
+                "557058:abc-123"));
+        when(actorResolution.resolve(any(String[].class)))
+                .thenReturn(new ResolvedActors(Map.of("557058:abc-123", "rm@acme.com")));
+
+        mockMvc.perform(get("/api/settings/jira-site"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.updatedBy").value("rm@acme.com"));
     }
 
     @Test
@@ -63,6 +83,8 @@ class JiraSiteConfigControllerTest {
     void putUpdatesBaseUrl() throws Exception {
         when(service.updateBaseUrl(eq("https://acme.atlassian.net"), any()))
                 .thenReturn(new JiraSiteConfig("https://acme.atlassian.net", Instant.now(), "557058:abc-123"));
+        when(actorResolution.resolve(any(String[].class)))
+                .thenReturn(new ResolvedActors(Map.of("557058:abc-123", "rm@acme.com")));
 
         mockMvc.perform(put("/api/settings/jira-site")
                         .with(csrf())

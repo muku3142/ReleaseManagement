@@ -59,7 +59,20 @@ export function RenderedDocument(props: { chrome: ChromeFields; logoUrl: string 
     <>
       {chrome.coverEnabled && (
         <div className="mb-6 rounded border border-gray-300 bg-white p-8 text-center shadow-sm">
-          {props.logoUrl && <img src={props.logoUrl} alt="" className="mx-auto max-h-20" />}
+          {/* Inline style rather than a class: Tailwind's max-h-* scale is fixed steps with no mm unit,
+          and no arbitrary-value variant is used anywhere else in this codebase, so building a dynamic
+          class string would be more machinery than a style prop for the same result. mm is the stored
+          unit precisely so this value needs no conversion here, in the PDF's CSS, or in DOCX's EMU.
+          max-height, not height: a logo shorter than the configured height keeps its natural size
+          (D-05.1-06), which is the same behaviour the PDF and DOCX renderers implement. */}
+          {props.logoUrl && (
+            <img
+              src={props.logoUrl}
+              alt=""
+              className="mx-auto"
+              style={{ maxHeight: `${chrome.logoRenderHeightMm}mm` }}
+            />
+          )}
           <p className="text-2xl font-semibold">{renderChromeNodes(chrome.coverTitle)}</p>
           <p className="mt-2 text-base text-gray-600">{renderChromeNodes(chrome.coverSubtitle)}</p>
         </div>

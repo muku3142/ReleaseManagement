@@ -176,7 +176,8 @@ class DocxExportAdapterTest {
 
     @Test
     void coverPageIsPresentAndTitlePgIsSet() throws Exception {
-        ChromeFields chrome = new ChromeFields(true, "Release Notes", "Version 1.0", "", "", false);
+        ChromeFields chrome = new ChromeFields(true, "Release Notes", "Version 1.0", "", "", false,
+                ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
         byte[] bytes = adapter.toDocx("Body text", chrome, null);
 
         MainDocumentPart mainPart = mainPart(bytes);
@@ -188,7 +189,7 @@ class DocxExportAdapterTest {
     @Test
     void headerAndFooterPartsExistWithFirstAndDefaultRefs() throws Exception {
         ChromeFields chrome = new ChromeFields(true, "Title", "Subtitle", "Running Header", "Footer",
-                false);
+                false, ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
         byte[] bytes = adapter.toDocx("Body", chrome, null);
 
         MainDocumentPart mainPart = mainPart(bytes);
@@ -219,7 +220,8 @@ class DocxExportAdapterTest {
 
     @Test
     void footerContainsPageAndNumpagesFieldCodes() throws Exception {
-        ChromeFields chrome = new ChromeFields(false, "", "", "", "Orchstro", true);
+        ChromeFields chrome = new ChromeFields(false, "", "", "", "Orchstro", true,
+                ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
         byte[] bytes = adapter.toDocx("Body", chrome, null);
 
         MainDocumentPart mainPart = mainPart(bytes);
@@ -241,7 +243,8 @@ class DocxExportAdapterTest {
 
     @Test
     void pageNumberFieldsAbsentWhenDisabled() throws Exception {
-        ChromeFields chrome = new ChromeFields(false, "", "", "", "Orchstro", false);
+        ChromeFields chrome = new ChromeFields(false, "", "", "", "Orchstro", false,
+                ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
         byte[] bytes = adapter.toDocx("Body", chrome, null);
 
         MainDocumentPart mainPart = mainPart(bytes);
@@ -260,7 +263,8 @@ class DocxExportAdapterTest {
 
     @Test
     void logoBecomesAnImagePartWhenPresent() throws Exception {
-        ChromeFields chrome = new ChromeFields(true, "T", "S", "", "", false);
+        ChromeFields chrome = new ChromeFields(true, "T", "S", "", "", false,
+                ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
         byte[] logoBytes = png(4, 4);
         LogoImage logo = new LogoImage(logoBytes,
                 new LogoMetadata("image/png", "logo.png", logoBytes.length, 4, 4, Instant.now()));

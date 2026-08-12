@@ -55,7 +55,7 @@ class DocumentSnapshotPersistenceIT {
     }
 
     private static ChromeFields chrome() {
-        return new ChromeFields(true, "Cover Title", "Cover Subtitle", "Header", "Footer", true);
+        return new ChromeFields(true, "Cover Title", "Cover Subtitle", "Header", "Footer", true, 55);
     }
 
     private Release release(String name) {
@@ -99,6 +99,10 @@ class DocumentSnapshotPersistenceIT {
         assertThat(loaded.chrome().headerText()).isEqualTo("Header");
         assertThat(loaded.chrome().footerText()).isEqualTo("Footer");
         assertThat(loaded.chrome().pageNumbersEnabled()).isTrue();
+        // 55, not 30: logo_render_height_mm carries a DEFAULT 30, so a fixture using 30 would still
+        // pass with the mapper's setter missing entirely. Only a non-default value proves the
+        // round-trip.
+        assertThat(loaded.chrome().logoRenderHeightMm()).isEqualTo(55);
         assertThat(loaded.generatedBy()).isEqualTo("rm@acme.com");
         assertThat(loaded.generatedAt()).isNotNull();
     }

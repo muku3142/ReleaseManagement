@@ -2,6 +2,7 @@ package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.security.CookieBearerTokenResolver;
 import com.evision.releasemgmt.adapters.security.ProblemDetailAuthenticationEntryPoint;
+import com.evision.releasemgmt.application.ActorResolutionService;
 import com.evision.releasemgmt.application.DocumentExportService;
 import com.evision.releasemgmt.application.DocumentGenerationService;
 import com.evision.releasemgmt.config.JwtConfig;
@@ -51,6 +52,9 @@ class DocumentExportControllerTest {
 
     @MockitoBean
     private ReleaseRepository releaseRepository;
+
+    @MockitoBean
+    private ActorResolutionService actorResolution;
 
     private static RequestPostProcessor authenticated() {
         return jwt().jwt(b -> b.subject("557058:abc-123").claim("token_type", "access"));

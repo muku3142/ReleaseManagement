@@ -27,6 +27,9 @@ export type ChromeFields = {
   headerText: string;
   footerText: string;
   pageNumbersEnabled: boolean;
+  // Maximum rendered height of the cover logo, in millimetres. Bounded 5..120 server-side; the input's
+  // min/max mirror those bounds advisorily. Not the upload limit - see LogoLimits for that.
+  logoRenderHeightMm: number;
 };
 
 export type LogoMetadata = {

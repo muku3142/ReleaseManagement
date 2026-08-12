@@ -104,7 +104,7 @@ class DocumentGenerationServiceTest {
     void storedChromeIsResolvedWhileBothBooleansAreCopiedUnchanged() {
         Release release = openRelease();
         ChromeFields templateChrome = new ChromeFields(true, "Version {{release.version}}",
-                "For {{release.name}}", "Header {{release.version}}", "Footer {{release.version}}", true);
+                "For {{release.name}}", "Header {{release.version}}", "Footer {{release.version}}", true, 45);
         Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body", templateChrome);
         stubHappyPath(release, template, 1);
 
@@ -117,6 +117,8 @@ class DocumentGenerationServiceTest {
         assertThat(storedChrome.footerText()).isEqualTo("Footer 2026.08");
         assertThat(storedChrome.coverEnabled()).isTrue();
         assertThat(storedChrome.pageNumbersEnabled()).isTrue();
+        // D-05.1-03: copied straight through, never resolved - it carries no {{ }} placeholders.
+        assertThat(storedChrome.logoRenderHeightMm()).isEqualTo(45);
     }
 
     @Test
@@ -144,7 +146,8 @@ class DocumentGenerationServiceTest {
     @Test
     void chromeIsStoredResolvedNotRaw() {
         Release release = openRelease();
-        ChromeFields templateChrome = new ChromeFields(false, "Version {{release.version}}", "", "", "", false);
+        ChromeFields templateChrome = new ChromeFields(false, "Version {{release.version}}", "", "", "", false,
+                ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
         Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body", templateChrome);
         stubHappyPath(release, template, 1);
 

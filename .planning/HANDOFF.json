@@ -1,0 +1,84 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-08-12T08:11:00.174Z",
+  "phase": "05.1",
+  "phase_name": "per-template-logo-sizing",
+  "phase_dir": ".planning/phases/05.1-per-template-logo-sizing-and-cover-logo-parity-across-pdf-do",
+  "plan": 4,
+  "task": 2,
+  "total_tasks": 2,
+  "status": "paused",
+  "note": "Three 5.x phases are in play at once. 05.1 is the only one PAUSED MID-EXECUTION (this handoff's subject). 05.2 is COMPLETE. 05.3 is PLANNED but not started. See multi_phase_state below.",
+  "multi_phase_state": {
+    "05.1": {
+      "status": "executing",
+      "plans_done": 3,
+      "plans_total": 4,
+      "blocked_on": "human-verify checkpoint in plan 05.1-04",
+      "all_code_merged": true
+    },
+    "05.2": {
+      "status": "complete",
+      "plans_done": 3,
+      "plans_total": 3,
+      "verification": "human_needed (live-Jira round trip unproven; all 6 automated criteria pass)"
+    },
+    "05.3": {
+      "status": "planned",
+      "plans_done": 0,
+      "plans_total": 3,
+      "next_command": "/gsd-execute-phase 05.3",
+      "note": "wave 3 also ends at a human checkpoint"
+    },
+    "08": {
+      "status": "roadmapped",
+      "note": "Release Insights Dashboard, sequenced after Phase 7 by data availability"
+    }
+  },
+  "completed_tasks": [
+    {"id": 1, "name": "05.1-01 ChromeFields.logoRenderHeightMm through V6 and the full stack", "status": "done", "commit": "3acc264"},
+    {"id": 2, "name": "05.1-02 mm control, TS mirror, shared-renderer sizing", "status": "done", "commit": "9318433"},
+    {"id": 3, "name": "05.1-03 both exporters clamp; cross-format seam test", "status": "done", "commit": "437e479"},
+    {"id": 4, "name": "05.1-04 Task 1 full regression + V6 against pre-phase rows", "status": "done", "commit": "none (verification-only, files_modified empty)"}
+  ],
+  "remaining_tasks": [
+    {"id": 5, "name": "05.1-04 Task 2 human-verify checkpoint (blocking gate)", "status": "awaiting_human"},
+    {"id": 6, "name": "05.1-04-SUMMARY.md, then phase completion + ROADMAP/STATE close-out", "status": "not_started"}
+  ],
+  "blockers": [
+    {
+      "description": "Plan 05.1-04 is at a blocking human-verify checkpoint. A person must compare an oversized logo (>=400px tall, ideally 600x300) across the document viewer, an exported PDF and an exported DOCX, plus 5 other steps in the plan's how-to-verify block.",
+      "type": "human_action",
+      "workaround": "None. The gate is deliberate: D-05-07 declined automated cross-format visual parity, so a human eyeball is the only verification this phase has for the visual half."
+    }
+  ],
+  "human_actions_pending": [
+    {
+      "action": "Complete plan 05.1-04's 6-step checkpoint, then reply approved or describe what differs",
+      "context": "All 05.1 code is merged and green (backend 571, frontend 210). Only the checkpoint and its SUMMARY remain before the phase can close.",
+      "blocking": true
+    },
+    {
+      "action": "Verify 05.2's add-tickets flow against a real Jira instance (plan 05.2-03 manual steps 5-8)",
+      "context": "Every automated test stubs JiraTicketPort or mocks useTicketSearch, so nothing proves the release scope survives a real HTTP round trip. Recorded in 05.2-VERIFICATION.md as human_needed.",
+      "blocking": false
+    },
+    {
+      "action": "Phase 2's 02-04 dev-status capture (needs a live Jira token)",
+      "context": "Long-standing. Phase 6 cannot be scoped until it resolves.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {"decision": "Logo height is a per-template ChromeFields field stored on the snapshot", "rationale": "Global config would apply one value everywhere and re-render old documents at today's value; a clamp-only fix gave no control. Storing on the snapshot means an existing document keeps the size it was generated with.", "phase": "05.1"},
+    {"decision": "The 05.1 seam test uses 15mm, not the 30mm default", "rationale": "At 30mm the pre-fix PDF's hard-coded max-height:3cm coincidentally produces the correct answer, so a default-height assertion would pass against broken code.", "phase": "05.1"},
+    {"decision": "Ticket filtering is scoped to the target release only, never global", "rationale": "release_ticket_item_key_unique (release_id, ticket_key) is per-release precisely so a hotfix can ship in two releases. A global filter would make that state unreachable through the UI while leaving it reachable in data.", "phase": "05.2"},
+    {"decision": "The release scope is a separate argument to TicketSearchService.search, not a field on TicketSearchCriteria", "rationale": "toJql() then has no access to it — the constraint is enforced by the type system rather than by a comment someone could later ignore.", "phase": "05.2"},
+    {"decision": "A new sibling AddTicketsToReleaseDialog rather than extending AddToReleaseDialog", "rationale": "D-03-01 in that component's own header says it owns exactly one job and contains no search or table. The new dialog is its mirror image (release fixed, tickets chosen).", "phase": "05.2"},
+    {"decision": "05.3 resolves accountId to email at READ time; nothing stored changes", "rationale": "The only option of three that fixes already-recorded history — document_snapshot is append-only, so a stored label could never be corrected. Also keeps the stable identifier rather than freezing a mutable one.", "phase": "05.3"},
+    {"decision": "The dashboard is Phase 8, after Phase 7, not a 5.x decimal", "rationale": "Only documentation readiness has data today; ladder position and promotion history are Phase 7. Building earlier would show one source and be reworked. It also absorbs AUDIT-04, which no ROADMAP phase was claiming.", "phase": "08"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Ask the user to complete plan 05.1-04's checkpoint against a large logo (the plan's how-to-verify block has all 6 steps and a jshell snippet to generate a 600x300 PNG). On approval, resume executor agent a0341b471a37e47a0's successor to write 05.1-04-SUMMARY.md and close the phase. Alternatively run /gsd-execute-phase 05.3, which is planned and ready.",
+  "context_notes": "Working tree is clean; everything is committed. Session hit the usage limit three times — each time an agent was killed mid-flight and each time its work survived on disk and was recovered after verification, so CHECK DISK AND GIT LOG BEFORE ASSUMING FAILURE. I made that mistake once: I reported 05.2-02 as 'never started' after checking only the working tree and file listing, when in fact its two code commits were already in git log from the prior evening."
+}

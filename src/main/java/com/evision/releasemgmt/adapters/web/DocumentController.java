@@ -4,8 +4,10 @@ import com.evision.releasemgmt.adapters.web.dto.ChromeFieldsResponse;
 import com.evision.releasemgmt.adapters.web.dto.DocumentResponse;
 import com.evision.releasemgmt.adapters.web.dto.DocumentRevisionListResponse;
 import com.evision.releasemgmt.adapters.web.dto.DocumentRevisionResponse;
+import com.evision.releasemgmt.application.ActorResolutionService;
 import com.evision.releasemgmt.application.DocumentExportService;
 import com.evision.releasemgmt.application.DocumentGenerationService;
+import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
@@ -37,12 +39,14 @@ public class DocumentController {
     private final DocumentGenerationService service;
     private final DocumentExportService exportService;
     private final ReleaseRepository releaseRepository;
+    private final ActorResolutionService actorResolution;
 
     public DocumentController(DocumentGenerationService service, DocumentExportService exportService,
-                              ReleaseRepository releaseRepository) {
+                              ReleaseRepository releaseRepository, ActorResolutionService actorResolution) {
         this.service = service;
         this.exportService = exportService;
         this.releaseRepository = releaseRepository;
+        this.actorResolution = actorResolution;
     }
 
     @PostMapping
@@ -70,9 +74,13 @@ public class DocumentController {
                                                    @PathVariable TemplateDocumentType documentType) {
         List<DocumentSnapshot> all = service.revisions(releaseId, documentType);
         int latestRevision = all.isEmpty() ? 0 : all.get(0).revision(); // newest-first, per the port's contract
+        // D-05.3-05: resolved once for the whole history, not inside the map - a per-row lookup here is
+        // the N+1 this phase exists to avoid.
+        ResolvedActors actors = actorResolution.resolve(
+                all.stream().map(DocumentSnapshot::generatedBy).toArray(String[]::new));
         List<DocumentRevisionResponse> revisions = all.stream()
                 .map(s -> new DocumentRevisionResponse(s.revision(), s.revision() == latestRevision,
-                        s.generatedAt(), s.generatedBy()))
+                        s.generatedAt(), actors.display(s.generatedBy())))
                 .toList();
         return new DocumentRevisionListResponse(revisions);
     }
@@ -148,12 +156,14 @@ public class DocumentController {
     private DocumentResponse toResponse(DocumentSnapshot snapshot) {
         ChromeFields chrome = snapshot.chrome();
         ChromeFieldsResponse chromeResponse = new ChromeFieldsResponse(chrome.coverEnabled(), chrome.coverTitle(),
-                chrome.coverSubtitle(), chrome.headerText(), chrome.footerText(), chrome.pageNumbersEnabled());
+                chrome.coverSubtitle(), chrome.headerText(), chrome.footerText(), chrome.pageNumbersEnabled(),
+                chrome.logoRenderHeightMm());
         int latestRevision = service.nextRevision(snapshot.releaseId(), snapshot.documentType()) - 1;
         boolean templateDeleted = !service.templateStillExists(snapshot.templateId());
         boolean hasLogo = service.hasLogo(snapshot.id());
+        ResolvedActors actors = actorResolution.resolve(snapshot.generatedBy());
         return new DocumentResponse(snapshot.id(), snapshot.releaseId(), snapshot.documentType().name(),
                 snapshot.revision(), latestRevision, snapshot.markdown(), snapshot.templateName(),
-                templateDeleted, hasLogo, chromeResponse, snapshot.generatedAt(), snapshot.generatedBy());
+                templateDeleted, hasLogo, chromeResponse, snapshot.generatedAt(), actors.display(snapshot.generatedBy()));
     }
 }

@@ -17,9 +17,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 3: Release Assembly** - Create, freeze, and manage named/versioned releases built from browsed tickets (completed 2026-08-06)
 - [ ] **Phase 4: Template Authoring** - Author, validate, and live-preview per-document-type templates against a safe, documented view-model (all code merged 2026-08-10; awaiting the 04-11 live-tenant verification)
 - [x] **Phase 5: Document Generation** - Generate, preview, and export release notes, runbooks, and approval documents as immutable snapshots (completed 2026-08-11)
-- [ ] **Phase 5.1: Per-Template Logo Sizing** - Make the cover logo's rendered size a per-template setting and close the DOCX cover-logo parity defect (INSERTED)
+- [x] **Phase 5.1: Per-Template Logo Sizing** - Make the cover logo's rendered size a per-template setting and close the DOCX cover-logo parity defect (INSERTED, completed 2026-08-12)
+- [x] **Phase 5.2: Release Ticket Selection** - Hide already-added tickets while assembling, and add tickets from the release page itself (INSERTED, completed 2026-08-12)
+- [ ] **Phase 5.3: Actor Identity Display** - Show a person's email instead of an opaque Jira account id, resolved at read time so existing history displays correctly (INSERTED)
+- [ ] **Phase 5.4: Template Selection At Generation Time** - Choose which template produces a document when generating, instead of relying on whichever template is active (INSERTED)
 - [ ] **Phase 6: Azure DevOps Enrichment** - Surface linked commits/PRs per ticket, degrading gracefully when absent, with tracked-expiry credentials
 - [ ] **Phase 7: Promotion Tracking & Audit Trail** - Promote releases through the fixed environment ladder with a complete, append-only history
+- [ ] **Phase 8: Release Insights Dashboard** - One screen answering what Jira structurally cannot: outstanding paperwork, ladder position, what went where and when, and how long releases actually take
 
 ## Phase Details
 
@@ -160,11 +164,10 @@ Note: engine and view-model design (jmustache integration, `ReleaseView`/`Ticket
 
 ### Phase 05.1: Per-Template Logo Sizing (INSERTED)
 
-**Goal**: Template author controls how large the cover logo renders, as a per-template chrome
-setting stored on the snapshot, and all four renderers agree on that size
+**Goal**: Template author controls how large the cover logo renders, as a per-template chrome setting stored on the snapshot, and all four renderers agree on that size
 **Requirements**: DOC-05, DOC-06, DOC-08, TMPL-08
 **Depends on**: Phase 5
-**Plans**: TBD
+**Plans**: 4 across 3 waves
 **UI hint**: yes
 
 **Why this was inserted (found 2026-08-11, after Phase 5 was verified):** the cover logo is sized in
@@ -194,7 +197,169 @@ shared code path, and that check only catches this when the logo is large enough
 - The DOCX clamp is a defect fix and is required regardless of the per-template setting
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 05.1 to break down)
+- [x] 05.1-01-PLAN.md — ChromeFields gains logoRenderHeightMm: V6 migration on both tables, threaded through persistence, DTOs, controllers, generation and the seeder (wave 1)
+- [x] 05.1-02-PLAN.md — The "Cover logo height (mm)" control, the TypeScript mirror, and mm-based cover-logo sizing in the shared preview/viewer component (wave 1)
+- [x] 05.1-03-PLAN.md — Both exporters honour the stored height, proportionally and downward only, plus the cross-format seam assertion (wave 2)
+- [x] 05.1-04-PLAN.md — Full regression, V6 against pre-phase rows, and the human parity check across PDF/DOCX/viewer (wave 3)
+
+### Phase 05.2: Release Ticket Selection (INSERTED)
+
+**Goal**: Release manager assembles a release without re-encountering tickets it already contains, and can add tickets to a release from the release page itself rather than only from the browse screen
+**Requirements**: REL-01, REL-03, JIRA-02
+**Depends on**: Phase 3 (release assembly), Phase 2 (ticket browsing)
+**Plans**: 3 across 2 waves
+**UI hint**: yes
+
+**Why this was inserted (requested 2026-08-11):** two assembly frictions the release manager hit in
+use. Neither is a correctness bug — the backend already tolerates both situations — they are about not
+making a person do avoidable work.
+
+1. **Already-added tickets keep appearing in browse.** When assembling a release, tickets already on
+   it still show in the ticket table, so the release manager scrolls past and re-selects tickets they
+   have already taken.
+2. **Tickets can only be added from the browse screen.** The flow is browse → select → choose a
+   destination release. There is no way to start from a release and pull tickets into it, which is the
+   natural direction once a release exists.
+
+**Success criteria:**
+1. Browsing tickets in the context of a release does not list tickets that release already contains
+2. Browsing tickets outside any release context still lists everything, unchanged
+3. Release manager can open a release and add tickets to it without leaving that page
+4. The add-from-release flow offers the same project, sprint, status and JQL filtering and the same
+   multi-select as the browse screen — not a reduced second search
+5. The ticket browse surface exists once in the codebase, used by both entry points
+6. A frozen release offers no add affordance at all, rather than failing after tickets are chosen
+
+**Scope notes:**
+- Filtering is scoped to the *target* release only. The schema's
+  `release_ticket_item_key_unique UNIQUE (release_id, ticket_key)` deliberately allows one ticket in
+  several releases (a hotfix legitimately ships in two), and that capability is preserved
+- Filtering happens server-side, after `JiraTicketPort.searchAll` returns, so the count the UI reports
+  is honest. It must NOT be expressed in JQL — Jira knows nothing about our releases
+- `searchAll` already exhausts Jira's cursor pagination server-side (`JIRA-03`) and returns a complete
+  `List<TicketDetail>`, so no cursor or page-top-up logic is involved
+- `ReleaseRepository.findTicketKeys(releaseId)` already exists (`ReleaseService.addTickets:70` uses it
+  for its own de-duplication) — the filter reuses it rather than adding a query
+- The add path already guards frozen releases (`ReleaseService.addTickets:67` calls
+  `release.requireOpen()`) and already treats an all-already-present selection as success with honest
+  counts (`D-03-13`), which stays as the race safety net
+- `items_changed_at` document-staleness stamping happens in `ReleaseRepositoryAdapter`, below the
+  service layer, so a new entry point cannot bypass it
+
+Plans:
+
+**Wave 1**
+- [x] 05.2-01 — Server-side release-membership filter on `POST /api/tickets/search`, threaded as a separate argument so `toJql()` structurally cannot see it — REL-01, JIRA-02
+- [x] 05.2-02 — Extract the browse surface out of `TicketsRoute.tsx` (416 lines) into one reusable `TicketBrowser`; behaviour-preserving, with the existing suite passing untouched as the proof — JIRA-02
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 05.2-03 — The release page's own add-tickets dialog, composing the extracted browser — REL-01, REL-03, JIRA-02
+
+### Phase 05.3: Actor Identity Display (INSERTED)
+
+**Goal**: Every actor shown in the UI is a person's email rather than an opaque Jira account id, resolved at read time so already-recorded history displays correctly too
+**Requirements**: AUTH-02, DOC-07
+**Depends on**: Phase 1 (credential storage), Phase 5 (document snapshots)
+**Plans**: 3 across 3 waves
+**UI hint**: yes
+
+**Why this was inserted (found 2026-08-11):** every actor field in the system stores the signed-in
+user's **Jira account id**, and the API returns it verbatim, so the UI shows values like
+`5f5f5f58aba9660071082b49` where a person belongs. `AuthenticationService.java:58` issues the JWT as
+`jwtTokenService.issue(identity.accountId(), email)` — the subject is the accountId and the email is a
+separate `CLAIM_EMAIL` claim — so `principal.getName()` yields the accountId at all **9 capture sites
+across 5 controllers**: `DocumentController:56` (`generatedBy`), `ReleaseController:54,86` (`createdBy`,
+`frozenBy`), `TemplateController:80,114,131,136,142` (`createdBy`, `updatedBy`),
+`JiraSiteConfigController:35` (`updatedBy`). Eight response DTOs carry these fields.
+
+**Direction chosen: resolve at read time, keep storing the accountId.** The accountId is the *right*
+thing to persist — it is stable, whereas an email can change, and `document_snapshot` is append-only
+(`D-05-06`/`DOC-07`) so a stored label could never be corrected afterwards. Resolving for display
+instead fixes every already-generated document with no migration and without touching immutability.
+Rejected: storing the email going forward (leaves every existing row opaque, loses the stable
+identifier) and storing both (schema change across four tables, still does not fix history).
+
+**The trap this phase must not fall into.** `JiraCredentialRepository.findByAccountId` returns a
+`JiraCredential` carrying `apiToken`, and loading that entity **decrypts** `encrypted_token`. The
+adapter deliberately uses JPQL for `upsert`, `findSessionsInvalidatedAt` and `markSessionsInvalidated`
+specifically to avoid that (see the comment at `JiraCredentialRepositoryAdapter.java:33`) because a
+rotated `RM_CREDENTIAL_KEY` throws on stale ciphertext — a bug that once locked every user out of the
+very sign-in that would have replaced the unreadable token. Using `findByAccountId` on a display path
+would let a decryption failure break an unrelated screen such as a document list. This phase needs a
+**projection-only** lookup returning `(account_id, email)` without loading the entity, in the same
+style as `findSessionsInvalidatedAt`.
+
+**Success criteria:**
+1. Every actor field in every API response resolves to an email when that account's credential row exists
+2. Documents, releases and templates recorded *before* this phase display correctly, with no migration and no stored value rewritten
+3. An account whose credential row no longer exists degrades to showing the account id — never a blank, an error, or a crash
+4. No display path can trigger token decryption: a rotated or unreadable `RM_CREDENTIAL_KEY` cannot break a document, release or template screen
+5. Resolving many actors on a list screen does not issue one query per row
+
+**Scope notes:**
+- Nothing stored changes. No migration. No write path is touched.
+- The stored API token must never be read, decrypted or returned on this path (`AUTH-03`/`D-13`: the
+  token is never returned to the client in any form)
+- An email is PII. It is already exposed for the signed-in user via the session endpoint and this is a
+  single-release-manager tool, but the threat model should state the disclosure surface explicitly
+  rather than assume it is fine
+
+Plans:
+
+**Wave 1**
+- [x] 05.3-01 — The read-only actor lookup: a narrow port plus a JPQL scalar projection that never hydrates `JiraCredentialEntity`, so decryption cannot fire on a display path — AUTH-02
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [x] 05.3-02 — Wire resolution into the four controllers that map actor-bearing responses, batched so a list does not issue a query per row — DOC-07
+
+**Wave 3** *(blocked on Wave 2 completion — NOT autonomous, ends at a human checkpoint)*
+- [ ] 05.3-03 — Prove the central claim across the seam: with an undecryptable credential row present, the screens still render — AUTH-02, DOC-07
+
+### Phase 05.4: Template Selection At Generation Time (INSERTED)
+
+**Goal**: The release manager chooses which template produces a document at the moment of generation, instead of the choice being implied by whichever template is currently active
+**Requirements**: DOC-01, DOC-07, TMPL-01
+**Depends on**: Phase 5 (document generation), Phase 05.3 (shares DocumentController)
+**Plans**: TBD (run /gsd-plan-phase 05.4 to break down)
+**UI hint**: yes
+
+**Why this was inserted (requested 2026-08-12):** generation picks its template implicitly.
+`DocumentGenerationService.java:51` resolves it as
+`templateRepository.findActive(documentType).orElseThrow(NoActiveTemplateException::new)`, and
+`TemplateRepositoryAdapter.setActive()` keeps exactly one template active per document type by
+deactivating the previous one. To generate with a different template the release manager must leave the
+release, go to Templates, activate the other one, come back and generate — and that switch is global, so
+it silently changes what every other release will generate next.
+
+**Direction chosen (D-05.4-01, decided 2026-08-12): `active` stays as the default, the choice becomes
+an optional override.** `generate()` accepts an optional templateId; when it is absent the current
+`findActive` behaviour is unchanged, and the picker preselects the active template. Rejected: removing
+the `active` concept outright — a larger diff (drop `setActive`, `findActive`, the activate UI and the
+`template.active` column) for a workflow the release manager has not asked to lose.
+
+**Direction chosen (D-05.4-02, decided 2026-08-12): the picker is filtered to the slot's document type
+and the server rejects a mismatch.** Per-type readiness, revision numbering and export filenames all key
+off document type today, so letting a runbook template fill the release-notes slot would make the
+snapshot's own `documentType` dishonest.
+
+**What this phase does NOT need.** `DocumentSnapshot.create(...)` already stores `template.id()`,
+`template.name()` and `template.body()` on every snapshot (DOC-07), so which template produced a
+document is already recorded — there is no schema change and no migration in this phase.
+
+**Success criteria:**
+1. Release manager can choose, at the point of generating, which template of that document type is used
+2. Generating without making a choice uses the active template exactly as it does today
+3. The picker offers only templates matching the slot's document type, and the server rejects a mismatched templateId rather than trusting the client
+4. The resulting snapshot records the template actually chosen, so the revision history shows which template produced each revision
+5. Choosing a template for one generation does not change what any other release generates next
+
+**Scope notes:**
+- `DocumentController.java:48` is also edited by plan 05.3-02 — this phase must run after Phase 05.3, not beside it
+- Readiness (`DocumentReadinessService.java:38-40,62-64`, `NO_ACTIVE_TEMPLATE`) keeps its current meaning, since `active` survives
+- Frontend surface: `DocumentsSection.tsx:87,107,116` (the Generate button and its three `NO_ACTIVE_TEMPLATE` branches), `api/documents.ts`, and a template list query filtered by document type
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 05.4 to break down)
 
 ### Phase 6: Azure DevOps Enrichment
 **Goal**: Release manager sees each ticket's linked Azure DevOps commits and pull requests where available, with the tool degrading gracefully when a link is absent or enrichment fails, and credentials safely managed against the 2026 PAT retirement
@@ -227,7 +392,7 @@ Plans:
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 6 → 7
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5.3 → 6 → 7 → 8
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -236,6 +401,64 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 6 → 7
 | 3. Release Assembly | 8/8 | Complete   | 2026-08-06 |
 | 4. Template Authoring | 11/11 | Code merged, awaiting live-tenant verification (04-11 task 3) |  |
 | 5. Document Generation | 13/13 | Complete   | 2026-08-11 |
-| 5.1 Per-Template Logo Sizing | 0/TBD | Not planned | - |
+| 5.1 Per-Template Logo Sizing | 4/4 | Complete   | 2026-08-12 |
+| 5.2 Release Ticket Selection | 3/3 | Complete   | 2026-08-12 |
+| 5.3 Actor Identity Display | 2/3 | In Progress|  |
+| 5.4 Template Selection At Generation Time | 0/TBD | Not planned | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
+| 8. Release Insights Dashboard | 0/TBD | Not started | - |
+
+### Phase 8: Release Insights Dashboard
+**Goal**: Release manager opens one screen and sees what Jira structurally cannot answer — which releases have outstanding paperwork, where each sits on the environment ladder, what went to each environment and when, and how long releases actually take
+**Depends on**: Phase 7 (promotion and ladder data), Phase 6 (enrichment coverage), Phase 5 (documentation readiness)
+**Requirements**: AUDIT-04, INSIGHT-01, INSIGHT-02
+**Plans**: TBD
+**UI hint**: yes
+
+**Why this is Phase 8 and not a decimal after Phase 5 (decided 2026-08-11).** The user asked for
+dashboard insights "not available in Jira". That request does **not** reverse the recorded decision to
+drop analytics — `PROJECT.md:41` drops Jira's *agile reports* (velocity, cycle time, burndown, sprint
+scope change) and in the same breath states that "dashboards here must answer what Jira structurally
+cannot — release documentation status, environment-ladder position, promotion history". This phase is
+exactly that carve-out.
+
+It is sequenced after Phase 7 because of data availability, not preference. Of the three areas that
+entry names, only documentation readiness exists today (`DOC-09`, shipped in Phase 5 as the readiness
+pills). Ladder position (`DEPL-01`) and promotion history (`AUDIT-01`, `DEPL-03`) are Phase 7. Building
+a dashboard earlier would have shown one data source and largely duplicated the releases list, then
+been reworked once Phase 7 landed.
+
+**Requirement bookkeeping this phase performs:**
+- **`AUDIT-04` finds its home here.** It was mapped to Phase 7 in `REQUIREMENTS.md` but **no ROADMAP
+  phase's `Requirements` line claimed it**, so the automated coverage gate could never check it — the
+  same defect class as the known `REL-08` omission in Phase 3. It is a cross-release dashboard
+  requirement ("view deployment history across all releases on one screen, filterable by environment and
+  date range"), so it belongs to this phase and is removed from Phase 7's implicit scope.
+- **`INSIGHT-01` and `INSIGHT-02` are new**, added 2026-08-11 for the two insight areas the user selected
+  that no existing requirement covers. This grows v1 from 47 requirements to 49.
+
+**Success criteria:**
+1. Release manager sees, across all releases on one screen, which of the three documents are generated, stale, or never generated — without opening each release
+2. Release manager sees where every release currently sits on the environment ladder
+3. Release manager can answer "what went to Production, and when" from one screen, filtered by environment and date range, without opening each release (`AUDIT-04`)
+4. Release manager sees how long releases take through their own lifecycle — created to frozen, frozen to production — computed from timestamps this system owns (`INSIGHT-01`)
+5. Release manager sees each release's composition: ticket count, manual versus ticket-backed split, and what share of tickets carry linked Azure DevOps commits or pull requests (`INSIGHT-02`)
+6. Every figure on the dashboard is derived from this system's own database — no new Jira integration surface, and specifically no Agile board/burndown/story-point reads beyond the sprint listing Phase 2 already uses
+
+**Scope notes:**
+- **This phase must not rebuild Jira's reports.** `PROJECT.md:41` is still binding: no velocity, no Jira
+  cycle time, no burndown, no sprint scope change. Criterion 4 measures *this tool's* release process
+  (created → frozen → promoted), which Jira cannot compute because it does not know when a release was
+  frozen or deployed here. That distinction is the whole justification — state it in the plans so a
+  future reader does not mistake criterion 4 for the thing that was dropped.
+- `frontend/src/routes/DashboardRoute.tsx` is currently a 15-line placeholder whose copy still reads
+  "No releases yet. Release assembly arrives in a later phase" — stale since Phase 3 shipped. This phase
+  replaces it.
+- `DOC-09` is still `Pending` in `REQUIREMENTS.md` although Phase 5 shipped the readiness data this
+  phase consumes. Confirm it before building criterion 1 on it.
+- Read-only over existing tables. This phase should need no new write path; whether it needs new
+  read-side projections or aggregate queries is a planning question.
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 8 to break down)

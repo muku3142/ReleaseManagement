@@ -13,6 +13,7 @@ const NO_CHROME: ChromeFields = {
   headerText: '',
   footerText: '',
   pageNumbersEnabled: false,
+  logoRenderHeightMm: 30,
 };
 
 // Mirrors PlaceholderCatalog.ENTRIES's token/scope shape (plan 04-01/04-20) - the pushes() field

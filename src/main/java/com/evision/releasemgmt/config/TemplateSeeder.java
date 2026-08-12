@@ -71,16 +71,19 @@ public class TemplateSeeder implements ApplicationRunner {
 
     private static ChromeFields releaseNotesChrome() {
         return new ChromeFields(true, "{{release.name}} release notes", "Version {{release.version}}",
-                "{{release.name}} — {{release.version}}", "Release notes · {{release.version}}", true);
+                "{{release.name}} — {{release.version}}", "Release notes · {{release.version}}", true,
+                ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
     }
 
     private static ChromeFields runbookChrome() {
         return new ChromeFields(true, "Deployment runbook", "{{release.name}} — {{release.version}}",
-                "Runbook · {{release.name}}", "Deployment runbook · {{release.version}}", true);
+                "Runbook · {{release.name}}", "Deployment runbook · {{release.version}}", true,
+                ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
     }
 
     private static ChromeFields approvalChrome() {
         return new ChromeFields(true, "Change approval", "{{release.name}} — {{release.version}}",
-                "Change approval · {{release.name}}", "Approval document · {{release.version}}", true);
+                "Change approval · {{release.name}}", "Approval document · {{release.version}}", true,
+                ChromeFields.DEFAULT_LOGO_RENDER_HEIGHT_MM);
     }
 }
