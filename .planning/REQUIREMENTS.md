@@ -10,7 +10,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 ### Authentication
 
 - [x] **AUTH-01**: Release manager can sign in by supplying their Jira email and API token, which the system validates against Jira before granting access
-- [ ] **AUTH-02**: All Jira reads are performed with the signed-in user's own credential, so the tool never sees tickets the user could not see in Jira
+- [x] **AUTH-02**: All Jira reads are performed with the signed-in user's own credential, so the tool never sees tickets the user could not see in Jira
 - [x] **AUTH-03**: Stored Jira credentials are encrypted at rest and never returned to the client after being saved
 - [ ] **AUTH-04**: Release manager can replace an expired or revoked Jira token without losing existing releases, templates or history
 

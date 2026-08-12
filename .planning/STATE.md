@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 05.2 complete; 05.1 parked at its human checkpoint
-last_updated: "2026-08-12T08:04:12.747Z"
-last_activity: 2026-08-12 -- Phase 05.2 executed (3/3); backend 571, frontend 210
+stopped_at: Completed 05.3-01-PLAN.md
+last_updated: "2026-08-12T12:57:02.271Z"
+last_activity: 2026-08-12
 progress:
   total_phases: 11
   completed_phases: 4
   total_plans: 57
-  completed_plans: 51
-  percent: 89
+  completed_plans: 52
+  percent: 91
 ---
 
 # Project State
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-27)
 
 **Core value:** Given a set of Jira tickets, produce accurate and consistent release documentation plus a tracked deployment record — without anyone doing manual release bookkeeping in Jira.
-**Current focus:** Phase 05.3 — actor identity display (planned, ready to execute)
+**Current focus:** Phase 05.3 — actor-identity-display-resolve-stored-jira-accountid-to-a-hu
 
 ## Current Position
 
-Phase: 05.3 (actor-identity-display) — READY TO EXECUTE
-Plan: 0 of 3 across 3 waves — run `/gsd-execute-phase 05.3`
+Phase: 05.3 (actor-identity-display-resolve-stored-jira-accountid-to-a-hu) — EXECUTING
+Plan: 2 of 3
 
-Current baselines: **backend 571 tests, frontend 210 tests**, `tsc -b` clean, full `mvn clean test`
+Current baselines: **backend 579 tests, frontend 210 tests**, `tsc -b` clean, full `mvn clean test`
 BUILD SUCCESS.
 
 **Two things need a human before their phases can close:**
@@ -36,6 +36,7 @@ BUILD SUCCESS.
 1. **05.1's blocking checkpoint** — plan 05.1-04 is parked awaiting a visual comparison of an oversized
    logo across the viewer, PDF and DOCX. All 05.1 code is merged and green; only the checkpoint and its
    SUMMARY remain.
+
 2. **05.2's live-Jira verification** — every automated test stubs `JiraTicketPort` or mocks
    `useTicketSearch`, so nothing proves the release scope survives a real HTTP round trip. Recorded in
    `05.2-VERIFICATION.md` frontmatter as `human_needed`, not silently passed.
@@ -56,12 +57,15 @@ BUILD SUCCESS.
   at all (the button sits inside `{isOpen && ...}`), so refusal happens before the work rather than as a
   409 after tickets are chosen.
 
-- **05.3 Actor Identity Display — PLANNED, 3 plans / 3 waves, not started.** Wave 1 builds the
-  projection-only lookup, wave 2 wires it into the four controllers, wave 3 proves it across the seam
-  and ends at a human checkpoint. The load-bearing fact, confirmed by pattern mapping rather than
-  inferred: decryption fires because `JiraCredentialEntity.token` carries
-  `@Convert(converter = EncryptedTokenConverter.class)`, so the risk attaches to the entity **type** —
-  any query returning that type can throw on a superseded key, and only a scalar projection avoids it.
+- **05.3 Actor Identity Display — EXECUTING, 1/3 plans complete.** Wave 1 (plan 01) built the
+  projection-only `ActorDirectory` port, `findEmailsByAccountIdIn` JPQL projection, and the batching
+  `ActorResolutionService`/`ResolvedActors` pair — proven end-to-end against a real Postgres row this
+  key cannot decrypt (`findByAccountId` throws, `ActorDirectory` still resolves the email). Wave 2 wires
+  it into the four controllers, wave 3 proves it across the seam and ends at a human checkpoint. The
+  load-bearing fact, confirmed by pattern mapping rather than inferred: decryption fires because
+  `JiraCredentialEntity.token` carries `@Convert(converter = EncryptedTokenConverter.class)`, so the
+  risk attaches to the entity **type** — any query returning that type can throw on a superseded key,
+  and only a scalar projection avoids it.
 
 **Phase 05 (document-generation) is complete** — 13/13 plans, verified 2026-08-11.
 Both verification gaps were closed by gap-closure plans and the phase's human
@@ -110,10 +114,10 @@ replaced entirely by **sprint** (brings Jira's Agile API into scope, reversing
 part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
 names, table widening, and frontend tests moved to `frontend/tests/`.
 
-Status: Phase 05.2 complete — 05.3 ready to execute
-Last activity: 2026-08-12 -- Phase 05.2 executed (3/3); backend 571, frontend 210
+Status: Executing Phase 05.3 — plan 01 complete (2/3)
+Last activity: 2026-08-12 -- Phase 05.3 plan 01 executed (3/3 tasks); backend 579, frontend 210
 
-Progress: [█████████░] 89%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -139,6 +143,7 @@ Progress: [█████████░] 89%
 | Phase 01 P05 | 53 | 2 tasks | 13 files |
 | Phase 01 P06 | 55 | 2 tasks | 13 files |
 | Phase 01 P07 | 100 | 3 tasks | 22 files |
+| Phase 05.3 P01 | 4min | 3 tasks | 7 files |
 
 ## Accumulated Context
 
@@ -190,6 +195,7 @@ Recent decisions affecting current work:
 - [Phase 01]: AuthController extracts a shared accountId(jwt) helper so jwt.getSubject() is called from exactly one place — Keeps the literal grep-gated acceptance criterion accurate while removing duplication between session() and replaceCredential()
 - [Phase 01]: PUT /api/auth/credential revalidates the replacement token live against Jira using the stored email before upserting, and rejects ACCOUNT_MISMATCH (409) if the validated identity belongs to a different account — AUTH-04 requires replace-without-losing-data; revalidation prevents storing a token Jira itself would reject, and the mismatch check prevents one account's credential row being overwritten by another account's token
 - [Phase 01]: Frontend credentialStatus.ts uses a dependency-free useSyncExternalStore module instead of a state library for the single credential-invalid boolean signal — Avoids adding a state-management dependency for one boolean flag shared between apiFetch and CredentialAlert
+- [Phase 05.3]: ActorResolutionService.resolve uses varargs (String...) not List<String>, so single/dual-id call sites can call it inline while a list call site uses toArray(String[]::new) which tolerates a null unfrozen-release entry
 
 ### Pending Todos
 
@@ -215,6 +221,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-10T09:40:05.295Z
-Stopped at: Phase 5 UI-SPEC approved
-Resume file: .planning/phases/05-document-generation/05-UI-SPEC.md
+Last session: 2026-08-12T12:57:02.263Z
+Stopped at: Completed 05.3-01-PLAN.md
+Resume file: None

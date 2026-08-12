@@ -306,7 +306,7 @@ style as `findSessionsInvalidatedAt`.
 Plans:
 
 **Wave 1**
-- [ ] 05.3-01 — The read-only actor lookup: a narrow port plus a JPQL scalar projection that never hydrates `JiraCredentialEntity`, so decryption cannot fire on a display path — AUTH-02
+- [x] 05.3-01 — The read-only actor lookup: a narrow port plus a JPQL scalar projection that never hydrates `JiraCredentialEntity`, so decryption cannot fire on a display path — AUTH-02
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 05.3-02 — Wire resolution into the four controllers that map actor-bearing responses, batched so a list does not issue a query per row — DOC-07
