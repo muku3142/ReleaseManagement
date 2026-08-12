@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05.3-01-PLAN.md
-last_updated: "2026-08-12T12:57:02.271Z"
-last_activity: 2026-08-12
+stopped_at: Completed 05.3-02-PLAN.md
+last_updated: "2026-08-12T13:22:42.002Z"
+last_activity: 2026-08-12 -- Phase 05.3 plan 02 executed (3/3 tasks); backend 590, frontend 210
 progress:
-  total_phases: 11
-  completed_phases: 4
+  total_phases: 12
+  completed_phases: 5
   total_plans: 57
-  completed_plans: 52
-  percent: 91
+  completed_plans: 54
+  percent: 95
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-07-27)
 ## Current Position
 
 Phase: 05.3 (actor-identity-display-resolve-stored-jira-accountid-to-a-hu) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
-Current baselines: **backend 579 tests, frontend 210 tests**, `tsc -b` clean, full `mvn clean test`
+Current baselines: **backend 590 tests, frontend 210 tests**, `tsc -b` clean, full `mvn clean test`
 BUILD SUCCESS.
 
 **Two things need a human before their phases can close:**
@@ -57,15 +57,18 @@ BUILD SUCCESS.
   at all (the button sits inside `{isOpen && ...}`), so refusal happens before the work rather than as a
   409 after tickets are chosen.
 
-- **05.3 Actor Identity Display — EXECUTING, 1/3 plans complete.** Wave 1 (plan 01) built the
+- **05.3 Actor Identity Display — EXECUTING, 2/3 plans complete.** Wave 1 (plan 01) built the
   projection-only `ActorDirectory` port, `findEmailsByAccountIdIn` JPQL projection, and the batching
   `ActorResolutionService`/`ResolvedActors` pair — proven end-to-end against a real Postgres row this
-  key cannot decrypt (`findByAccountId` throws, `ActorDirectory` still resolves the email). Wave 2 wires
-  it into the four controllers, wave 3 proves it across the seam and ends at a human checkpoint. The
-  load-bearing fact, confirmed by pattern mapping rather than inferred: decryption fires because
-  `JiraCredentialEntity.token` carries `@Convert(converter = EncryptedTokenConverter.class)`, so the
-  risk attaches to the entity **type** — any query returning that type can throw on a superseded key,
-  and only a scalar projection avoids it.
+  key cannot decrypt (`findByAccountId` throws, `ActorDirectory` still resolves the email). Wave 2
+  (plan 02) wired it into `DocumentController`, `JiraSiteConfigController`, `ReleaseController` and
+  `TemplateController` — all eight actor fields across six response DTOs now carry the resolved email,
+  with `ReleaseController.list()` and `DocumentController.revisions()` each issuing exactly one batched
+  lookup regardless of row count. Backend 579→590 (11 new controller-slice tests). Wave 3 proves it
+  across the seam and ends at a human checkpoint. The load-bearing fact, confirmed by pattern mapping
+  rather than inferred: decryption fires because `JiraCredentialEntity.token` carries
+  `@Convert(converter = EncryptedTokenConverter.class)`, so the risk attaches to the entity **type** —
+  any query returning that type can throw on a superseded key, and only a scalar projection avoids it.
 
 **Phase 05 (document-generation) is complete** — 13/13 plans, verified 2026-08-11.
 Both verification gaps were closed by gap-closure plans and the phase's human
@@ -114,10 +117,10 @@ replaced entirely by **sprint** (brings Jira's Agile API into scope, reversing
 part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
 names, table widening, and frontend tests moved to `frontend/tests/`.
 
-Status: Executing Phase 05.3 — plan 01 complete (2/3)
-Last activity: 2026-08-12 -- Phase 05.3 plan 01 executed (3/3 tasks); backend 579, frontend 210
+Status: Executing Phase 05.3 — plan 02 complete (2/3)
+Last activity: 2026-08-12 -- Phase 05.3 plan 02 executed (3/3 tasks); backend 590, frontend 210
 
-Progress: [█████████░] 91%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -144,6 +147,7 @@ Progress: [█████████░] 91%
 | Phase 01 P06 | 55 | 2 tasks | 13 files |
 | Phase 01 P07 | 100 | 3 tasks | 22 files |
 | Phase 05.3 P01 | 4min | 3 tasks | 7 files |
+| Phase 05.3 P02 | 25min | 3 tasks | 10 files |
 
 ## Accumulated Context
 
@@ -208,6 +212,7 @@ Recent decisions affecting current work:
 - [Phase 01]: PUT /api/auth/credential revalidates the replacement token live against Jira using the stored email before upserting, and rejects ACCOUNT_MISMATCH (409) if the validated identity belongs to a different account — AUTH-04 requires replace-without-losing-data; revalidation prevents storing a token Jira itself would reject, and the mismatch check prevents one account's credential row being overwritten by another account's token
 - [Phase 01]: Frontend credentialStatus.ts uses a dependency-free useSyncExternalStore module instead of a state library for the single credential-invalid boolean signal — Avoids adding a state-management dependency for one boolean flag shared between apiFetch and CredentialAlert
 - [Phase 05.3]: ActorResolutionService.resolve uses varargs (String...) not List<String>, so single/dual-id call sites can call it inline while a list call site uses toArray(String[]::new) which tolerates a null unfrozen-release entry
+- [Phase 05.3]: ReleaseController.toResponse/toAddResult and TemplateController.toResponse de-staticed to instance methods; ReleaseController.toSummaryResponse stays static and takes a resolved ResolvedActors parameter so a list row cannot resolve for itself
 
 ### Pending Todos
 
@@ -233,6 +238,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-12T12:57:02.263Z
-Stopped at: Completed 05.3-01-PLAN.md
+Last session: 2026-08-12T13:21:17.366Z
+Stopped at: Completed 05.3-02-PLAN.md
 Resume file: None

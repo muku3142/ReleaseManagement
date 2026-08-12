@@ -52,7 +52,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [ ] **DOC-04**: Release manager can generate an approval/change document with clearly-labelled risk, impact and backout-plan sections — authored as template content. Superseded 2026-08-10: originally "whose data model provides risk, impact and backout-plan fields"; see the Phase 5 note below
 - [ ] **DOC-05**: Release manager can export any generated document as PDF
 - [ ] **DOC-06**: Release manager can export any generated document as DOCX
-- [ ] **DOC-07**: Each generated document is stored as an immutable snapshot recording the template version, content and generation timestamp, so regenerating creates a new revision instead of altering the previous one
+- [x] **DOC-07**: Each generated document is stored as an immutable snapshot recording the template version, content and generation timestamp, so regenerating creates a new revision instead of altering the previous one
 - [ ] **DOC-08**: Both the PDF and DOCX export of a document render that template's cover page, running header, footer and page numbering, with the two formats visually equivalent rather than merely both present
 - [ ] **DOC-09**: Release manager can see across all releases which of the three documents have been generated, which are **stale** relative to the release's current ticket set, and which were never generated — so outstanding release paperwork is visible without opening each release one at a time
 
@@ -195,7 +195,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | DOC-04 | Phase 5 | Pending |
 | DOC-05 | Phase 5 | Pending |
 | DOC-06 | Phase 5 | Pending |
-| DOC-07 | Phase 5 | Pending |
+| DOC-07 | Phase 5 | Complete |
 | DOC-08 | Phase 5 | Pending |
 | DOC-09 | Phase 5 | Pending |
 | ADO-01 | Phase 6 | Pending |

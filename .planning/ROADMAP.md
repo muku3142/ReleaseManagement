@@ -310,7 +310,7 @@ Plans:
 - [x] 05.3-01 — The read-only actor lookup: a narrow port plus a JPQL scalar projection that never hydrates `JiraCredentialEntity`, so decryption cannot fire on a display path — AUTH-02
 
 **Wave 2** *(blocked on Wave 1 completion)*
-- [ ] 05.3-02 — Wire resolution into the four controllers that map actor-bearing responses, batched so a list does not issue a query per row — DOC-07
+- [x] 05.3-02 — Wire resolution into the four controllers that map actor-bearing responses, batched so a list does not issue a query per row — DOC-07
 
 **Wave 3** *(blocked on Wave 2 completion — NOT autonomous, ends at a human checkpoint)*
 - [ ] 05.3-03 — Prove the central claim across the seam: with an undecryptable credential row present, the screens still render — AUTH-02, DOC-07
