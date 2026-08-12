@@ -47,23 +47,30 @@ export type TicketSearchResponse = { tickets: Ticket[] };
 // statusCategories is sent only on the picker path — on the JQL path the backend forwards the
 // query verbatim, so sending it would imply a filter that is not actually applied.
 // sprintId is omitted entirely when absent rather than sent as null.
-export function toSearchBody(criteria: TicketSearchCriteria): Record<string, unknown> {
+export function toSearchBody(
+  criteria: TicketSearchCriteria,
+  releaseId?: string,
+): Record<string, unknown> {
+  // Present means "hide what this release already holds"; absent is the unfiltered browse screen.
+  // The server does the filtering, so the count the UI shows is the count of what it is showing.
+  const scope = releaseId ? { releaseId } : {};
   if (criteria.mode === 'jql') {
-    return { jql: criteria.jql };
+    return { jql: criteria.jql, ...scope };
   }
   return {
     projectId: criteria.projectId,
     ...(criteria.sprintId ? { sprintId: criteria.sprintId } : {}),
     statusCategories: criteria.statusCategories,
+    ...scope,
   };
 }
 
-export function useTicketSearch() {
+export function useTicketSearch(releaseId?: string) {
   return useMutation({
     mutationFn: (criteria: TicketSearchCriteria) =>
       apiFetch<TicketSearchResponse>('/api/tickets/search', {
         method: 'POST',
-        body: JSON.stringify(toSearchBody(criteria)),
+        body: JSON.stringify(toSearchBody(criteria, releaseId)),
       }),
   });
 }

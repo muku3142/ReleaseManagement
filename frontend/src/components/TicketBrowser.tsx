@@ -15,6 +15,7 @@ import {
 export function TicketBrowser(props: {
   actionLabel: string;
   onAction: (ticketKeys: string[], jiraProjectKey: string | null) => void;
+  releaseId?: string;
 }) {
   const [projectId, setProjectId] = useState('');
   const [sprintId, setSprintId] = useState('');
@@ -30,7 +31,7 @@ export function TicketBrowser(props: {
 
   const projects = useJiraProjects();
   const sprints = useJiraSprints(projectId);
-  const search = useTicketSearch();
+  const search = useTicketSearch(props.releaseId);
 
   const selectAllRef = useRef<HTMLInputElement>(null);
   const allSelected = loaded !== null && loaded.length > 0 && selected.size === loaded.length;
@@ -209,6 +210,10 @@ export function TicketBrowser(props: {
         </div>
       )}
 
+      {props.releaseId !== undefined && (
+        <p className="mt-3 text-sm text-gray-600">Tickets already on this release are hidden.</p>
+      )}
+
       {projectsProblem && (
         <p role="alert" data-reason={projectsProblem.reason} className="mt-2 text-sm text-red-600">
           {messageForReason(projectsProblem)}
@@ -254,7 +259,9 @@ export function TicketBrowser(props: {
             <p className="mt-2 text-sm text-gray-600">No tickets matched your JQL. Try a broader query.</p>
           ) : (
             <p className="mt-2 text-sm text-gray-600">
-              {`No tickets matched ${scopeDescription}${statusHint}. Try a different sprint, widen the status filter, or use Advanced: edit as JQL.`}
+              {`No tickets matched ${scopeDescription}${statusHint}${
+                props.releaseId !== undefined ? ', or every match is already on this release' : ''
+              }. Try a different sprint, widen the status filter, or use Advanced: edit as JQL.`}
             </p>
           )}
         </div>

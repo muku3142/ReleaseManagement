@@ -102,4 +102,37 @@ describe('ticket search client', () => {
     expect(body.statusCategories).toEqual([]);
     expect('statusCategories' in body).toBe(true);
   });
+
+  it('sends the release scope alongside the picker fields', () => {
+    const body = toSearchBody(
+      { mode: 'project', projectId: '10023', sprintId: '10891', statusCategories: ['DONE'] },
+      'r1',
+    );
+
+    expect(body).toEqual({
+      projectId: '10023',
+      sprintId: '10891',
+      statusCategories: ['DONE'],
+      releaseId: 'r1',
+    });
+  });
+
+  it('sends the release scope alongside raw jql', () => {
+    const body = toSearchBody({ mode: 'jql', jql: 'project = CNV' }, 'r1');
+
+    expect(body).toEqual({ jql: 'project = CNV', releaseId: 'r1' });
+  });
+
+  it('omits the release scope entirely outside a release context', () => {
+    const projectBody = toSearchBody({
+      mode: 'project',
+      projectId: '10023',
+      sprintId: '10891',
+      statusCategories: ['DONE'],
+    });
+    const jqlBody = toSearchBody({ mode: 'jql', jql: 'project = CNV' });
+
+    expect('releaseId' in projectBody).toBe(false);
+    expect('releaseId' in jqlBody).toBe(false);
+  });
 });
