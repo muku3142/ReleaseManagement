@@ -172,6 +172,18 @@ Progress: [█████████░] 91%
   the only option that fixes already-recorded history — `document_snapshot` is append-only so a stored
   label could never be corrected.
 
+- Phase 05.4 inserted after Phase 05.3 on 2026-08-12 (URGENT) — template selection at generation time.
+  `DocumentGenerationService.java:51` resolves the template as `findActive(documentType)`, and
+  `setActive` keeps exactly one active per type, so generating with a different template means leaving
+  the release, re-activating globally, and coming back — and that switch changes what every other
+  release generates next. D-05.4-01: `active` stays as the preselected default and templateId becomes
+  an optional override, rejecting the larger "remove `active` entirely" diff for a workflow the user
+  has not asked to lose. D-05.4-02: the picker is filtered to the slot's document type and the server
+  rejects a mismatch, because readiness, revision numbering and export filenames all key off document
+  type. No schema change: `DocumentSnapshot.create` already stores the template id, name and body.
+  Sequenced after 05.3 — both edit `DocumentController.java`. Written by hand;
+  `state add-roadmap-evolution` is SDK-only in this CLI version and errors out.
+
 - **The `phase insert` handler places a new decimal section immediately after the *named* phase, not
   in numeric order.** Inserting 05.2 and 05.3 "after 5" put both sections *before* 05.1 in the file,
   and left the top checklist, the Progress table and the `Phases execute in numeric order:` line

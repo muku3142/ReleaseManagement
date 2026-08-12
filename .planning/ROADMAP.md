@@ -20,6 +20,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 5.1: Per-Template Logo Sizing** - Make the cover logo's rendered size a per-template setting and close the DOCX cover-logo parity defect (INSERTED)
 - [x] **Phase 5.2: Release Ticket Selection** - Hide already-added tickets while assembling, and add tickets from the release page itself (INSERTED, completed 2026-08-12)
 - [ ] **Phase 5.3: Actor Identity Display** - Show a person's email instead of an opaque Jira account id, resolved at read time so existing history displays correctly (INSERTED)
+- [ ] **Phase 5.4: Template Selection At Generation Time** - Choose which template produces a document when generating, instead of relying on whichever template is active (INSERTED)
 - [ ] **Phase 6: Azure DevOps Enrichment** - Surface linked commits/PRs per ticket, degrading gracefully when absent, with tracked-expiry credentials
 - [ ] **Phase 7: Promotion Tracking & Audit Trail** - Promote releases through the fixed environment ladder with a complete, append-only history
 - [ ] **Phase 8: Release Insights Dashboard** - One screen answering what Jira structurally cannot: outstanding paperwork, ladder position, what went where and when, and how long releases actually take
@@ -313,6 +314,52 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion — NOT autonomous, ends at a human checkpoint)*
 - [ ] 05.3-03 — Prove the central claim across the seam: with an undecryptable credential row present, the screens still render — AUTH-02, DOC-07
+
+### Phase 05.4: Template Selection At Generation Time (INSERTED)
+
+**Goal**: The release manager chooses which template produces a document at the moment of generation, instead of the choice being implied by whichever template is currently active
+**Requirements**: DOC-01, DOC-07, TMPL-01
+**Depends on**: Phase 5 (document generation), Phase 05.3 (shares DocumentController)
+**Plans**: TBD (run /gsd-plan-phase 05.4 to break down)
+**UI hint**: yes
+
+**Why this was inserted (requested 2026-08-12):** generation picks its template implicitly.
+`DocumentGenerationService.java:51` resolves it as
+`templateRepository.findActive(documentType).orElseThrow(NoActiveTemplateException::new)`, and
+`TemplateRepositoryAdapter.setActive()` keeps exactly one template active per document type by
+deactivating the previous one. To generate with a different template the release manager must leave the
+release, go to Templates, activate the other one, come back and generate — and that switch is global, so
+it silently changes what every other release will generate next.
+
+**Direction chosen (D-05.4-01, decided 2026-08-12): `active` stays as the default, the choice becomes
+an optional override.** `generate()` accepts an optional templateId; when it is absent the current
+`findActive` behaviour is unchanged, and the picker preselects the active template. Rejected: removing
+the `active` concept outright — a larger diff (drop `setActive`, `findActive`, the activate UI and the
+`template.active` column) for a workflow the release manager has not asked to lose.
+
+**Direction chosen (D-05.4-02, decided 2026-08-12): the picker is filtered to the slot's document type
+and the server rejects a mismatch.** Per-type readiness, revision numbering and export filenames all key
+off document type today, so letting a runbook template fill the release-notes slot would make the
+snapshot's own `documentType` dishonest.
+
+**What this phase does NOT need.** `DocumentSnapshot.create(...)` already stores `template.id()`,
+`template.name()` and `template.body()` on every snapshot (DOC-07), so which template produced a
+document is already recorded — there is no schema change and no migration in this phase.
+
+**Success criteria:**
+1. Release manager can choose, at the point of generating, which template of that document type is used
+2. Generating without making a choice uses the active template exactly as it does today
+3. The picker offers only templates matching the slot's document type, and the server rejects a mismatched templateId rather than trusting the client
+4. The resulting snapshot records the template actually chosen, so the revision history shows which template produced each revision
+5. Choosing a template for one generation does not change what any other release generates next
+
+**Scope notes:**
+- `DocumentController.java:48` is also edited by plan 05.3-02 — this phase must run after Phase 05.3, not beside it
+- Readiness (`DocumentReadinessService.java:38-40,62-64`, `NO_ACTIVE_TEMPLATE`) keeps its current meaning, since `active` survives
+- Frontend surface: `DocumentsSection.tsx:87,107,116` (the Generate button and its three `NO_ACTIVE_TEMPLATE` branches), `api/documents.ts`, and a template list query filtered by document type
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 05.4 to break down)
 
 ### Phase 6: Azure DevOps Enrichment
 **Goal**: Release manager sees each ticket's linked Azure DevOps commits and pull requests where available, with the tool degrading gracefully when a link is absent or enrichment fails, and credentials safely managed against the 2026 PAT retirement
