@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 05.3-02-PLAN.md
-last_updated: "2026-08-12T13:22:42.002Z"
-last_activity: 2026-08-12 -- Phase 05.3 plan 02 executed (3/3 tasks); backend 590, frontend 210
+stopped_at: Completed 05.3-03-PLAN.md — Phase 05.3 COMPLETE (3/3)
+last_updated: "2026-08-13T00:00:00.000Z"
+last_activity: 2026-08-13 -- Phase 05.3 plan 03 executed (3/3 tasks, checkpoint approved); backend 597, frontend 210
 progress:
   total_phases: 12
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 57
-  completed_plans: 54
-  percent: 95
+  completed_plans: 55
+  percent: 96
 ---
 
 # Project State
@@ -21,14 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-27)
 
 **Core value:** Given a set of Jira tickets, produce accurate and consistent release documentation plus a tracked deployment record — without anyone doing manual release bookkeeping in Jira.
-**Current focus:** Phase 05.3 — actor-identity-display-resolve-stored-jira-accountid-to-a-hu
+**Current focus:** Phase 05.3 complete. Phase 05.4 (template selection at generation time) is
+inserted and unplanned — next up.
 
 ## Current Position
 
-Phase: 05.3 (actor-identity-display-resolve-stored-jira-accountid-to-a-hu) — EXECUTING
-Plan: 3 of 3
+Phase: 05.3 (actor-identity-display-resolve-stored-jira-accountid-to-a-hu) — COMPLETE (3/3)
+Plan: 3 of 3 (all complete)
 
-Current baselines: **backend 590 tests, frontend 210 tests**, `tsc -b` clean, full `mvn clean test`
+Current baselines: **backend 597 tests, frontend 210 tests**, `tsc -b` clean, full `mvn clean test`
 BUILD SUCCESS.
 
 **One thing needs a human before its phase can close:**
@@ -59,16 +60,24 @@ BUILD SUCCESS.
   at all (the button sits inside `{isOpen && ...}`), so refusal happens before the work rather than as a
   409 after tickets are chosen.
 
-- **05.3 Actor Identity Display — EXECUTING, 2/3 plans complete.** Wave 1 (plan 01) built the
+- **05.3 Actor Identity Display — COMPLETE, 3/3 plans, closed 2026-08-13.** Wave 1 (plan 01) built the
   projection-only `ActorDirectory` port, `findEmailsByAccountIdIn` JPQL projection, and the batching
   `ActorResolutionService`/`ResolvedActors` pair — proven end-to-end against a real Postgres row this
   key cannot decrypt (`findByAccountId` throws, `ActorDirectory` still resolves the email). Wave 2
   (plan 02) wired it into `DocumentController`, `JiraSiteConfigController`, `ReleaseController` and
   `TemplateController` — all eight actor fields across six response DTOs now carry the resolved email,
   with `ReleaseController.list()` and `DocumentController.revisions()` each issuing exactly one batched
-  lookup regardless of row count. Backend 579→590 (11 new controller-slice tests). Wave 3 proves it
-  across the seam and ends at a human checkpoint. The load-bearing fact, confirmed by pattern mapping
-  rather than inferred: decryption fires because `JiraCredentialEntity.token` carries
+  lookup regardless of row count. Backend 579→590 (11 new controller-slice tests). Wave 3 (plan 03)
+  crossed the seam: `ActorDisplaySeamIT` drives the real `ReleaseController`/`DocumentController` beans
+  against a Postgres row whose ciphertext the active key cannot decrypt, with a mutation check
+  confirming the tests fail if the adapter is reverted to entity hydration; two new ArchUnit rules
+  (`theWebAdapterCannotReachTheTokenBearingCredentialPort`, `actorResolutionResolvesThroughActorDirectoryOnly`)
+  lock the display path out of `JiraCredentialRepository`, each proven non-vacuous by hand. Backend
+  590→597 (5 seam + 2 arch tests). The plan's human checkpoint (Task 3, pre-existing records display
+  correctly) was **approved verbatim ("approved")** — no per-step observations were volunteered or
+  recorded; see `05.3-03-SUMMARY.md`'s "Checkpoint Evidence" section for the explicit distinction from
+  05.1's "asserted, not observed" gate. The load-bearing fact, confirmed by pattern mapping rather than
+  inferred: decryption fires because `JiraCredentialEntity.token` carries
   `@Convert(converter = EncryptedTokenConverter.class)`, so the risk attaches to the entity **type** —
   any query returning that type can throw on a superseded key, and only a scalar projection avoids it.
 
@@ -119,10 +128,10 @@ replaced entirely by **sprint** (brings Jira's Agile API into scope, reversing
 part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
 names, table widening, and frontend tests moved to `frontend/tests/`.
 
-Status: Executing Phase 05.3 — plan 02 complete (2/3)
-Last activity: 2026-08-12 -- Phase 05.3 plan 02 executed (3/3 tasks); backend 590, frontend 210
+Status: Phase 05.3 COMPLETE (3/3). Phase 05.4 (unplanned) next.
+Last activity: 2026-08-13 -- Phase 05.3 plan 03 executed (3/3 tasks, checkpoint approved); backend 597, frontend 210
 
-Progress: [██████████] 95%
+Progress: [██████████] 96%
 
 ## Performance Metrics
 
@@ -150,6 +159,7 @@ Progress: [██████████] 95%
 | Phase 01 P07 | 100 | 3 tasks | 22 files |
 | Phase 05.3 P01 | 4min | 3 tasks | 7 files |
 | Phase 05.3 P02 | 25min | 3 tasks | 10 files |
+| Phase 05.3 P03 | ~6min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -240,6 +250,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-12T13:21:17.366Z
-Stopped at: Completed 05.3-02-PLAN.md
+Last session: 2026-08-13T00:00:00.000Z
+Stopped at: Completed 05.3-03-PLAN.md — Phase 05.3 COMPLETE (3/3)
 Resume file: None

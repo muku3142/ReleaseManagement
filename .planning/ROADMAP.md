@@ -19,7 +19,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 5: Document Generation** - Generate, preview, and export release notes, runbooks, and approval documents as immutable snapshots (completed 2026-08-11)
 - [x] **Phase 5.1: Per-Template Logo Sizing** - Make the cover logo's rendered size a per-template setting and close the DOCX cover-logo parity defect (INSERTED, completed 2026-08-12)
 - [x] **Phase 5.2: Release Ticket Selection** - Hide already-added tickets while assembling, and add tickets from the release page itself (INSERTED, completed 2026-08-12)
-- [ ] **Phase 5.3: Actor Identity Display** - Show a person's email instead of an opaque Jira account id, resolved at read time so existing history displays correctly (INSERTED)
+- [x] **Phase 5.3: Actor Identity Display** - Show a person's email instead of an opaque Jira account id, resolved at read time so existing history displays correctly (INSERTED, completed 2026-08-13)
 - [ ] **Phase 5.4: Template Selection At Generation Time** - Choose which template produces a document when generating, instead of relying on whichever template is active (INSERTED)
 - [ ] **Phase 6: Azure DevOps Enrichment** - Surface linked commits/PRs per ticket, degrading gracefully when absent, with tracked-expiry credentials
 - [ ] **Phase 7: Promotion Tracking & Audit Trail** - Promote releases through the fixed environment ladder with a complete, append-only history
@@ -313,7 +313,7 @@ Plans:
 - [x] 05.3-02 — Wire resolution into the four controllers that map actor-bearing responses, batched so a list does not issue a query per row — DOC-07
 
 **Wave 3** *(blocked on Wave 2 completion — NOT autonomous, ends at a human checkpoint)*
-- [ ] 05.3-03 — Prove the central claim across the seam: with an undecryptable credential row present, the screens still render — AUTH-02, DOC-07
+- [x] 05.3-03 — Prove the central claim across the seam: with an undecryptable credential row present, the screens still render — AUTH-02, DOC-07
 
 ### Phase 05.4: Template Selection At Generation Time (INSERTED)
 
@@ -403,7 +403,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 5. Document Generation | 13/13 | Complete   | 2026-08-11 |
 | 5.1 Per-Template Logo Sizing | 4/4 | Complete   | 2026-08-12 |
 | 5.2 Release Ticket Selection | 3/3 | Complete   | 2026-08-12 |
-| 5.3 Actor Identity Display | 2/3 | In Progress|  |
+| 5.3 Actor Identity Display | 3/3 | Complete   | 2026-08-13 |
 | 5.4 Template Selection At Generation Time | 0/TBD | Not planned | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
