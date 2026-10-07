@@ -221,7 +221,7 @@ class GenerateThenExportSeamTest {
         // DocumentExportService does in production - the same bytes generation was handed.
         when(snapshotRepository.findLogo(any())).thenReturn(Optional.ofNullable(logo));
 
-        return generationService.generate(release.id(), template.documentType(), "actor-1");
+        return generationService.generate(release.id(), template.documentType(), null, "actor-1");
     }
 
     private static Release openRelease() {
