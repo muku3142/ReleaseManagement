@@ -399,6 +399,10 @@ Plans:
   3. Release manager can tell the difference between a ticket that has no Azure DevOps link and one whose enrichment was attempted and failed
   4. Release manager configures an org-scoped Azure DevOps credential with a tracked expiry date and is warned before it expires
   5. Enriching a release containing many tickets completes in bounded time through parallel, cached lookups rather than one sequential call per ticket
+  6. *(added 2026-10-07, data for INSIGHT-03)* Each stored commit keeps its author date, and each Jira-backed item stores its status-category history (scoped, cached `/changelog`, status changes only) and its issue links, so Phase 8 can separate development churn from testing rework
+
+**Discussed 2026-10-07** alongside Phase 8. See `06-CONTEXT.md` (D-06-01..08). **Research and planning
+still wait on plan 02-04's live `dev-status` capture.**
 **Plans**: TBD
 **UI hint**: yes
 
@@ -413,6 +417,11 @@ Plans:
   3. Release manager can view the complete promotion history of a release, not just its current stage
   4. Release manager can view every document generated for a release, including superseded revisions
   5. Release and promotion history is append-only — a correction adds a new entry rather than editing or deleting an existing one
+
+**Constraints placed by Phase 8 (decided 2026-10-07, D-08-14):** only frozen releases can be promoted.
+Promotions are append-only rows with environment, `promoted_at`, `promoted_by`, outcome (SUCCESS/FAILED)
+and an optional note, indexed for `(environment, promoted_at)` filtering. The ladder order and the
+Production environment are defined. A `current_stage` column alone is insufficient.
 **Plans**: TBD
 **UI hint**: yes
 
@@ -439,7 +448,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 ### Phase 8: Release Insights Dashboard
 **Goal**: Release manager opens one screen and sees what Jira structurally cannot answer — which releases have outstanding paperwork, where each sits on the environment ladder, what went to each environment and when, and how long releases actually take
 **Depends on**: Phase 7 (promotion and ladder data), Phase 6 (enrichment coverage), Phase 5 (documentation readiness)
-**Requirements**: AUDIT-04, INSIGHT-01, INSIGHT-02
+**Requirements**: AUDIT-04, INSIGHT-01, INSIGHT-02, INSIGHT-03
 **Plans**: TBD
 **UI hint**: yes
 
@@ -471,7 +480,10 @@ been reworked once Phase 7 landed.
 3. Release manager can answer "what went to Production, and when" from one screen, filtered by environment and date range, without opening each release (`AUDIT-04`)
 4. Release manager sees how long releases take through their own lifecycle — created to frozen, frozen to production — computed from timestamps this system owns (`INSIGHT-01`)
 5. Release manager sees each release's composition: ticket count, manual versus ticket-backed split, and what share of tickets carry linked Azure DevOps commits or pull requests (`INSIGHT-02`)
-6. Every figure on the dashboard is derived from this system's own database — no new Jira integration surface, and specifically no Agile board/burndown/story-point reads beyond the sprint listing Phase 2 already uses
+6. Every figure on the dashboard is derived from this system's own database — no new Jira integration surface, and specifically no Agile board/burndown/story-point reads beyond the sprint listing Phase 2 already uses *(amended 2026-10-07: Phase 6 adds a scoped, cached `/changelog` read for status history, captured at refresh time, never at render time)*
+7. *(added 2026-10-07, INSIGHT-03)* Release manager can distinguish development problems (commits needed to reach first Done) from testing problems (reopens after Done, commits after first Done, caused-by bugs), per ticket and summarised per release
+
+**Discussed 2026-10-07.** See `08-CONTEXT.md` (D-08-01..14).
 
 **Scope notes:**
 - **This phase must not rebuild Jira's reports.** `PROJECT.md:41` is still binding: no velocity, no Jira

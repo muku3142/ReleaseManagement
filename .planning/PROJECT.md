@@ -42,6 +42,17 @@ Given a set of Jira tickets, produce accurate and consistent release documentati
 
   > **Partially reversed 2026-08-04.** The *reports* stay out of scope — that reasoning holds. But the **Agile API is now in scope**, because Phase 2 filters candidate tickets by **sprint**: releases here are scoped by sprint, not by fix version, so `GET /rest/agile/1.0/board` and `/board/{id}/sprint` are read to populate the sprint picker (`JiraProjectAdapter.listSprints`). Only board and sprint *listing* is used — no burndown, no story points, no `/changelog`. Fix-version filtering was removed in the same change. Cost incurred: one extra undocumented-stability surface (the Agile API is versioned and documented, unlike `dev-status`) and the two-call board→sprint hop, since Jira does not expose sprints per project directly.
 
+  > **`/changelog` partially reversed 2026-10-07 (INSIGHT-03).** The user wants to tell development
+  > problems (many commits before first Done) apart from testing problems (reopened after Done). Jira's
+  > resolution date cannot do that: it is overwritten on re-resolution, so reopen-window commits look
+  > like development commits. The paginated `/changelog` is therefore read under tight limits:
+  > - only for tickets that belong to a release;
+  > - only on refresh, and only when the ticket's `updated` time has changed;
+  > - only the status changes are stored.
+  >
+  > It feeds per-ticket first-Done time and reopen count, combined with Azure DevOps commit dates. The
+  > *reports* stay out of scope: no velocity, no Jira cycle time, no burndown.
+
 ## Context
 
 **Problem being replaced.** Today the release manager does this work by hand in Jira: hand-creating release versions, chasing which tickets are actually in a release, and writing release notes and deployment instructions manually. It is slow, inconsistent between releases, and leaves a weak audit trail.

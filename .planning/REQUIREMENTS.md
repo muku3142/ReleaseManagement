@@ -87,6 +87,7 @@ because Jira does not know when a release was frozen or deployed here.
 
 - [ ] **INSIGHT-01**: Release manager can see how long releases take through their own lifecycle — created to frozen, and frozen to production — computed from timestamps this system already owns, so slow releases are visible without manual bookkeeping
 - [ ] **INSIGHT-02**: Release manager can see each release's composition on one screen — ticket count, manual versus ticket-backed split, and what share of tickets carry linked Azure DevOps commits or pull requests — so gaps in traceability are visible before the release ships
+- [ ] **INSIGHT-03**: Release manager can see, per ticket and summarised per release, how many commits it took to reach Done (development churn) separately from how often it was reopened after Done and the commits made after first Done (testing rework), plus the bugs Jira-linked to it as caused-by — so development problems and testing problems are distinguishable. Done means Jira status category Done; history comes from a scoped, cached read of the ticket's status changes (`/changelog`), not a velocity or cycle-time report (added 2026-10-07)
 
 ### Cross-cutting UX
 
@@ -210,11 +211,15 @@ Which phases cover which requirements. Populated during roadmap creation.
 | AUDIT-01 | Phase 7 | Pending |
 | AUDIT-02 | Phase 7 | Pending |
 | AUDIT-03 | Phase 7 | Pending |
-| AUDIT-04 | Phase 7 | Pending |
+| AUDIT-04 | Phase 8 | Pending |
+| INSIGHT-01 | Phase 8 | Pending |
+| INSIGHT-02 | Phase 8 | Pending |
+| INSIGHT-03 | Phase 8 (data captured in Phase 6) | Pending |
 | UX-01 | Phase 5 (resolved) | Deferred to v2 |
 
 **Coverage:**
 - v1 requirements: 47 total (AUTH 4 + JIRA 6 + REL 6 + TMPL 8 + DOC 9 + ADO 5 + DEPL 4 + AUDIT 4 + UX 1) — was 40; added 2026-07-31: TMPL-08/TMPL-09/DOC-08 (document chrome), REL-08 (manual release items), AUDIT-04 (cross-release deployment history), UX-01 (drag-and-drop). Plus DOC-09 (cross-release documentation readiness). Analytics (ANLY-01..06) was raised and then DROPPED the same day — Jira ships those reports; this tool must answer what Jira cannot.
+- 2026-10-07: INSIGHT-03 added (commits-to-done vs reopen rework), growing v1 to 50 with INSIGHT-01/02; AUDIT-04 remapped to Phase 8 per the Phase 8 ROADMAP note; INSIGHT-01..03 traceability rows were missing and are now added.
 - Mapped to phases: 47/47 ✓ (UX-01 resolved to v2 in Phase 5 — see the note below)
 - Unmapped: 0 ✓
 
