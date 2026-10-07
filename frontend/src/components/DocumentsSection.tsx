@@ -10,7 +10,14 @@ import {
   type DocumentReadinessState,
   type DocumentRevision,
 } from '../api/documents';
-import { DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS, type DocumentType } from '../api/templates';
+import {
+  DOCUMENT_TYPES,
+  DOCUMENT_TYPE_LABELS,
+  templatesOfType,
+  useTemplates,
+  type DocumentType,
+  type TemplateSummary,
+} from '../api/templates';
 import { ReadinessPill } from './ReadinessPill';
 import { ExportButtons, Spinner } from './ExportButtons';
 
@@ -47,6 +54,11 @@ export function DocumentsSection({ releaseId, releaseName, version }: DocumentsS
 
 const GENERATING_LABEL = 'Generating…';
 
+function templateOptionLabel(t: TemplateSummary): string {
+  const tags = [t.myDefault && 'my default', t.active && 'active'].filter(Boolean);
+  return tags.length > 0 ? `${t.name} (${tags.join(', ')})` : t.name;
+}
+
 type DocumentRowProps = {
   releaseId: string;
   releaseName: string;
@@ -63,6 +75,15 @@ function DocumentRow({ releaseId, releaseName, version, documentType, readinessS
   const revisions = useDocumentRevisions(releaseId, documentType);
   const generateMutation = useGenerateDocument();
   const [historyOpen, setHistoryOpen] = useState(false);
+  const templates = useTemplates();
+  const options = templatesOfType(templates.data?.templates ?? [], documentType);
+  const [chosenId, setChosenId] = useState<string | undefined>(undefined);
+  // D-05.4-03: preselect in the order the server resolves - my default, then the global active template.
+  const preselected = options.find((t) => t.myDefault) ?? options.find((t) => t.active);
+  const selectedId = options.some((t) => t.id === chosenId) ? chosenId : preselected?.id;
+  // With neither a default nor an active template the user must pick (D-05.4-03). While the list is
+  // still loading or failed, Generate stays usable and the server resolves the template itself.
+  const mustPick = templates.isSuccess && selectedId === undefined;
 
   const revisionList = revisions.data?.revisions ?? [];
   const hasRevisions = revisionList.length > 0;
@@ -111,21 +132,41 @@ function DocumentRow({ releaseId, releaseName, version, documentType, readinessS
         )}
 
         {readinessState !== 'NO_TEMPLATE' && (
-          <button
-            type="button"
-            onClick={() => generateMutation.mutate({ releaseId, documentType })}
-            disabled={generateBusy}
-            className={
-              hasRevisions
-                ? readinessState === 'STALE'
-                  ? 'flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50'
-                  : 'flex items-center gap-2 rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50'
-                : 'flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50'
-            }
-          >
-            {generateBusy && <Spinner />}
-            {generateBusy ? GENERATING_LABEL : `${hasRevisions ? 'Regenerate' : 'Generate'} ${typeLabel}`}
-          </button>
+          <>
+            <select
+              aria-label={`${typeLabel} template`}
+              value={selectedId ?? ''}
+              onChange={(e) => setChosenId(e.target.value)}
+              disabled={generateBusy}
+              className="rounded border border-gray-300 px-2 py-2 text-sm text-gray-700 disabled:opacity-50"
+            >
+              {selectedId === undefined && (
+                <option value="" disabled>
+                  Choose a template…
+                </option>
+              )}
+              {options.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {templateOptionLabel(t)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => generateMutation.mutate({ releaseId, documentType, templateId: selectedId })}
+              disabled={generateBusy || mustPick}
+              className={
+                hasRevisions
+                  ? readinessState === 'STALE'
+                    ? 'flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50'
+                    : 'flex items-center gap-2 rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 disabled:opacity-50'
+                  : 'flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50'
+              }
+            >
+              {generateBusy && <Spinner />}
+              {generateBusy ? GENERATING_LABEL : `${hasRevisions ? 'Regenerate' : 'Generate'} ${typeLabel}`}
+            </button>
+          </>
         )}
 
         {hasRevisions && (
@@ -226,7 +267,7 @@ function RevisionRow({ releaseId, releaseName, version, documentType, revision, 
       <p>
         {`Revision ${revision.revision} `}
         {revision.latest ? '(latest)' : '(superseded)'}
-        {` · generated ${new Date(revision.generatedAt).toLocaleString()} by ${revision.generatedBy}`}
+        {` · generated ${new Date(revision.generatedAt).toLocaleString()} by ${revision.generatedBy} · template ${revision.templateName}`}
       </p>
       <div className="mt-1 flex flex-wrap items-center gap-2">
         <DocumentViewLink

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocumentsSection } from '../../src/components/DocumentsSection';
 import type { DocumentReadinessState, DocumentRevision } from '../../src/api/documents';
+import type { TemplateSummary } from '../../src/api/templates';
 
 type LinkProps = {
   children?: ReactNode;
@@ -73,7 +74,27 @@ function generatedDocument(documentType: DocType, revision = 1) {
   };
 }
 
+function tpl(id: string, documentType: DocType, flags: { active?: boolean; myDefault?: boolean } = {}): TemplateSummary {
+  return {
+    id,
+    name: `Template ${id}`,
+    documentType,
+    active: flags.active ?? false,
+    myDefault: flags.myDefault ?? false,
+    hasLogo: false,
+    warningCount: 0,
+    updatedAt: '2026-08-01T00:00:00Z',
+  };
+}
+
+const DEFAULT_TEMPLATES: TemplateSummary[] = [
+  tpl('rn-active', 'RELEASE_NOTES', { active: true }),
+  tpl('rb-active', 'RUNBOOK', { active: true }),
+  tpl('ap-active', 'APPROVAL', { active: true }),
+];
+
 type Fixture = {
+  templates?: TemplateSummary[];
   readiness?: Partial<Record<DocType, DocumentReadinessState>>;
   revisions?: Partial<Record<DocType, DocumentRevision[]>>;
   generateStatus?: Partial<Record<DocType, () => Response>>;
@@ -89,6 +110,10 @@ function mockFetch(fixture: Fixture) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = typeof input === 'string' ? input : input.toString();
     const method = (init?.method ?? 'GET').toUpperCase();
+
+    if (url === '/api/templates') {
+      return json(200, { templates: fixture.templates ?? DEFAULT_TEMPLATES });
+    }
 
     if (url.startsWith('/api/documents/readiness')) {
       const entries = (Object.keys(readiness) as DocType[]).map((type) => ({
@@ -327,6 +352,121 @@ describe('DocumentsSection', () => {
 
     expect(releaseNotesRow.querySelector('[role="alert"][data-reason="NO_TEMPLATE"]')).not.toBeNull();
     expect(runbookRow.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  function pickerFor(row: HTMLElement): HTMLSelectElement {
+    return row.querySelector('select[aria-label="Release Notes template"]') as HTMLSelectElement;
+  }
+
+  function postBodies(): unknown[] {
+    return vi
+      .mocked(globalThis.fetch)
+      .mock.calls.filter(([, init]) => (init?.method ?? 'GET').toUpperCase() === 'POST')
+      .map(([, init]) => init?.body);
+  }
+
+  it('pickerListsOnlyTemplatesOfTheRowsType', async () => {
+    mockFetch({
+      readiness: { RELEASE_NOTES: 'NOT_GENERATED' },
+      templates: [
+        tpl('rn-a', 'RELEASE_NOTES', { active: true }),
+        tpl('rn-b', 'RELEASE_NOTES'),
+        tpl('rb-a', 'RUNBOOK', { active: true }),
+      ],
+    });
+    await renderSection();
+
+    const values = [...pickerFor(rowFor('Release Notes')).options].map((o) => o.value);
+    expect(values).toEqual(['rn-a', 'rn-b']);
+  });
+
+  it('pickerPreselectsMyDefaultOverTheActiveTemplate', async () => {
+    mockFetch({
+      readiness: { RELEASE_NOTES: 'NOT_GENERATED' },
+      templates: [tpl('rn-a', 'RELEASE_NOTES', { active: true }), tpl('rn-b', 'RELEASE_NOTES', { myDefault: true })],
+    });
+    await renderSection();
+
+    expect(pickerFor(rowFor('Release Notes')).value).toBe('rn-b');
+  });
+
+  it('pickerPreselectsTheActiveTemplateWithoutAPersonalDefault', async () => {
+    mockFetch({
+      readiness: { RELEASE_NOTES: 'NOT_GENERATED' },
+      templates: [tpl('rn-a', 'RELEASE_NOTES', { active: true }), tpl('rn-b', 'RELEASE_NOTES')],
+    });
+    await renderSection();
+
+    expect(pickerFor(rowFor('Release Notes')).value).toBe('rn-a');
+  });
+
+  it('generateSendsThePreselectedTemplateId', async () => {
+    mockFetch({ readiness: { RELEASE_NOTES: 'NOT_GENERATED' }, templates: [tpl('rn-a', 'RELEASE_NOTES', { active: true })] });
+    await renderSection();
+
+    await act(async () => byText(rowFor('Release Notes'), 'Generate Release Notes').click());
+    await flush();
+
+    expect(postBodies()).toEqual(['{"templateId":"rn-a"}']);
+  });
+
+  it('withNoDefaultAndNoActiveTemplateTheUserMustPickBeforeGenerating', async () => {
+    mockFetch({
+      readiness: { RELEASE_NOTES: 'NOT_GENERATED' },
+      templates: [tpl('rn-a', 'RELEASE_NOTES'), tpl('rn-b', 'RELEASE_NOTES')],
+    });
+    await renderSection();
+
+    const row = rowFor('Release Notes');
+    const select = pickerFor(row);
+    expect(select.value).toBe('');
+    expect(select.options[0].textContent).toBe('Choose a template…');
+    expect(select.options[0].disabled).toBe(true);
+    expect(byText(row, 'Generate Release Notes').disabled).toBe(true);
+
+    await act(async () => {
+      select.value = 'rn-b';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    expect(byText(row, 'Generate Release Notes').disabled).toBe(false);
+    await act(async () => byText(row, 'Generate Release Notes').click());
+    await flush();
+    expect(postBodies()).toEqual(['{"templateId":"rn-b"}']);
+  });
+
+  it('pickerIsDisabledWhileGenerating', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = typeof input === 'string' ? input : input.toString();
+      if (url === '/api/templates') return json(200, { templates: DEFAULT_TEMPLATES });
+      if (url.startsWith('/api/documents/readiness')) {
+        return json(200, { entries: [{ releaseId: 'r1', documentType: 'RELEASE_NOTES', state: 'NOT_GENERATED' }] });
+      }
+      if (url.endsWith('/revisions')) return json(200, { revisions: [] });
+      if ((init?.method ?? 'GET').toUpperCase() === 'POST') return new Promise<Response>(() => {});
+      return json(404, { status: 404, reason: 'UNKNOWN' });
+    });
+    await renderSection();
+
+    const row = rowFor('Release Notes');
+    await act(async () => byText(row, 'Generate Release Notes').click());
+    await flush();
+
+    expect(pickerFor(row).disabled).toBe(true);
+  });
+
+  it('revisionHistoryShowsTheProducingTemplateName', async () => {
+    mockFetch({
+      readiness: { RELEASE_NOTES: 'UP_TO_DATE' },
+      revisions: { RELEASE_NOTES: [rev(1, true, '2026-08-05T00:00:00Z', 'rm@acme.com', 'Standard')] },
+    });
+    await renderSection();
+
+    const row = rowFor('Release Notes');
+    const disclosure = [...row.querySelectorAll('button')].find((b) => b.getAttribute('aria-expanded') !== null)!;
+    await act(async () => disclosure.click());
+
+    expect(row.querySelector('ul li')!.textContent).toContain('template Standard');
   });
 
   it('exportPdfAndDocxCallTheMutationWithTheRightFormat', async () => {
