@@ -15,6 +15,7 @@ const RELEASE_NOTES_ACTIVE = {
   name: 'Standard release notes',
   documentType: 'RELEASE_NOTES',
   active: true,
+  myDefault: false,
   hasLogo: false,
   warningCount: 0,
   updatedAt: '2026-08-09T00:00:00Z',
@@ -25,8 +26,20 @@ const APPROVAL_WITH_WARNINGS = {
   name: 'Change approval',
   documentType: 'APPROVAL',
   active: false,
+  myDefault: false,
   hasLogo: false,
   warningCount: 2,
+  updatedAt: '2026-08-09T00:00:00Z',
+};
+
+const RELEASE_NOTES_MY_DEFAULT = {
+  id: 't3',
+  name: 'My release notes',
+  documentType: 'RELEASE_NOTES',
+  active: false,
+  myDefault: true,
+  hasLogo: false,
+  warningCount: 0,
   updatedAt: '2026-08-09T00:00:00Z',
 };
 
@@ -123,6 +136,66 @@ describe('TemplatesRoute', () => {
     const pill = [...container.querySelectorAll('span')].find((s) => s.textContent === 'Active');
     expect(pill).toBeDefined();
     expect(pill!.className).toContain('bg-gray-800');
+  });
+
+  it('shows a My default badge distinct from Active, only on the myDefault row', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      json(200, { templates: [RELEASE_NOTES_ACTIVE, RELEASE_NOTES_MY_DEFAULT] }),
+    );
+
+    await renderRoute();
+
+    const spans = [...container.querySelectorAll('span')];
+    const mine = spans.filter((s) => s.textContent === 'My default');
+    expect(mine).toHaveLength(1);
+    expect(mine[0].className).not.toContain('bg-gray-800');
+    expect(spans.filter((s) => s.textContent === 'Active')).toHaveLength(1);
+  });
+
+  function stubMyDefaultCalls() {
+    return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/my-default')) return json(200, { ...RELEASE_NOTES_MY_DEFAULT });
+      return json(200, { templates: [RELEASE_NOTES_ACTIVE, RELEASE_NOTES_MY_DEFAULT] });
+    });
+  }
+
+  it('Set as my default issues PUT to /my-default', async () => {
+    const fetchMock = stubMyDefaultCalls();
+
+    await renderRoute();
+    await act(async () => byText('Set as my default').click());
+
+    const call = fetchMock.mock.calls.find((c) => String(c[0]) === '/api/templates/t1/my-default');
+    expect(call).toBeDefined();
+    expect((call![1] as RequestInit).method).toBe('PUT');
+  });
+
+  it('Clear my default replaces Set on the myDefault row and issues DELETE', async () => {
+    const fetchMock = stubMyDefaultCalls();
+
+    await renderRoute();
+    expect([...container.querySelectorAll('button')].filter((b) => b.textContent === 'Clear my default')).toHaveLength(1);
+    expect([...container.querySelectorAll('button')].filter((b) => b.textContent === 'Set as my default')).toHaveLength(1);
+    await act(async () => byText('Clear my default').click());
+
+    const call = fetchMock.mock.calls.find((c) => String(c[0]) === '/api/templates/t3/my-default');
+    expect(call).toBeDefined();
+    expect((call![1] as RequestInit).method).toBe('DELETE');
+  });
+
+  it('renders the action error when setting a default fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+      String(input).endsWith('/my-default')
+        ? json(404, { status: 404, reason: 'TEMPLATE_NOT_FOUND' })
+        : json(200, { templates: [RELEASE_NOTES_ACTIVE] }),
+    );
+
+    await renderRoute();
+    await act(async () => byText('Set as my default').click());
+    await flush();
+
+    expect(container.querySelector('[role="alert"][data-reason="TEMPLATE_NOT_FOUND"]')).not.toBeNull();
   });
 
   it('renders the unresolved-placeholder warning dot only for a template with warningCount > 0', async () => {
