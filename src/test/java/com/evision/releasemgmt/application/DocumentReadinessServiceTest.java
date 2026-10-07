@@ -11,12 +11,13 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -34,15 +35,15 @@ class DocumentReadinessServiceTest {
             new DocumentReadinessService(releaseRepository, templateRepository, snapshotRepository);
 
     @Test
-    void noActiveTemplateWinsRegardlessOfWhetherASnapshotExists() {
+    void noTemplateWinsRegardlessOfWhetherASnapshotExists() {
         assertThat(service.state(ReleaseStatus.OPEN, null, null, false, T0))
-                .isEqualTo(DocumentReadinessState.NO_ACTIVE_TEMPLATE);
+                .isEqualTo(DocumentReadinessState.NO_TEMPLATE);
         assertThat(service.state(ReleaseStatus.OPEN, null, null, false, null))
-                .isEqualTo(DocumentReadinessState.NO_ACTIVE_TEMPLATE);
+                .isEqualTo(DocumentReadinessState.NO_TEMPLATE);
     }
 
     @Test
-    void activeTemplateWithNoSnapshotIsNotGenerated() {
+    void templateWithNoSnapshotIsNotGenerated() {
         assertThat(service.state(ReleaseStatus.OPEN, null, null, true, null))
                 .isEqualTo(DocumentReadinessState.NOT_GENERATED);
     }
@@ -93,7 +94,7 @@ class DocumentReadinessServiceTest {
         ReleaseSummary release1 = summary(UUID.randomUUID(), ReleaseStatus.OPEN);
         ReleaseSummary release2 = summary(UUID.randomUUID(), ReleaseStatus.OPEN);
         when(releaseRepository.search("")).thenReturn(List.of(release1, release2));
-        when(templateRepository.findActive(any())).thenReturn(Optional.empty());
+        when(templateRepository.existsByDocumentType(any())).thenReturn(false);
         when(snapshotRepository.findLatestForAllReleases()).thenReturn(List.of());
 
         List<DocumentReadinessService.ReadinessEntry> entries = service.all();
@@ -101,7 +102,25 @@ class DocumentReadinessServiceTest {
         assertThat(entries).hasSize(2 * TemplateDocumentType.values().length);
         verify(releaseRepository, times(1)).search("");
         verify(snapshotRepository, times(1)).findLatestForAllReleases();
-        verify(templateRepository, times(3)).findActive(any());
+        verify(templateRepository, times(3)).existsByDocumentType(any());
+        verify(templateRepository, never()).findActive(any());
+    }
+
+    @Test
+    void allBlocksOnlyTheTypesThatHaveNoTemplateAtAll() {
+        UUID releaseId = UUID.randomUUID();
+        when(releaseRepository.search("")).thenReturn(List.of(summary(releaseId, ReleaseStatus.OPEN)));
+        when(templateRepository.existsByDocumentType(TemplateDocumentType.RELEASE_NOTES)).thenReturn(true);
+        when(snapshotRepository.findLatestForAllReleases()).thenReturn(List.of());
+
+        List<DocumentReadinessService.ReadinessEntry> entries = service.all();
+
+        assertThat(entries).extracting(DocumentReadinessService.ReadinessEntry::documentType,
+                        DocumentReadinessService.ReadinessEntry::state)
+                .containsExactlyInAnyOrder(
+                        tuple(TemplateDocumentType.RELEASE_NOTES, DocumentReadinessState.NOT_GENERATED),
+                        tuple(TemplateDocumentType.RUNBOOK, DocumentReadinessState.NO_TEMPLATE),
+                        tuple(TemplateDocumentType.APPROVAL, DocumentReadinessState.NO_TEMPLATE));
     }
 
     private static ReleaseSummary summary(UUID id, ReleaseStatus status) {

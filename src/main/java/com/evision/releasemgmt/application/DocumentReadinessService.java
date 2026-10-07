@@ -35,9 +35,9 @@ public class DocumentReadinessService {
 
     /** Pure comparison - no port calls. The caller supplies what it has already loaded. */
     public DocumentReadinessState state(ReleaseStatus status, Instant lastRefreshedAt, Instant itemsChangedAt,
-                                        boolean hasActiveTemplate, Instant generatedAtOrNull) {
-        if (!hasActiveTemplate) {
-            return DocumentReadinessState.NO_ACTIVE_TEMPLATE;
+                                        boolean hasTemplate, Instant generatedAtOrNull) {
+        if (!hasTemplate) {
+            return DocumentReadinessState.NO_TEMPLATE;
         }
         if (generatedAtOrNull == null) {
             return DocumentReadinessState.NOT_GENERATED;
@@ -59,9 +59,11 @@ public class DocumentReadinessService {
     /** DOC-09: every (release, document type) pair, in one pass. */
     public List<ReadinessEntry> all() {
         List<ReleaseSummary> releases = releaseRepository.search("");
-        Map<TemplateDocumentType, Boolean> hasActiveTemplate = new HashMap<>();
+        // D-05.4-06: readiness must read the same for every viewer, so it cannot depend on the active
+        // template or per-user defaults.
+        Map<TemplateDocumentType, Boolean> hasTemplate = new HashMap<>();
         for (TemplateDocumentType type : TemplateDocumentType.values()) {
-            hasActiveTemplate.put(type, templateRepository.findActive(type).isPresent());
+            hasTemplate.put(type, templateRepository.existsByDocumentType(type));
         }
         Map<SnapshotKey, Instant> latestGeneratedAt = new HashMap<>();
         for (var snapshot : snapshotRepository.findLatestForAllReleases()) {
@@ -73,7 +75,7 @@ public class DocumentReadinessService {
             for (TemplateDocumentType type : TemplateDocumentType.values()) {
                 Instant generatedAt = latestGeneratedAt.get(new SnapshotKey(release.id(), type));
                 DocumentReadinessState state = state(release.status(), release.lastRefreshedAt(),
-                        release.itemsChangedAt(), hasActiveTemplate.get(type), generatedAt);
+                        release.itemsChangedAt(), hasTemplate.get(type), generatedAt);
                 entries.add(new ReadinessEntry(release.id(), type, state));
             }
         }
