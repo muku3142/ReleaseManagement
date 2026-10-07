@@ -320,7 +320,7 @@ Plans:
 **Goal**: The release manager chooses which template produces a document at the moment of generation, instead of the choice being implied by whichever template is currently active
 **Requirements**: DOC-01, DOC-07, TMPL-01
 **Depends on**: Phase 5 (document generation), Phase 05.3 (shares DocumentController)
-**Plans**: TBD (run /gsd-plan-phase 05.4 to break down)
+**Plans**: 7 plans
 **UI hint**: yes
 
 **Why this was inserted (requested 2026-08-12):** generation picks its template implicitly.
@@ -370,7 +370,23 @@ See `05.4-CONTEXT.md`.
 - Frontend surface: `DocumentsSection.tsx:87,107,116` (the Generate button and its three `NO_ACTIVE_TEMPLATE` branches), `api/documents.ts`, and a template list query filtered by document type
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 05.4 to break down)
+
+**Wave 1**
+- [ ] 05.4-01 — V7 `template_user_default` table (composite PK, FK ON DELETE CASCADE) and five port methods incl. per-type existence check — TMPL-01
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 05.4-02 — Rename NO_ACTIVE_TEMPLATE to NO_TEMPLATE end to end on the backend, readiness via existence check, two new D-05.4-02 rejection codes — DOC-01
+- [ ] 05.4-04 — `PUT/DELETE /api/templates/{id}/my-default` and per-requester `myDefault` on every template response — TMPL-01
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 05.4-03 — Generation resolves explicit pick, then my default, then active; optional request body; templateName on revisions — DOC-01, DOC-07
+- [ ] 05.4-05 — Templates screen: "Set as my default" / "Clear my default" and a distinct "My default" badge — TMPL-01
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 05.4-06 — Type-filtered picker with default-then-active preselection, NO_TEMPLATE on the frontend, reason messages, template name in history — DOC-01, DOC-07
+
+**Wave 5** *(blocked on Wave 4 completion — NOT autonomous, ends at a human checkpoint)*
+- [ ] 05.4-07 — Two-principal / cascade / provenance IT, full regression, human verify — DOC-01, DOC-07, TMPL-01
 
 ### Phase 6: Azure DevOps Enrichment
 **Goal**: Release manager sees each ticket's linked Azure DevOps commits and pull requests where available, with the tool degrading gracefully when a link is absent or enrichment fails, and credentials safely managed against the 2026 PAT retirement
