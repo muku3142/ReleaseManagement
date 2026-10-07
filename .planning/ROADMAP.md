@@ -379,8 +379,8 @@ Plans:
 - [x] 05.4-04 — `PUT/DELETE /api/templates/{id}/my-default` and per-requester `myDefault` on every template response — TMPL-01
 
 **Wave 3** *(blocked on Wave 2 completion)*
-- [ ] 05.4-03 — Generation resolves explicit pick, then my default, then active; optional request body; templateName on revisions — DOC-01, DOC-07
-- [ ] 05.4-05 — Templates screen: "Set as my default" / "Clear my default" and a distinct "My default" badge — TMPL-01
+- [x] 05.4-03 — Generation resolves explicit pick, then my default, then active; optional request body; templateName on revisions — DOC-01, DOC-07
+- [x] 05.4-05 — Templates screen: "Set as my default" / "Clear my default" and a distinct "My default" badge — TMPL-01
 
 **Wave 4** *(blocked on Wave 3 completion)*
 - [ ] 05.4-06 — Type-filtered picker with default-then-active preselection, NO_TEMPLATE on the frontend, reason messages, template name in history — DOC-01, DOC-07
@@ -440,7 +440,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 5.1 Per-Template Logo Sizing | 4/4 | Complete   | 2026-08-12 |
 | 5.2 Release Ticket Selection | 3/3 | Complete   | 2026-08-12 |
 | 5.3 Actor Identity Display | 3/3 | Complete   | 2026-08-13 |
-| 5.4 Template Selection At Generation Time | 3/7 | In Progress | - |
+| 5.4 Template Selection At Generation Time | 5/7 | In Progress | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
 | 8. Release Insights Dashboard | 0/TBD | Not started | - |
