@@ -1,6 +1,7 @@
 package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.web.dto.ChromeFieldsResponse;
+import com.evision.releasemgmt.adapters.web.dto.GenerateDocumentRequest;
 import com.evision.releasemgmt.adapters.web.dto.DocumentResponse;
 import com.evision.releasemgmt.adapters.web.dto.DocumentRevisionListResponse;
 import com.evision.releasemgmt.adapters.web.dto.DocumentRevisionResponse;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -53,11 +55,14 @@ public class DocumentController {
     @ResponseStatus(HttpStatus.CREATED)
     public DocumentResponse generate(@PathVariable UUID releaseId,
                                      @PathVariable TemplateDocumentType documentType,
+                                     @RequestBody(required = false) GenerateDocumentRequest request,
                                      Principal principal) {
         // Every /api/** path is authenticated() in SecurityConfig, so Spring Security guarantees a
-        // principal here. Generation takes no request body (D-05-01: nothing is prompted for at
-        // generation time).
-        return toResponse(service.generate(releaseId, documentType, principal.getName()));
+        // principal here. D-05.4-01 supersedes D-05-01 for the template choice only: the body is
+        // optional and, when absent, the server resolves the requester's default then the active
+        // template. The actor always comes from the principal, never from the body.
+        UUID templateId = request == null ? null : request.templateId();
+        return toResponse(service.generate(releaseId, documentType, templateId, principal.getName()));
     }
 
     @GetMapping
@@ -80,7 +85,7 @@ public class DocumentController {
                 all.stream().map(DocumentSnapshot::generatedBy).toArray(String[]::new));
         List<DocumentRevisionResponse> revisions = all.stream()
                 .map(s -> new DocumentRevisionResponse(s.revision(), s.revision() == latestRevision,
-                        s.generatedAt(), actors.display(s.generatedBy())))
+                        s.generatedAt(), actors.display(s.generatedBy()), s.templateName()))
                 .toList();
         return new DocumentRevisionListResponse(revisions);
     }
