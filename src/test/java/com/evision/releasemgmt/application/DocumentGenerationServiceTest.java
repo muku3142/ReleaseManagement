@@ -1,8 +1,10 @@
 package com.evision.releasemgmt.application;
 
 import com.evision.releasemgmt.adapters.render.MustacheFlexmarkRenderAdapter;
+import com.evision.releasemgmt.domain.document.ChosenTemplateNotFoundException;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
 import com.evision.releasemgmt.domain.document.NoTemplateException;
+import com.evision.releasemgmt.domain.document.TemplateTypeMismatchException;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
@@ -52,7 +54,7 @@ class DocumentGenerationServiceTest {
                 ChromeFields.empty());
         stubHappyPath(release, template, 1);
 
-        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, "actor-1");
+        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, null, "actor-1");
 
         String expectedMarkdown =
                 renderService.resolveText(template.body(), SampleReleaseView.instance(), "Body").output();
@@ -74,7 +76,7 @@ class DocumentGenerationServiceTest {
         when(snapshotRepository.findByRevision(release.id(), TemplateDocumentType.RELEASE_NOTES, 1))
                 .thenReturn(Optional.of(revisionOne));
 
-        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, "actor-2");
+        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, null, "actor-2");
 
         assertThat(snapshotCaptor().revision()).isEqualTo(2);
         assertThat(service.revision(release.id(), TemplateDocumentType.RELEASE_NOTES, 1).markdown())
@@ -87,7 +89,7 @@ class DocumentGenerationServiceTest {
         when(releaseRepository.findById(release.id())).thenReturn(Optional.of(release));
         when(templateRepository.findActive(TemplateDocumentType.RUNBOOK)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.generate(release.id(), TemplateDocumentType.RUNBOOK, "actor-1"))
+        assertThatThrownBy(() -> service.generate(release.id(), TemplateDocumentType.RUNBOOK, null, "actor-1"))
                 .isInstanceOf(NoTemplateException.class);
     }
 
@@ -96,7 +98,7 @@ class DocumentGenerationServiceTest {
         UUID unknownReleaseId = UUID.randomUUID();
         when(releaseRepository.findById(unknownReleaseId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.generate(unknownReleaseId, TemplateDocumentType.RELEASE_NOTES, "actor-1"))
+        assertThatThrownBy(() -> service.generate(unknownReleaseId, TemplateDocumentType.RELEASE_NOTES, null, "actor-1"))
                 .isInstanceOf(ReleaseNotFoundException.class);
     }
 
@@ -108,7 +110,7 @@ class DocumentGenerationServiceTest {
         Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body", templateChrome);
         stubHappyPath(release, template, 1);
 
-        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, "actor-1");
+        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, null, "actor-1");
 
         ChromeFields storedChrome = snapshotCaptor().chrome();
         assertThat(storedChrome.coverTitle()).isEqualTo("Version 2026.08");
@@ -129,7 +131,7 @@ class DocumentGenerationServiceTest {
         Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body", ChromeFields.empty());
         stubHappyPath(frozenRelease, template, 1);
 
-        service.generate(frozenRelease.id(), TemplateDocumentType.RELEASE_NOTES, "actor-1");
+        service.generate(frozenRelease.id(), TemplateDocumentType.RELEASE_NOTES, null, "actor-1");
 
         assertThat(snapshotCaptor().revision()).isEqualTo(1);
     }
@@ -151,7 +153,7 @@ class DocumentGenerationServiceTest {
         Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body", templateChrome);
         stubHappyPath(release, template, 1);
 
-        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, "actor-1");
+        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, null, "actor-1");
 
         assertThat(snapshotCaptor().chrome().coverTitle()).isEqualTo("Version 2026.08");
     }
@@ -165,7 +167,7 @@ class DocumentGenerationServiceTest {
                 ChromeFields.empty(), GroupingDimension.COMPONENT);
         stubHappyPath(release, componentGroupedTemplate, 1);
 
-        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, "actor-1");
+        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, null, "actor-1");
 
         verify(assembler).assemble(release, GroupingDimension.COMPONENT);
     }
@@ -183,9 +185,95 @@ class DocumentGenerationServiceTest {
                 templateRepository, snapshotRepository, assembler, boundBreachingRenderService);
 
         assertThatThrownBy(() -> serviceWithBoundBreach.generate(release.id(), TemplateDocumentType.RELEASE_NOTES,
-                "actor-1")).isInstanceOf(RenderBoundExceededException.class);
+                null, "actor-1")).isInstanceOf(RenderBoundExceededException.class);
 
         verify(snapshotRepository, never()).create(any(), any());
+    }
+
+    @Test
+    void explicitTemplateOfTheRightTypeIsUsedAndNoDefaultIsConsulted() {
+        Release release = openRelease();
+        Template chosen = namedTemplate("Chosen", TemplateDocumentType.RELEASE_NOTES);
+        stubHappyPath(release, chosen, 1);
+        when(templateRepository.findById(chosen.id())).thenReturn(Optional.of(chosen));
+
+        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, chosen.id(), "557058:user-a");
+
+        assertThat(snapshotCaptor().templateId()).isEqualTo(chosen.id());
+        assertThat(snapshotCaptor().templateName()).isEqualTo("Chosen");
+        verify(templateRepository, never()).findUserDefault(any(), any());
+        verify(templateRepository, never()).findActive(any());
+    }
+
+    @Test
+    void unknownExplicitTemplateIsRejectedWithoutFallbackOrSnapshot() {
+        Release release = openRelease();
+        UUID unknownId = UUID.randomUUID();
+        when(releaseRepository.findById(release.id())).thenReturn(Optional.of(release));
+        when(templateRepository.findById(unknownId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, unknownId,
+                "557058:user-a")).isInstanceOf(ChosenTemplateNotFoundException.class);
+
+        verify(templateRepository, never()).findUserDefault(any(), any());
+        verify(templateRepository, never()).findActive(any());
+        verify(snapshotRepository, never()).create(any(), any());
+    }
+
+    @Test
+    void explicitTemplateOfAnotherTypeIsRejectedWithoutSnapshot() {
+        Release release = openRelease();
+        Template runbook = namedTemplate("Runbook", TemplateDocumentType.RUNBOOK);
+        when(releaseRepository.findById(release.id())).thenReturn(Optional.of(release));
+        when(templateRepository.findById(runbook.id())).thenReturn(Optional.of(runbook));
+
+        assertThatThrownBy(() -> service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, runbook.id(),
+                "557058:user-a")).isInstanceOf(TemplateTypeMismatchException.class);
+
+        verify(templateRepository, never()).findActive(any());
+        verify(snapshotRepository, never()).create(any(), any());
+    }
+
+    @Test
+    void personalDefaultWinsOverTheActiveTemplate() {
+        Release release = openRelease();
+        Template personal = namedTemplate("Personal", TemplateDocumentType.RELEASE_NOTES);
+        stubHappyPath(release, personal, 1);
+        when(templateRepository.findUserDefault("557058:user-a", TemplateDocumentType.RELEASE_NOTES))
+                .thenReturn(Optional.of(personal));
+
+        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, null, "557058:user-a");
+
+        assertThat(snapshotCaptor().templateName()).isEqualTo("Personal");
+        assertThat(snapshotCaptor().templateId()).isEqualTo(personal.id());
+        verify(templateRepository, never()).findActive(any());
+    }
+
+    @Test
+    void withNoChoiceAndNoPersonalDefaultTheActiveTemplateIsUsed() {
+        Release release = openRelease();
+        Template active = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body", ChromeFields.empty());
+        stubHappyPath(release, active, 1);
+
+        service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, null, "557058:user-a");
+
+        assertThat(snapshotCaptor().templateId()).isEqualTo(active.id());
+        assertThat(snapshotCaptor().templateName()).isEqualTo("Standard notes");
+    }
+
+    @Test
+    void unknownReleaseWithAnExplicitTemplateStillThrowsReleaseNotFound() {
+        UUID unknownReleaseId = UUID.randomUUID();
+        when(releaseRepository.findById(unknownReleaseId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.generate(unknownReleaseId, TemplateDocumentType.RELEASE_NOTES,
+                UUID.randomUUID(), "557058:user-a")).isInstanceOf(ReleaseNotFoundException.class);
+    }
+
+    private static Template namedTemplate(String name, TemplateDocumentType documentType) {
+        Template base = activeTemplate(documentType, "Body", ChromeFields.empty());
+        return new Template(base.id(), name, documentType, base.body(), false, base.chrome(),
+                base.groupingDimension(), null, List.of(), base.createdAt(), "actor-0", base.updatedAt(), "actor-0");
     }
 
     private DocumentSnapshot snapshotCaptor() {

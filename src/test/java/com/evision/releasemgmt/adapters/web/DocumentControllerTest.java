@@ -8,9 +8,11 @@ import com.evision.releasemgmt.application.DocumentGenerationService;
 import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
+import com.evision.releasemgmt.domain.document.ChosenTemplateNotFoundException;
 import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
 import com.evision.releasemgmt.domain.document.NoTemplateException;
+import com.evision.releasemgmt.domain.document.TemplateTypeMismatchException;
 import com.evision.releasemgmt.domain.template.ChromeFields;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.LogoMetadata;
@@ -21,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -33,6 +36,7 @@ import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -86,7 +90,7 @@ class DocumentControllerTest {
         UUID releaseId = UUID.randomUUID();
         UUID templateId = UUID.randomUUID();
         DocumentSnapshot snapshot = snapshot(releaseId, TemplateDocumentType.RELEASE_NOTES, 1, templateId);
-        when(service.generate(eq(releaseId), eq(TemplateDocumentType.RELEASE_NOTES), any())).thenReturn(snapshot);
+        when(service.generate(eq(releaseId), eq(TemplateDocumentType.RELEASE_NOTES), any(), any())).thenReturn(snapshot);
         when(service.nextRevision(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(2);
         when(service.templateStillExists(templateId)).thenReturn(true);
         when(service.hasLogo(snapshot.id())).thenReturn(false);
@@ -100,13 +104,96 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$.templateDeleted").value(false))
                 .andExpect(jsonPath("$.hasLogo").value(false));
 
-        verify(service).generate(eq(releaseId), eq(TemplateDocumentType.RELEASE_NOTES), eq("557058:abc-123"));
+        verify(service).generate(eq(releaseId), eq(TemplateDocumentType.RELEASE_NOTES), isNull(), eq("557058:abc-123"));
+    }
+
+    private static final String GENERATE_URL = "/api/releases/{releaseId}/documents/{documentType}";
+
+    private void stubGenerateSuccess(UUID releaseId, UUID templateId) {
+        DocumentSnapshot snapshot = snapshot(releaseId, TemplateDocumentType.RELEASE_NOTES, 1, templateId);
+        when(service.generate(eq(releaseId), eq(TemplateDocumentType.RELEASE_NOTES), any(), any()))
+                .thenReturn(snapshot);
+        when(service.nextRevision(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(2);
+        when(service.templateStillExists(templateId)).thenReturn(true);
+        stubActors();
+    }
+
+    @Test
+    void postWithTemplateIdPassesItToTheService() throws Exception {
+        UUID releaseId = UUID.randomUUID();
+        UUID templateId = UUID.randomUUID();
+        stubGenerateSuccess(releaseId, templateId);
+
+        mockMvc.perform(post(GENERATE_URL, releaseId, "RELEASE_NOTES")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"templateId\":\"" + templateId + "\"}")
+                        .with(csrf()).with(authenticated()))
+                .andExpect(status().isCreated());
+
+        verify(service).generate(releaseId, TemplateDocumentType.RELEASE_NOTES, templateId, "557058:abc-123");
+    }
+
+    @Test
+    void unknownBodyFieldsCannotChangeTheActorOrTheDocumentType() throws Exception {
+        UUID releaseId = UUID.randomUUID();
+        UUID templateId = UUID.randomUUID();
+        stubGenerateSuccess(releaseId, templateId);
+
+        mockMvc.perform(post(GENERATE_URL, releaseId, "RELEASE_NOTES")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"templateId\":\"" + templateId
+                                + "\",\"accountId\":\"557058:someone-else\",\"documentType\":\"RUNBOOK\"}")
+                        .with(csrf()).with(authenticated()))
+                .andExpect(status().isCreated());
+
+        verify(service).generate(releaseId, TemplateDocumentType.RELEASE_NOTES, templateId, "557058:abc-123");
+    }
+
+    @Test
+    void postWithTemplateOfAnotherTypeReturns422TemplateTypeMismatch() throws Exception {
+        UUID releaseId = UUID.randomUUID();
+        when(service.generate(eq(releaseId), eq(TemplateDocumentType.RELEASE_NOTES), any(), any()))
+                .thenThrow(new TemplateTypeMismatchException());
+
+        mockMvc.perform(post(GENERATE_URL, releaseId, "RELEASE_NOTES")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"templateId\":\"" + UUID.randomUUID() + "\"}")
+                        .with(csrf()).with(authenticated()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.reason").value("TEMPLATE_TYPE_MISMATCH"));
+    }
+
+    @Test
+    void postWithUnknownTemplateReturns422ChosenTemplateNotFound() throws Exception {
+        UUID releaseId = UUID.randomUUID();
+        when(service.generate(eq(releaseId), eq(TemplateDocumentType.RELEASE_NOTES), any(), any()))
+                .thenThrow(new ChosenTemplateNotFoundException());
+
+        mockMvc.perform(post(GENERATE_URL, releaseId, "RELEASE_NOTES")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"templateId\":\"" + UUID.randomUUID() + "\"}")
+                        .with(csrf()).with(authenticated()))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.reason").value("CHOSEN_TEMPLATE_NOT_FOUND"));
+    }
+
+    @Test
+    void postWithMalformedTemplateIdReturns400AndNeverGenerates() throws Exception {
+        UUID releaseId = UUID.randomUUID();
+
+        mockMvc.perform(post(GENERATE_URL, releaseId, "RELEASE_NOTES")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"templateId\":\"not-a-uuid\"}")
+                        .with(csrf()).with(authenticated()))
+                .andExpect(status().isBadRequest());
+
+        verify(service, never()).generate(any(), any(), any(), any());
     }
 
     @Test
     void postWithNoTemplateReturns409WithReasonNoTemplate() throws Exception {
         UUID releaseId = UUID.randomUUID();
-        when(service.generate(eq(releaseId), eq(TemplateDocumentType.RELEASE_NOTES), any()))
+        when(service.generate(eq(releaseId), eq(TemplateDocumentType.RELEASE_NOTES), any(), any()))
                 .thenThrow(new NoTemplateException());
 
         mockMvc.perform(post("/api/releases/{releaseId}/documents/{documentType}", releaseId, "RELEASE_NOTES")
@@ -160,6 +247,7 @@ class DocumentControllerTest {
                         "RELEASE_NOTES").with(authenticated()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.revisions[0].revision").value(2))
+                .andExpect(jsonPath("$.revisions[0].templateName").value("Standard notes"))
                 .andExpect(jsonPath("$.revisions[0].latest").value(true))
                 .andExpect(jsonPath("$.revisions[1].revision").value(1))
                 .andExpect(jsonPath("$.revisions[1].latest").value(false));

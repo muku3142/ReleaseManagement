@@ -1,8 +1,10 @@
 package com.evision.releasemgmt.application;
 
+import com.evision.releasemgmt.domain.document.ChosenTemplateNotFoundException;
 import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
 import com.evision.releasemgmt.domain.document.NoTemplateException;
+import com.evision.releasemgmt.domain.document.TemplateTypeMismatchException;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.template.ChromeFields;
@@ -20,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+// D-05.4-03: the template is the explicit pick, the requester default or the global active one.
 // D-05-10: generation is explicit and per-document-type, never automatic - the release manager
 // triggers it, never a freeze or refresh side effect.
 @Service
@@ -42,13 +45,14 @@ public class DocumentGenerationService {
         this.renderService = renderService;
     }
 
-    public DocumentSnapshot generate(UUID releaseId, TemplateDocumentType documentType, String actor) {
+    public DocumentSnapshot generate(UUID releaseId, TemplateDocumentType documentType, UUID templateIdOrNull,
+                                     String actor) {
         // Deliberately no lifecycle guard here: generating final paperwork right after freezing is a
         // normal sequence (05-UI-SPEC screen 1), and D-05-09 makes "frozen + generated" the terminal
         // satisfied state. No Jira call happens here either - D-03-06 already materialised every
         // ticket, so this reads only the locally stored release.
         Release release = releaseRepository.findById(releaseId).orElseThrow(ReleaseNotFoundException::new);
-        Template template = templateRepository.findActive(documentType).orElseThrow(NoTemplateException::new);
+        Template template = resolveTemplate(documentType, templateIdOrNull, actor);
         // D-05-04/D-05-53: grouped by the dimension of the template that produced this document, so
         // the snapshot's grouping always stays self-consistent with its copied templateBody.
         ReleaseView view = assembler.assemble(release, template.groupingDimension());
@@ -84,6 +88,24 @@ public class DocumentGenerationService {
         DocumentSnapshot snapshot = DocumentSnapshot.create(releaseId, documentType, revision, markdown,
                 template.id(), template.name(), template.body(), resolvedChrome, actor, Instant.now());
         return snapshotRepository.create(snapshot, logo);
+    }
+
+    // D-05.4-03: explicit pick, then the requester's own default, then the global active template.
+    // actor is principal.getName(), the Jira accountId the defaults table is keyed by.
+    private Template resolveTemplate(TemplateDocumentType documentType, UUID templateIdOrNull, String actor) {
+        if (templateIdOrNull != null) {
+            Template chosen = templateRepository.findById(templateIdOrNull)
+                    .orElseThrow(ChosenTemplateNotFoundException::new);
+            // D-05.4-02: never trust the client's pick. A cross-type template would make the snapshot's
+            // own documentType, revision numbering and export filename dishonest.
+            if (chosen.documentType() != documentType) {
+                throw new TemplateTypeMismatchException();
+            }
+            return chosen;
+        }
+        return templateRepository.findUserDefault(actor, documentType)
+                .or(() -> templateRepository.findActive(documentType))
+                .orElseThrow(NoTemplateException::new);
     }
 
     public DocumentSnapshot latest(UUID releaseId, TemplateDocumentType documentType) {
