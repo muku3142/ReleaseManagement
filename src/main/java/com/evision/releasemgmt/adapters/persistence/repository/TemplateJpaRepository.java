@@ -15,4 +15,6 @@ public interface TemplateJpaRepository extends JpaRepository<TemplateEntity, UUI
     List<TemplateEntity> findByDocumentTypeOrderByNameAsc(TemplateDocumentType documentType);
 
     Optional<TemplateEntity> findByDocumentTypeAndActiveTrue(TemplateDocumentType documentType);
+
+    boolean existsByDocumentType(TemplateDocumentType documentType);
 }
