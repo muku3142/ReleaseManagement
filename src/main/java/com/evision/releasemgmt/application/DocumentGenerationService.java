@@ -2,7 +2,7 @@ package com.evision.releasemgmt.application;
 
 import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
-import com.evision.releasemgmt.domain.document.NoActiveTemplateException;
+import com.evision.releasemgmt.domain.document.NoTemplateException;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.template.ChromeFields;
@@ -48,7 +48,7 @@ public class DocumentGenerationService {
         // satisfied state. No Jira call happens here either - D-03-06 already materialised every
         // ticket, so this reads only the locally stored release.
         Release release = releaseRepository.findById(releaseId).orElseThrow(ReleaseNotFoundException::new);
-        Template template = templateRepository.findActive(documentType).orElseThrow(NoActiveTemplateException::new);
+        Template template = templateRepository.findActive(documentType).orElseThrow(NoTemplateException::new);
         // D-05-04/D-05-53: grouped by the dimension of the template that produced this document, so
         // the snapshot's grouping always stays self-consistent with its copied templateBody.
         ReleaseView view = assembler.assemble(release, template.groupingDimension());

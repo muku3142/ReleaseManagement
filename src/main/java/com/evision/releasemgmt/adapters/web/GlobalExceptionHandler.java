@@ -5,7 +5,9 @@ import com.evision.releasemgmt.application.JiraSiteConfigService.JiraSiteNotConf
 import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
 import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
 import com.evision.releasemgmt.domain.document.ExportFailedException;
-import com.evision.releasemgmt.domain.document.NoActiveTemplateException;
+import com.evision.releasemgmt.domain.document.ChosenTemplateNotFoundException;
+import com.evision.releasemgmt.domain.document.NoTemplateException;
+import com.evision.releasemgmt.domain.document.TemplateTypeMismatchException;
 import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
@@ -136,11 +138,25 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 "This document doesn't exist yet.", "DOCUMENT_NOT_FOUND");
     }
 
-    @ExceptionHandler(NoActiveTemplateException.class)
-    public ProblemDetail handleNoActiveTemplate(NoActiveTemplateException ex) {
-        return problem(HttpStatus.CONFLICT, "No active template",
-                "No active template exists for this document type. Activate one from Templates "
-                        + "before generating.", "NO_ACTIVE_TEMPLATE");
+    @ExceptionHandler(NoTemplateException.class)
+    public ProblemDetail handleNoTemplate(NoTemplateException ex) {
+        return problem(HttpStatus.CONFLICT, "No template",
+                "No template is available for this document type. Create one from Templates, or choose "
+                        + "one, before generating.", "NO_TEMPLATE");
+    }
+
+    @ExceptionHandler(TemplateTypeMismatchException.class)
+    public ProblemDetail handleTemplateTypeMismatch(TemplateTypeMismatchException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Template type mismatch",
+                "The chosen template is for a different document type. Choose a template of this "
+                        + "document type.", "TEMPLATE_TYPE_MISMATCH");
+    }
+
+    @ExceptionHandler(ChosenTemplateNotFoundException.class)
+    public ProblemDetail handleChosenTemplateNotFound(ChosenTemplateNotFoundException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Chosen template not found",
+                "The chosen template no longer exists. Choose another template and try again.",
+                "CHOSEN_TEMPLATE_NOT_FOUND");
     }
 
     @ExceptionHandler(ExportFailedException.class)

@@ -2,7 +2,7 @@ package com.evision.releasemgmt.application;
 
 import com.evision.releasemgmt.adapters.render.MustacheFlexmarkRenderAdapter;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
-import com.evision.releasemgmt.domain.document.NoActiveTemplateException;
+import com.evision.releasemgmt.domain.document.NoTemplateException;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
@@ -82,13 +82,13 @@ class DocumentGenerationServiceTest {
     }
 
     @Test
-    void generatingForATypeWithNoActiveTemplateThrows() {
+    void generatingForATypeWithNoResolvableTemplateThrows() {
         Release release = openRelease();
         when(releaseRepository.findById(release.id())).thenReturn(Optional.of(release));
         when(templateRepository.findActive(TemplateDocumentType.RUNBOOK)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.generate(release.id(), TemplateDocumentType.RUNBOOK, "actor-1"))
-                .isInstanceOf(NoActiveTemplateException.class);
+                .isInstanceOf(NoTemplateException.class);
     }
 
     @Test

@@ -10,7 +10,7 @@ import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
-import com.evision.releasemgmt.domain.document.NoActiveTemplateException;
+import com.evision.releasemgmt.domain.document.NoTemplateException;
 import com.evision.releasemgmt.domain.template.ChromeFields;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.LogoMetadata;
@@ -104,15 +104,15 @@ class DocumentControllerTest {
     }
 
     @Test
-    void postWithNoActiveTemplateReturns409WithReasonNoActiveTemplate() throws Exception {
+    void postWithNoTemplateReturns409WithReasonNoTemplate() throws Exception {
         UUID releaseId = UUID.randomUUID();
         when(service.generate(eq(releaseId), eq(TemplateDocumentType.RELEASE_NOTES), any()))
-                .thenThrow(new NoActiveTemplateException());
+                .thenThrow(new NoTemplateException());
 
         mockMvc.perform(post("/api/releases/{releaseId}/documents/{documentType}", releaseId, "RELEASE_NOTES")
                         .with(csrf()).with(authenticated()))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.reason").value("NO_ACTIVE_TEMPLATE"));
+                .andExpect(jsonPath("$.reason").value("NO_TEMPLATE"));
     }
 
     @Test
