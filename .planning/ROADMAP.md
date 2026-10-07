@@ -345,6 +345,15 @@ snapshot's own `documentType` dishonest.
 **What this phase does NOT need.** `DocumentSnapshot.create(...)` already stores `template.id()`,
 `template.name()` and `template.body()` on every snapshot (DOC-07), so which template produced a
 document is already recorded — there is no schema change and no migration in this phase.
+*(Superseded 2026-10-07 by D-05.4-04 below: the per-user default needs one new table, `V7`.)*
+
+**Per-user default template (D-05.4-03 to D-05.4-06, decided 2026-10-07).** The user added that each user
+must be able to set their own default template. This default is layered over the global one:
+generation resolves the explicit pick first, then the user's own default for that type, then the
+global active template, and otherwise rejects. The default is set from the Templates screen. It is stored in one
+`(account_id, document_type) → template_id` table with `ON DELETE CASCADE`. Readiness's blocking state
+becomes "no template of this type exists" (`NO_TEMPLATE`), so it reads the same for every viewer.
+See `05.4-CONTEXT.md`.
 
 **Success criteria:**
 1. Release manager can choose, at the point of generating, which template of that document type is used
@@ -352,10 +361,12 @@ document is already recorded — there is no schema change and no migration in t
 3. The picker offers only templates matching the slot's document type, and the server rejects a mismatched templateId rather than trusting the client
 4. The resulting snapshot records the template actually chosen, so the revision history shows which template produced each revision
 5. Choosing a template for one generation does not change what any other release generates next
+6. Each user can set their own default template per document type from the Templates screen; it
+   preselects the picker and is used when no explicit choice is made, and never affects another user
 
 **Scope notes:**
 - `DocumentController.java:48` is also edited by plan 05.3-02 — this phase must run after Phase 05.3, not beside it
-- Readiness (`DocumentReadinessService.java:38-40,62-64`, `NO_ACTIVE_TEMPLATE`) keeps its current meaning, since `active` survives
+- Readiness (`DocumentReadinessService.java:38-40,62-64`, `NO_ACTIVE_TEMPLATE`) ~~keeps its current meaning, since `active` survives~~ becomes `NO_TEMPLATE` (no template of the type exists), per D-05.4-06
 - Frontend surface: `DocumentsSection.tsx:87,107,116` (the Generate button and its three `NO_ACTIVE_TEMPLATE` branches), `api/documents.ts`, and a template list query filtered by document type
 
 Plans:
