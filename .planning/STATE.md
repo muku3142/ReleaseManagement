@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Executing Phase 05.4 (wave 2 of 5)
+stopped_at: Executing Phase 05.4 (wave 3 of 5)
 last_updated: "2026-10-07T10:54:30.366Z"
 last_activity: 2026-10-07 -- Phase 05.4 planned (7 plans); per-user default template added (D-05.4-03..06)
 progress:
@@ -27,7 +27,7 @@ inserted and unplanned — next up.
 ## Current Position
 
 Phase: 05.4 (template-selection-at-generation-time) — PLANNED (0/7)
-Plan: 1 of 7 — executing wave 2
+Plan: 3 of 7 — executing wave 3
 
 Current baselines: **backend 597 tests, frontend 210 tests**, `tsc -b` clean, full `mvn clean test`
 BUILD SUCCESS.
@@ -128,7 +128,7 @@ replaced entirely by **sprint** (brings Jira's Agile API into scope, reversing
 part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
 names, table widening, and frontend tests moved to `frontend/tests/`.
 
-Status: Phase 05.4 EXECUTING (1/7). Phases 6 and 8 discussed (CONTEXT.md written).
+Status: Phase 05.4 EXECUTING (3/7). Phases 6 and 8 discussed (CONTEXT.md written).
 Last activity: 2026-10-07 -- Phase 05.4 planned (7 plans); per-user default template added (D-05.4-03..06)
 
 Progress: [█████████░] 86%
