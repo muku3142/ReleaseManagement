@@ -43,6 +43,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.security.Principal;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -72,16 +73,18 @@ public class TemplateController {
     }
 
     @GetMapping
-    public TemplateListResponse list() {
+    public TemplateListResponse list(Principal principal) {
+        // D-05.4-05: one lookup for the whole list, never one per row.
+        Set<UUID> myDefaults = templateService.myDefaultIds(principal.getName());
         return new TemplateListResponse(templateService.list().stream()
-                .map(TemplateController::toSummaryResponse).toList());
+                .map(t -> toSummaryResponse(t, myDefaults.contains(t.id()))).toList());
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public TemplateResponse create(@Valid @RequestBody CreateTemplateRequest request, Principal principal) {
         return toResponse(templateService.create(request.name(), request.documentType(),
-                principal.getName()));
+                principal.getName()), principal);
     }
 
     @GetMapping("/catalog")
@@ -108,14 +111,14 @@ public class TemplateController {
     }
 
     @GetMapping("/{templateId}")
-    public TemplateResponse get(@PathVariable UUID templateId) {
-        return toResponse(templateService.get(templateId));
+    public TemplateResponse get(@PathVariable UUID templateId, Principal principal) {
+        return toResponse(templateService.get(templateId), principal);
     }
 
     @PutMapping("/{templateId}/name")
     public TemplateResponse rename(@PathVariable UUID templateId,
                                    @Valid @RequestBody RenameTemplateRequest request, Principal principal) {
-        return toResponse(templateService.rename(templateId, request.name(), principal.getName()));
+        return toResponse(templateService.rename(templateId, request.name(), principal.getName()), principal);
     }
 
     @PutMapping("/{templateId}/content")
@@ -138,18 +141,30 @@ public class TemplateController {
                 ? GroupingDimension.ISSUE_TYPE
                 : GroupingDimension.valueOf(request.groupingDimension());
         return toResponse(templateService.saveContent(templateId, request.body(), chrome,
-                groupingDimension, principal.getName()));
+                groupingDimension, principal.getName()), principal);
     }
 
     @PostMapping("/{templateId}/activate")
     public TemplateResponse activate(@PathVariable UUID templateId, Principal principal) {
-        return toResponse(templateService.activate(templateId, principal.getName()));
+        return toResponse(templateService.activate(templateId, principal.getName()), principal);
+    }
+
+    // D-05.4-05: the requester's own default for this template's document type. The account is always the
+    // authenticated principal and the type always comes from the template - neither is read from the request.
+    @PutMapping("/{templateId}/my-default")
+    public TemplateResponse setMyDefault(@PathVariable UUID templateId, Principal principal) {
+        return toResponse(templateService.setMyDefault(templateId, principal.getName()), principal);
+    }
+
+    @DeleteMapping("/{templateId}/my-default")
+    public TemplateResponse clearMyDefault(@PathVariable UUID templateId, Principal principal) {
+        return toResponse(templateService.clearMyDefault(templateId, principal.getName()), principal);
     }
 
     @PostMapping("/{templateId}/duplicate")
     @ResponseStatus(HttpStatus.CREATED)
     public TemplateResponse duplicate(@PathVariable UUID templateId, Principal principal) {
-        return toResponse(templateService.duplicate(templateId, principal.getName()));
+        return toResponse(templateService.duplicate(templateId, principal.getName()), principal);
     }
 
     @DeleteMapping("/{templateId}")
@@ -162,14 +177,15 @@ public class TemplateController {
     // there is no separate replace endpoint (TMPL-09).
     @PostMapping(path = "/{templateId}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public TemplateResponse uploadLogo(@PathVariable UUID templateId,
-                                       @RequestParam("file") MultipartFile file) throws IOException {
+                                       @RequestParam("file") MultipartFile file,
+                                       Principal principal) throws IOException {
         return toResponse(templateService.uploadLogo(templateId, file.getBytes(),
-                file.getOriginalFilename()));
+                file.getOriginalFilename()), principal);
     }
 
     @DeleteMapping("/{templateId}/logo")
-    public TemplateResponse removeLogo(@PathVariable UUID templateId) {
-        return toResponse(templateService.removeLogo(templateId));
+    public TemplateResponse removeLogo(@PathVariable UUID templateId, Principal principal) {
+        return toResponse(templateService.removeLogo(templateId), principal);
     }
 
     // WR-04: templateService.getLogo() 404s TEMPLATE_NOT_FOUND when the template itself doesn't
@@ -195,7 +211,8 @@ public class TemplateController {
                 .body(image.bytes());
     }
 
-    private TemplateResponse toResponse(Template template) {
+    private TemplateResponse toResponse(Template template, Principal principal) {
+        boolean myDefault = templateService.myDefaultIds(principal.getName()).contains(template.id());
         ChromeFields chrome = template.chrome();
         ChromeFieldsResponse chromeResponse = new ChromeFieldsResponse(chrome.coverEnabled(),
                 chrome.coverTitle(), chrome.coverSubtitle(), chrome.headerText(), chrome.footerText(),
@@ -206,14 +223,14 @@ public class TemplateController {
                         template.logo().uploadedAt());
         ResolvedActors actors = actorResolution.resolve(template.createdBy(), template.updatedBy());
         return new TemplateResponse(template.id(), template.name(), template.documentType().name(),
-                template.body(), template.active(), chromeResponse, template.groupingDimension().name(),
+                template.body(), template.active(), myDefault, chromeResponse, template.groupingDimension().name(),
                 logoResponse, template.warnings(), template.createdAt(), actors.display(template.createdBy()),
                 template.updatedAt(), actors.display(template.updatedBy()));
     }
 
-    private static TemplateSummaryResponse toSummaryResponse(Template template) {
+    private static TemplateSummaryResponse toSummaryResponse(Template template, boolean myDefault) {
         return new TemplateSummaryResponse(template.id(), template.name(), template.documentType().name(),
-                template.active(), template.logo() != null, template.warnings().size(),
+                template.active(), myDefault, template.logo() != null, template.warnings().size(),
                 template.updatedAt());
     }
 }
