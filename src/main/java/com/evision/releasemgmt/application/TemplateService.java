@@ -82,6 +82,23 @@ public class TemplateService {
         return repository.setActive(id);
     }
 
+    // D-05.4-03/D-05.4-05: personal, keyed by the requester's accountId. Never touches template.active, so
+    // nothing changes for any other user. The document type comes from the template (D-05.4-04).
+    public Template setMyDefault(UUID templateId, String accountId) {
+        repository.setUserDefault(accountId, templateId);
+        return get(templateId);
+    }
+
+    public Template clearMyDefault(UUID templateId, String accountId) {
+        Template template = get(templateId);
+        repository.clearUserDefault(accountId, templateId);
+        return template;
+    }
+
+    public Set<UUID> myDefaultIds(String accountId) {
+        return repository.findUserDefaultTemplateIds(accountId);
+    }
+
     public Template duplicate(UUID id, String actor) {
         Template source = get(id);
         String base = source.name() + " copy";

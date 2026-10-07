@@ -6,6 +6,7 @@ import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import com.evision.releasemgmt.domain.template.TemplateMalformedException;
+import com.evision.releasemgmt.domain.template.TemplateNotFoundException;
 import com.evision.releasemgmt.ports.TemplateRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -15,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -218,6 +220,57 @@ class TemplateServiceTest {
 
         assertThatThrownBy(() -> service.getLogo(missingId))
                 .isInstanceOf(com.evision.releasemgmt.domain.template.TemplateNotFoundException.class);
+    }
+
+    @Test
+    void setMyDefaultStoresForTheAccountAndNeverTouchesActive() {
+        Template existing = existingTemplate();
+        when(repository.findById(existing.id())).thenReturn(Optional.of(existing));
+
+        Template result = service.setMyDefault(existing.id(), "557058:a");
+
+        assertThat(result).isSameAs(existing);
+        verify(repository).setUserDefault("557058:a", existing.id());
+        verify(repository, never()).setActive(any());
+        verify(repository, never()).update(any());
+    }
+
+    @Test
+    void setMyDefaultOnAnUnknownTemplatePropagatesNotFound() {
+        UUID id = UUID.randomUUID();
+        org.mockito.Mockito.doThrow(new TemplateNotFoundException()).when(repository).setUserDefault("557058:a", id);
+
+        assertThatThrownBy(() -> service.setMyDefault(id, "557058:a"))
+                .isInstanceOf(TemplateNotFoundException.class);
+    }
+
+    @Test
+    void clearMyDefaultOnAnUnknownTemplateThrowsAndClearsNothing() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.clearMyDefault(id, "557058:a"))
+                .isInstanceOf(TemplateNotFoundException.class);
+        verify(repository, never()).clearUserDefault(any(), any());
+    }
+
+    @Test
+    void clearMyDefaultClearsForTheAccountAndReturnsTheTemplate() {
+        Template existing = existingTemplate();
+        when(repository.findById(existing.id())).thenReturn(Optional.of(existing));
+
+        Template result = service.clearMyDefault(existing.id(), "557058:a");
+
+        assertThat(result).isSameAs(existing);
+        verify(repository).clearUserDefault("557058:a", existing.id());
+    }
+
+    @Test
+    void myDefaultIdsDelegatesToTheRepository() {
+        UUID id = UUID.randomUUID();
+        when(repository.findUserDefaultTemplateIds("557058:a")).thenReturn(Set.of(id));
+
+        assertThat(service.myDefaultIds("557058:a")).containsExactly(id);
     }
 
     private static Template existingTemplate() {
