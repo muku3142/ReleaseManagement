@@ -7,8 +7,10 @@ import {
   DOCUMENT_TYPE_LABELS,
   templatesOfType,
   useActivateTemplate,
+  useClearMyDefaultTemplate,
   useDeleteTemplate,
   useDuplicateTemplate,
+  useSetMyDefaultTemplate,
   useTemplates,
   type DocumentType,
   type Template,
@@ -23,6 +25,8 @@ export function TemplatesRoute() {
 
   const activate = useActivateTemplate();
   const duplicate = useDuplicateTemplate();
+  const setMyDefault = useSetMyDefaultTemplate();
+  const clearMyDefault = useClearMyDefaultTemplate();
   const remove = useDeleteTemplate();
 
   const [creatingType, setCreatingType] = useState<DocumentType | null>(null);
@@ -33,6 +37,8 @@ export function TemplatesRoute() {
   const actionProblem =
     (activate.isError && activate.error instanceof ApiError && activate.error.problem) ||
     (duplicate.isError && duplicate.error instanceof ApiError && duplicate.error.problem) ||
+    (setMyDefault.isError && setMyDefault.error instanceof ApiError && setMyDefault.error.problem) ||
+    (clearMyDefault.isError && clearMyDefault.error instanceof ApiError && clearMyDefault.error.problem) ||
     (remove.isError && remove.error instanceof ApiError && remove.error.problem) ||
     undefined;
 
@@ -109,6 +115,11 @@ export function TemplatesRoute() {
                         {t.active && (
                           <span className="rounded-full bg-gray-800 px-2 py-0.5 text-sm text-white">Active</span>
                         )}
+                        {t.myDefault && (
+                          <span className="rounded-full border border-blue-600 px-2 py-0.5 text-sm text-blue-700">
+                            My default
+                          </span>
+                        )}
                         {t.warningCount > 0 && (
                           <span
                             aria-label="Has unresolved placeholder warnings"
@@ -123,6 +134,23 @@ export function TemplatesRoute() {
                             className="text-sm text-gray-600 hover:text-gray-900"
                           >
                             Make active
+                          </button>
+                        )}
+                        {t.myDefault ? (
+                          <button
+                            type="button"
+                            onClick={() => clearMyDefault.mutate(t.id)}
+                            className="text-sm text-gray-600 hover:text-gray-900"
+                          >
+                            Clear my default
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setMyDefault.mutate(t.id)}
+                            className="text-sm text-gray-600 hover:text-gray-900"
+                          >
+                            Set as my default
                           </button>
                         )}
                         <button
