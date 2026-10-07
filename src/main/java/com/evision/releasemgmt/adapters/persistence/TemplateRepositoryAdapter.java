@@ -2,8 +2,10 @@ package com.evision.releasemgmt.adapters.persistence;
 
 import com.evision.releasemgmt.adapters.persistence.entity.TemplateEntity;
 import com.evision.releasemgmt.adapters.persistence.entity.TemplateLogoEntity;
+import com.evision.releasemgmt.adapters.persistence.entity.TemplateUserDefaultEntity;
 import com.evision.releasemgmt.adapters.persistence.repository.TemplateJpaRepository;
 import com.evision.releasemgmt.adapters.persistence.repository.TemplateLogoJpaRepository;
+import com.evision.releasemgmt.adapters.persistence.repository.TemplateUserDefaultJpaRepository;
 import com.evision.releasemgmt.domain.template.ChromeFields;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.LogoMetadata;
@@ -20,6 +22,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 public class TemplateRepositoryAdapter implements TemplateRepository {
@@ -27,9 +30,13 @@ public class TemplateRepositoryAdapter implements TemplateRepository {
     private final TemplateJpaRepository jpa;
     private final TemplateLogoJpaRepository logoJpa;
 
-    public TemplateRepositoryAdapter(TemplateJpaRepository jpa, TemplateLogoJpaRepository logoJpa) {
+    private final TemplateUserDefaultJpaRepository defaultJpa;
+
+    public TemplateRepositoryAdapter(TemplateJpaRepository jpa, TemplateLogoJpaRepository logoJpa,
+                                     TemplateUserDefaultJpaRepository defaultJpa) {
         this.jpa = jpa;
         this.logoJpa = logoJpa;
+        this.defaultJpa = defaultJpa;
     }
 
     @Override
@@ -113,8 +120,8 @@ public class TemplateRepositoryAdapter implements TemplateRepository {
     @Override
     @Transactional
     public void delete(UUID templateId) {
-        // D-04-13: no guard, no existence check. The template_logo row goes with it via
-        // ON DELETE CASCADE.
+        // D-04-13: no guard, no existence check. The template_logo and template_user_default rows
+        // go with it via ON DELETE CASCADE.
         jpa.deleteById(templateId);
     }
 
@@ -147,6 +154,38 @@ public class TemplateRepositoryAdapter implements TemplateRepository {
     @Override
     public Optional<LogoImage> findLogo(UUID templateId) {
         return logoJpa.findById(templateId).map(TemplateRepositoryAdapter::toDomain);
+    }
+
+    @Override
+    public Optional<Template> findUserDefault(String accountId, TemplateDocumentType documentType) {
+        return defaultJpa.findByAccountIdAndDocumentType(accountId, documentType)
+                .flatMap(d -> findById(d.getTemplateId()));
+    }
+
+    @Override
+    public Set<UUID> findUserDefaultTemplateIds(String accountId) {
+        return defaultJpa.findByAccountId(accountId).stream()
+                .map(TemplateUserDefaultEntity::getTemplateId)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    @Override
+    @Transactional
+    public void setUserDefault(String accountId, UUID templateId) {
+        if (defaultJpa.upsertFromTemplate(accountId, templateId) == 0) {
+            throw new TemplateNotFoundException();
+        }
+    }
+
+    @Override
+    @Transactional
+    public void clearUserDefault(String accountId, UUID templateId) {
+        defaultJpa.deleteByAccountIdAndTemplateId(accountId, templateId);
+    }
+
+    @Override
+    public boolean existsByDocumentType(TemplateDocumentType documentType) {
+        return jpa.existsByDocumentType(documentType);
     }
 
     private Template load(UUID id) {
