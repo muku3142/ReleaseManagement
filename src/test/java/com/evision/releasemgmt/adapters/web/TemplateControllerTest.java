@@ -29,6 +29,7 @@ import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -146,6 +147,90 @@ class TemplateControllerTest {
         mockMvc.perform(get("/api/templates/{id}", id).with(authenticated()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.reason").value("TEMPLATE_NOT_FOUND"));
+    }
+
+    @Test
+    void listFlagsOnlyTheRequestersDefaultsWithOneLookup() throws Exception {
+        UUID mine = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        when(templateService.list()).thenReturn(List.of(template(mine, true), template(other, false)));
+        when(templateService.myDefaultIds("557058:abc-123")).thenReturn(Set.of(mine));
+
+        mockMvc.perform(get("/api/templates").with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.templates[0].myDefault").value(true))
+                .andExpect(jsonPath("$.templates[0].active").value(true))
+                .andExpect(jsonPath("$.templates[1].myDefault").value(false))
+                .andExpect(jsonPath("$.templates[1].active").value(false));
+
+        verify(templateService, times(1)).myDefaultIds("557058:abc-123");
+    }
+
+    @Test
+    void getReflectsTheRequestersDefault() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(templateService.get(id)).thenReturn(template(id, true));
+        when(templateService.myDefaultIds("557058:abc-123")).thenReturn(Set.of(id));
+        stubActors();
+
+        mockMvc.perform(get("/api/templates/{id}", id).with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.myDefault").value(true))
+                .andExpect(jsonPath("$.active").value(true));
+    }
+
+    @Test
+    void putMyDefaultSetsItForThePrincipal() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(templateService.setMyDefault(id, "557058:abc-123")).thenReturn(template(id, false));
+        when(templateService.myDefaultIds("557058:abc-123")).thenReturn(Set.of(id));
+        stubActors();
+
+        mockMvc.perform(put("/api/templates/{id}/my-default", id).with(csrf()).with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.myDefault").value(true))
+                .andExpect(jsonPath("$.active").value(false));
+
+        verify(templateService).setMyDefault(id, "557058:abc-123");
+    }
+
+    @Test
+    void putMyDefaultIgnoresAnyAccountIdOrDocumentTypeInTheBody() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(templateService.setMyDefault(id, "557058:abc-123")).thenReturn(template(id, false));
+        stubActors();
+
+        mockMvc.perform(put("/api/templates/{id}/my-default", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"accountId\":\"557058:other\",\"documentType\":\"RUNBOOK\"}"))
+                .andExpect(status().isOk());
+
+        verify(templateService).setMyDefault(id, "557058:abc-123");
+        verify(templateService, never()).setMyDefault(eq(id), eq("557058:other"));
+    }
+
+    @Test
+    void putMyDefaultOnAnUnknownTemplateIs404() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(templateService.setMyDefault(id, "557058:abc-123")).thenThrow(new TemplateNotFoundException());
+
+        mockMvc.perform(put("/api/templates/{id}/my-default", id).with(csrf()).with(authenticated()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.reason").value("TEMPLATE_NOT_FOUND"));
+    }
+
+    @Test
+    void deleteMyDefaultClearsItForThePrincipal() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(templateService.clearMyDefault(id, "557058:abc-123")).thenReturn(template(id, true));
+        stubActors();
+
+        mockMvc.perform(delete("/api/templates/{id}/my-default", id).with(csrf()).with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.myDefault").value(false))
+                .andExpect(jsonPath("$.active").value(true));
+
+        verify(templateService).clearMyDefault(id, "557058:abc-123");
     }
 
     @Test
