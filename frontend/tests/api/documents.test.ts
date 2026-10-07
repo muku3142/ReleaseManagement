@@ -116,6 +116,32 @@ describe('documents API client', () => {
     expect(client.getQueryState(documentRevisionsQueryKey('r1', 'RELEASE_NOTES'))?.isInvalidated).toBe(true);
   });
 
+  it('generate without a templateId sends no body', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(201, generatedDocument()));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const result = mount(() => useGenerateDocument(), client);
+
+    await act(async () => {
+      await result.current.mutateAsync({ releaseId: 'r1', documentType: 'RELEASE_NOTES' });
+    });
+
+    const init = fetchMock.mock.calls[0][1];
+    expect(init?.method).toBe('POST');
+    expect(init?.body).toBeUndefined();
+  });
+
+  it('generate with a templateId sends it as the JSON body', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(201, generatedDocument()));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const result = mount(() => useGenerateDocument(), client);
+
+    await act(async () => {
+      await result.current.mutateAsync({ releaseId: 'r1', documentType: 'RELEASE_NOTES', templateId: 't9' });
+    });
+
+    expect(fetchMock.mock.calls[0][1]?.body).toBe('{"templateId":"t9"}');
+  });
+
   it('export requests the correct URL per format and revision', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')

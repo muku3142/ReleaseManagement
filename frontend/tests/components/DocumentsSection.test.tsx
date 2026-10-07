@@ -43,8 +43,9 @@ function rev(
   latest: boolean,
   generatedAt = '2026-08-05T00:00:00Z',
   generatedBy = 'rm@acme.com',
+  templateName = 'Standard',
 ): DocumentRevision {
-  return { revision, latest, generatedAt, generatedBy };
+  return { revision, latest, generatedAt, generatedBy, templateName };
 }
 
 function generatedDocument(documentType: DocType, revision = 1) {
@@ -189,14 +190,13 @@ describe('DocumentsSection', () => {
     expect(headings).toEqual(['Release Notes', 'Runbook', 'Approval']);
   });
 
-  it('noActiveTemplateShowsGuidanceAndNoGenerateButton', async () => {
-    mockFetch({ readiness: { RELEASE_NOTES: 'NO_ACTIVE_TEMPLATE' } });
+  it('noTemplateShowsGuidanceAndNoGenerateButton', async () => {
+    mockFetch({ readiness: { RELEASE_NOTES: 'NO_TEMPLATE' } });
     await renderSection();
 
     const row = rowFor('Release Notes');
-    expect(row.textContent).toContain(
-      'No active Release Notes template — create or activate one to generate this document.',
-    );
+    expect(row.textContent).toContain('No Release Notes template — create one to generate this document.');
+    expect(row.querySelector('select')).toBeNull();
     expect(findText(row, 'Generate Release Notes')).toBeUndefined();
     const goToTemplatesLinks = [...row.querySelectorAll('a')].filter((a) => a.textContent === 'Go to templates');
     expect(goToTemplatesLinks.length).toBeGreaterThan(0);
@@ -314,7 +314,7 @@ describe('DocumentsSection', () => {
     mockFetch({
       readiness: { RELEASE_NOTES: 'NOT_GENERATED', RUNBOOK: 'NOT_GENERATED' },
       generateStatus: {
-        RELEASE_NOTES: () => json(422, { status: 422, reason: 'NO_ACTIVE_TEMPLATE' }),
+        RELEASE_NOTES: () => json(409, { status: 409, reason: 'NO_TEMPLATE' }),
       },
     });
     await renderSection();
@@ -325,7 +325,7 @@ describe('DocumentsSection', () => {
     await act(async () => byText(releaseNotesRow, 'Generate Release Notes').click());
     await flush();
 
-    expect(releaseNotesRow.querySelector('[role="alert"][data-reason="NO_ACTIVE_TEMPLATE"]')).not.toBeNull();
+    expect(releaseNotesRow.querySelector('[role="alert"][data-reason="NO_TEMPLATE"]')).not.toBeNull();
     expect(runbookRow.querySelector('[role="alert"]')).toBeNull();
   });
 

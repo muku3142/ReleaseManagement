@@ -75,9 +75,9 @@ describe('ReadinessPill', () => {
     expect(anchor.getAttribute('href')).toBe('/releases/r1#documents');
   });
 
-  it('NO_ACTIVE_TEMPLATE renders the "No active template" text linking to /templates', () => {
-    const anchor = renderPill('NO_ACTIVE_TEMPLATE');
-    expect(anchor.textContent).toBe('No active template');
+  it('NO_TEMPLATE renders the "No template" text linking to /templates', () => {
+    const anchor = renderPill('NO_TEMPLATE');
+    expect(anchor.textContent).toBe('No template');
     expect(anchor.getAttribute('href')).toBe('/templates');
   });
 
@@ -92,7 +92,7 @@ describe('ReadinessPill', () => {
   });
 
   it('everyStateIsAKeyboardReachableLink', () => {
-    const states: DocumentReadinessState[] = ['UP_TO_DATE', 'STALE', 'NOT_GENERATED', 'NO_ACTIVE_TEMPLATE'];
+    const states: DocumentReadinessState[] = ['UP_TO_DATE', 'STALE', 'NOT_GENERATED', 'NO_TEMPLATE'];
     for (const state of states) {
       const anchor = renderPill(state);
       expect(anchor.tagName).toBe('A');

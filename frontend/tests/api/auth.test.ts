@@ -19,6 +19,9 @@ describe('messageForReason', () => {
       'SITE_NOT_CONFIGURED',
       'ACCOUNT_MISMATCH',
       'RESULT_SET_TOO_LARGE',
+      'NO_TEMPLATE',
+      'TEMPLATE_TYPE_MISMATCH',
+      'CHOSEN_TEMPLATE_NOT_FOUND',
       'SOMETHING_UNKNOWN',
     ];
     const messages = reasons.map((reason) => messageForReason({ status: 401, reason }));

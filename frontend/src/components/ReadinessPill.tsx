@@ -46,10 +46,10 @@ export function ReadinessPill({ state, releaseId, documentType }: ReadinessPillP
           Not generated
         </Link>
       );
-    case 'NO_ACTIVE_TEMPLATE':
+    case 'NO_TEMPLATE':
       return (
         <Link to="/templates" className="whitespace-nowrap text-xs italic text-gray-400">
-          No active template
+          No template
         </Link>
       );
   }

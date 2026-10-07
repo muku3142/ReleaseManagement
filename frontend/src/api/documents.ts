@@ -4,11 +4,17 @@ import { DOCUMENT_TYPE_LABELS, type ChromeFields, type DocumentType } from './te
 
 // DOC-09/D-05-09: the four states DocumentReadinessService computes server-side. The frontend
 // renders whichever one it is given and never re-derives staleness from a raw timestamp (T-05-55).
-export type DocumentReadinessState = 'NO_ACTIVE_TEMPLATE' | 'NOT_GENERATED' | 'STALE' | 'UP_TO_DATE';
+export type DocumentReadinessState = 'NO_TEMPLATE' | 'NOT_GENERATED' | 'STALE' | 'UP_TO_DATE';
 export type ReadinessEntry = { releaseId: string; documentType: DocumentType; state: DocumentReadinessState };
 export type ReadinessResponse = { entries: ReadinessEntry[] };
 
-export type DocumentRevision = { revision: number; latest: boolean; generatedAt: string; generatedBy: string };
+export type DocumentRevision = {
+  revision: number;
+  latest: boolean;
+  generatedAt: string;
+  generatedBy: string;
+  templateName: string;
+};
 export type DocumentRevisionListResponse = { revisions: DocumentRevision[] };
 
 // Mirrors DocumentResponse exactly (05-04-SUMMARY.md). The stored template's full body is
@@ -82,8 +88,12 @@ export function useDocumentRevisions(releaseId: string, documentType: DocumentTy
 export function useGenerateDocument() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (vars: { releaseId: string; documentType: DocumentType }) =>
-      apiFetch<GeneratedDocument>(documentPath(vars.releaseId, vars.documentType), { method: 'POST' }),
+    mutationFn: (vars: { releaseId: string; documentType: DocumentType; templateId?: string }) =>
+      apiFetch<GeneratedDocument>(documentPath(vars.releaseId, vars.documentType), {
+        method: 'POST',
+        // D-05.4-01: an absent templateId sends no body, so the server resolves my default, then the active template.
+        ...(vars.templateId === undefined ? {} : { body: JSON.stringify({ templateId: vars.templateId }) }),
+      }),
     onSuccess: (document, vars) => {
       queryClient.invalidateQueries({ queryKey: ['releases'] });
       queryClient.invalidateQueries({ queryKey: readinessQueryKey() });

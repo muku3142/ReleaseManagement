@@ -82,9 +82,9 @@ function DocumentRow({ releaseId, releaseName, version, documentType, readinessS
       </div>
 
       <p className="mt-1 text-sm text-gray-600">
-        {readinessState === 'NO_ACTIVE_TEMPLATE' && (
+        {readinessState === 'NO_TEMPLATE' && (
           <>
-            {`No active ${typeLabel} template — create or activate one to generate this document.`}{' '}
+            {`No ${typeLabel} template — create one to generate this document.`}{' '}
             <Link to="/templates" className="text-blue-600 underline">
               Go to templates
             </Link>
@@ -104,13 +104,13 @@ function DocumentRow({ releaseId, releaseName, version, documentType, readinessS
       </p>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {readinessState === 'NO_ACTIVE_TEMPLATE' && (
+        {readinessState === 'NO_TEMPLATE' && (
           <Link to="/templates" className="text-sm text-blue-600 underline">
             Go to templates
           </Link>
         )}
 
-        {readinessState !== 'NO_ACTIVE_TEMPLATE' && (
+        {readinessState !== 'NO_TEMPLATE' && (
           <button
             type="button"
             onClick={() => generateMutation.mutate({ releaseId, documentType })}

@@ -89,7 +89,9 @@ const REASON_MESSAGES: Record<string, string> = {
   LOGO_TOO_LARGE: 'This image is too large.',
   LOGO_DIMENSIONS_EXCEEDED: 'This image is too large.',
   DOCUMENT_NOT_FOUND: "This document doesn't exist yet.",
-  NO_ACTIVE_TEMPLATE: 'No active template exists for this document type. Activate one from Templates before generating.',
+  NO_TEMPLATE: 'No template is available for this document type. Create one from Templates, or choose one, before generating.',
+  TEMPLATE_TYPE_MISMATCH: 'The chosen template is for a different document type. Choose a template of this document type.',
+  CHOSEN_TEMPLATE_NOT_FOUND: 'The chosen template no longer exists. Choose another template and try again.',
   EXPORT_FAILED: "The document couldn't be exported. Try again, and check the server logs if it persists.",
 };
 
