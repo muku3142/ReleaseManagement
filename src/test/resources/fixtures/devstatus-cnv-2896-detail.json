@@ -1,0 +1,121 @@
+{
+  "errors": [],
+  "detail": [
+    {
+      "branches": [
+        {
+          "name": "feature/EXAMPLE-1",
+          "url": "https://dev.azure.com/example-org/example-project/_git/example-repo?version=GBfeature/EXAMPLE-1",
+          "repository": {
+            "id": "00000000-0000-0000-0000-000000000001",
+            "name": "example-repo",
+            "url": "https://dev.azure.com/example-org/example-project/_git/example-repo"
+          },
+          "lastCommit": {
+            "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "displayId": "aaaaaaa",
+            "authorTimestamp": "2026-07-13T09:41:34.000+0000",
+            "url": "https://dev.azure.com/example-org/example-project/_git/example-repo/commit/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "author": {
+              "name": "Example Author",
+              "avatar": "https://example.com/avatar.png"
+            },
+            "fileCount": 9,
+            "merge": false,
+            "message": "example commit message without the ticket key.",
+            "files": []
+          }
+        }
+      ],
+      "pullRequests": [
+        {
+          "author": {
+            "name": "User ",
+            "avatar": "https://example.com/avatar.png"
+          },
+          "id": "1001",
+          "name": "EXAMPLE-1: example environment merge.",
+          "commentCount": 0,
+          "source": {
+            "branch": "develop",
+            "url": "https://dev.azure.com/example-org/example-project/_git/example-repo?version=GBdevelop"
+          },
+          "destination": {
+            "branch": "testing"
+          },
+          "reviewers": [],
+          "status": "MERGED",
+          "url": "https://dev.azure.com/example-org/example-project/_git/example-repo/pullrequest/1001",
+          "lastUpdate": "2026-07-26T10:59:40.310+0000",
+          "repositoryId": "00000000-0000-0000-0000-000000000001",
+          "repositoryName": "example-repo",
+          "repositoryUrl": "https://dev.azure.com/example-org/example-project/_git/example-repo",
+          "ari": "ari:cloud:graph::pull-request/activation/example/1"
+        },
+        {
+          "author": {
+            "name": "Example Author",
+            "avatar": "https://example.com/avatar.png"
+          },
+          "id": "1002",
+          "name": "example pull request",
+          "commentCount": 11,
+          "source": {
+            "branch": "feature/EXAMPLE-1",
+            "url": "https://dev.azure.com/example-org/example-project/_git/example-repo?version=GBfeature/EXAMPLE-1"
+          },
+          "destination": {
+            "branch": "develop"
+          },
+          "reviewers": [],
+          "status": "OPEN",
+          "url": "https://dev.azure.com/example-org/example-project/_git/example-repo/pullrequest/1002",
+          "lastUpdate": "2026-07-13T09:41:45.199+0000",
+          "repositoryId": "00000000-0000-0000-0000-000000000001",
+          "repositoryName": "example-repo",
+          "repositoryUrl": "https://dev.azure.com/example-org/example-project/_git/example-repo",
+          "ari": "ari:cloud:graph::pull-request/activation/example/1"
+        },
+        {
+          "author": {
+            "name": "Example Author",
+            "avatar": "https://example.com/avatar.png"
+          },
+          "id": "1003",
+          "name": "example pull request.",
+          "commentCount": 70,
+          "source": {
+            "branch": "feature/EXAMPLE-1",
+            "url": "https://dev.azure.com/example-org/example-project/_git/example-repo?version=GBfeature/EXAMPLE-1"
+          },
+          "destination": {
+            "branch": "develop"
+          },
+          "reviewers": [
+            {
+              "name": "Example Reviewer",
+              "avatar": "https://example.com/avatar.png",
+              "approved": true
+            }
+          ],
+          "status": "MERGED",
+          "url": "https://dev.azure.com/example-org/example-project/_git/example-repo/pullrequest/1003",
+          "lastUpdate": "2026-07-12T09:52:50.011+0000",
+          "repositoryId": "00000000-0000-0000-0000-000000000001",
+          "repositoryName": "example-repo",
+          "repositoryUrl": "https://dev.azure.com/example-org/example-project/_git/example-repo",
+          "ari": "ari:cloud:graph::pull-request/activation/example/1"
+        }
+      ],
+      "repositories": [],
+      "_instance": {
+        "name": "Azure Repos",
+        "baseUrl": "https://dev.azure.com",
+        "type": "AzureRepos",
+        "id": "azure-devops-for-jira",
+        "typeName": "Azure Repos",
+        "singleInstance": true
+      }
+    }
+  ]
+}

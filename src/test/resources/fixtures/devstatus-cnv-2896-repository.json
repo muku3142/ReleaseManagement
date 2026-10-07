@@ -1,0 +1,38 @@
+{
+  "errors": [],
+  "detail": [
+    {
+      "repositories": [
+        {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "name": "example-repo",
+          "url": "https://dev.azure.com/example-org/example-project/_git/example-repo",
+          "commits": [
+            {
+              "id": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "displayId": "bbbbbbb",
+              "authorTimestamp": "2026-07-26T10:26:25.000+0000",
+              "url": "https://dev.azure.com/example-org/example-project/_git/example-repo/commit/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "author": {
+                "name": "Example Author",
+                "avatar": "https://example.com/avatar.png"
+              },
+              "fileCount": 143,
+              "merge": false,
+              "message": "EXAMPLE-1: example commit message.",
+              "files": []
+            }
+          ]
+        }
+      ],
+      "_instance": {
+        "name": "Azure Repos",
+        "baseUrl": "https://dev.azure.com",
+        "type": "AzureRepos",
+        "id": "azure-devops-for-jira",
+        "typeName": "Azure Repos",
+        "singleInstance": true
+      }
+    }
+  ]
+}
