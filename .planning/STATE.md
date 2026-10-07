@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Completed 05.3-03-PLAN.md — Phase 05.3 COMPLETE (3/3)
-last_updated: "2026-08-13T00:00:00.000Z"
-last_activity: 2026-08-13 -- Phase 05.3 plan 03 executed (3/3 tasks, checkpoint approved); backend 597, frontend 210
+status: planned
+stopped_at: Phase 05.4 planned (7 plans, 5 waves) — ready to execute
+last_updated: "2026-10-07T10:54:30.366Z"
+last_activity: 2026-10-07 -- Phase 05.4 planned (7 plans); per-user default template added (D-05.4-03..06)
 progress:
   total_phases: 12
   completed_phases: 6
-  total_plans: 57
+  total_plans: 64
   completed_plans: 55
-  percent: 96
+  percent: 86
 ---
 
 # Project State
@@ -26,8 +26,8 @@ inserted and unplanned — next up.
 
 ## Current Position
 
-Phase: 05.3 (actor-identity-display-resolve-stored-jira-accountid-to-a-hu) — COMPLETE (3/3)
-Plan: 3 of 3 (all complete)
+Phase: 05.4 (template-selection-at-generation-time) — PLANNED (0/7)
+Plan: 0 of 7 — next: /gsd-execute-phase 05.4
 
 Current baselines: **backend 597 tests, frontend 210 tests**, `tsc -b` clean, full `mvn clean test`
 BUILD SUCCESS.
@@ -128,10 +128,10 @@ replaced entirely by **sprint** (brings Jira's Agile API into scope, reversing
 part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
 names, table widening, and frontend tests moved to `frontend/tests/`.
 
-Status: Phase 05.3 COMPLETE (3/3). Phase 05.4 (unplanned) next.
-Last activity: 2026-08-13 -- Phase 05.3 plan 03 executed (3/3 tasks, checkpoint approved); backend 597, frontend 210
+Status: Phase 05.4 PLANNED (7 plans, 5 waves), ready to execute. Phases 6 and 8 in discussion.
+Last activity: 2026-10-07 -- Phase 05.4 planned (7 plans); per-user default template added (D-05.4-03..06)
 
-Progress: [██████████] 96%
+Progress: [█████████░] 86%
 
 ## Performance Metrics
 

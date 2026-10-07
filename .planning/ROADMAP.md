@@ -431,7 +431,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 5.1 Per-Template Logo Sizing | 4/4 | Complete   | 2026-08-12 |
 | 5.2 Release Ticket Selection | 3/3 | Complete   | 2026-08-12 |
 | 5.3 Actor Identity Display | 3/3 | Complete   | 2026-08-13 |
-| 5.4 Template Selection At Generation Time | 0/TBD | Not planned | - |
+| 5.4 Template Selection At Generation Time | 0/7 | Planned | - |
 | 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
 | 8. Release Insights Dashboard | 0/TBD | Not started | - |
