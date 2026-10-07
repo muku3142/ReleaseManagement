@@ -46,6 +46,7 @@ export type TemplateSummary = {
   name: string;
   documentType: DocumentType;
   active: boolean;
+  myDefault: boolean;
   hasLogo: boolean;
   warningCount: number;
   updatedAt: string;
@@ -57,6 +58,7 @@ export type Template = {
   documentType: DocumentType;
   body: string;
   active: boolean;
+  myDefault: boolean;
   chrome: ChromeFields;
   groupingDimension: GroupingDimension;
   logo: LogoMetadata | null;
@@ -202,6 +204,20 @@ export function useSaveTemplateContent() {
 export function useActivateTemplate() {
   return useTemplateMutation((templateId: string) =>
     apiFetch<Template>(`/api/templates/${templateId}/activate`, { method: 'POST' }),
+  );
+}
+
+// D-05.4-05: personal to the signed-in user; never changes `active`. useTemplateMutation invalidates
+// ['templates'], which is required here - setting a default flips myDefault on two rows (old and new).
+export function useSetMyDefaultTemplate() {
+  return useTemplateMutation((templateId: string) =>
+    apiFetch<Template>(`/api/templates/${templateId}/my-default`, { method: 'PUT' }),
+  );
+}
+
+export function useClearMyDefaultTemplate() {
+  return useTemplateMutation((templateId: string) =>
+    apiFetch<Template>(`/api/templates/${templateId}/my-default`, { method: 'DELETE' }),
   );
 }
 

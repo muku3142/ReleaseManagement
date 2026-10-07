@@ -21,6 +21,7 @@ function summary(overrides: Partial<TemplateSummary>): TemplateSummary {
     name: 'Standard release notes',
     documentType: 'RELEASE_NOTES',
     active: true,
+    myDefault: false,
     hasLogo: false,
     warningCount: 0,
     updatedAt: '2026-08-09T00:00:00Z',
@@ -35,6 +36,7 @@ function template(overrides: Partial<Template>): Template {
     documentType: 'RELEASE_NOTES',
     body: '# {{release.name}}',
     active: true,
+    myDefault: false,
     chrome: {
       coverEnabled: false,
       coverTitle: '',
@@ -84,6 +86,18 @@ describe('templates API client', () => {
     const headers = new Headers(init.headers);
     expect(headers.get('Content-Type')).toBe('application/json');
     expect(JSON.parse(init.body as string)).toEqual({ name: 'New template', documentType: 'RUNBOOK' });
+  });
+
+  it('PUT /api/templates/{id}/my-default resolves to the template with myDefault true', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse(200, template({ id: 't1', myDefault: true })));
+
+    const result = await apiFetch<Template>('/api/templates/t1/my-default', { method: 'PUT' });
+
+    expect(result.myDefault).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/templates/t1/my-default');
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('PUT');
   });
 
   it('POST /api/templates/{id}/logo sends a FormData body without a Content-Type: application/json header', async () => {
