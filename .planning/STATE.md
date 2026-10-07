@@ -224,6 +224,7 @@ Recent decisions affecting current work:
 - [Phase 01]: PUT /api/auth/credential revalidates the replacement token live against Jira using the stored email before upserting, and rejects ACCOUNT_MISMATCH (409) if the validated identity belongs to a different account — AUTH-04 requires replace-without-losing-data; revalidation prevents storing a token Jira itself would reject, and the mismatch check prevents one account's credential row being overwritten by another account's token
 - [Phase 01]: Frontend credentialStatus.ts uses a dependency-free useSyncExternalStore module instead of a state library for the single credential-invalid boolean signal — Avoids adding a state-management dependency for one boolean flag shared between apiFetch and CredentialAlert
 - [Phase 05.3]: ActorResolutionService.resolve uses varargs (String...) not List<String>, so single/dual-id call sites can call it inline while a list call site uses toArray(String[]::new) which tolerates a null unfrozen-release entry
+- [Phase 02]: Jira→ADO link discovery resolved — GO (discovery only; ADO API needed for complete commits), see 02-DEVSTATUS-SPIKE.md
 - [Phase 05.3]: ReleaseController.toResponse/toAddResult and TemplateController.toResponse de-staticed to instance methods; ReleaseController.toSummaryResponse stays static and takes a resolved ResolvedActors parameter so a list row cannot resolve for itself
 
 ### Pending Todos
@@ -232,7 +233,7 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 2's Jira→ADO link-discovery spike outcome will determine Phase 6's exact scope (dev-status mechanism vs. commit/PR key-parsing fallback, or both) — revisit Phase 6 plan-phase once the spike lands.
+- Resolved: Jira→ADO link-discovery spike — GO for discovery via dev-status, but commit lists are incomplete (only key-referencing commits); Phase 6 needs the ADO API for full commits. See 02-DEVSTATUS-SPIKE.md.
 
 ### Quick Tasks Completed
 
