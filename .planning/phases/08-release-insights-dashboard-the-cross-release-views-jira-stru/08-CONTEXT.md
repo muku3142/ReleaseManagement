@@ -106,6 +106,14 @@ That falsely shows paperwork as STALE on the dashboard. Fix it here, the same wa
   - a defined ladder order and a defined Production environment.
 - A `current_stage` column alone is insufficient: it makes AUDIT-04, the failure markers and D-08-01
   impossible.
+- **Resolved by the Phase 7 discussion (2026-10-07, `07-CONTEXT.md`).** Phase 8 uses:
+  - the **Production flag** (D-07-04) to identify Production, not a stage name;
+  - **`deployed_at`** for durations and history, not `recorded_at` (D-07-10);
+  - **effective (non-superseded)** entries only (D-07-11);
+  - current stage computed from SUCCESS minus later ROLLED_BACK, by current ladder order (D-07-08).
+    A rolled-back Production release still keeps its first-success shipped date;
+  - **retired stages** still appear in deployment history, but not as filter defaults or matrix
+    columns.
 
 ### Claude's Discretion
 - **Read model:** a dedicated dashboard query/endpoint with set-based aggregate subqueries, not more

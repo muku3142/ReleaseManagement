@@ -422,6 +422,16 @@ still wait on plan 02-04's live `dev-status` capture.**
 Promotions are append-only rows with environment, `promoted_at`, `promoted_by`, outcome (SUCCESS/FAILED)
 and an optional note, indexed for `(environment, promoted_at)` filtering. The ladder order and the
 Production environment are defined. A `current_stage` column alone is insufficient.
+
+**Discussed 2026-10-07** (`07-CONTEXT.md`, D-07-01..12):
+- Stages: DEV → TEST → UAT → PROD are seeded. The ladder is editable in Settings, but there is one
+  ladder only. Stage ids are permanent, and a used stage is retired, never deleted. Exactly one stage
+  is flagged Production.
+- Promotion targets the next stage or redeploys the current one; skipping is rejected.
+- Outcomes are SUCCESS / FAILED / ROLLED_BACK. A rollback lowers the current stage.
+- Each promotion is one entry, recorded after the fact, carrying `deployed_at` and `recorded_at`.
+- Corrections are append-only entries that supersede the original, with a required reason.
+- Any signed-in user may record or correct a promotion.
 **Plans**: TBD
 **UI hint**: yes
 
