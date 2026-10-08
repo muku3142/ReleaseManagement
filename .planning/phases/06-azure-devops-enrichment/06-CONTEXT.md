@@ -20,7 +20,7 @@ model) and a codebase assumptions scan, all run 2026-10-07.
 - **Data capture for INSIGHT-03** (Phase 8 computes and displays it, this phase stores it):
   - every linked commit's author date;
   - the ticket's status-change history from a scoped `/changelog` read;
-  - the ticket's caused-by issue links.
+  - ~~the ticket's caused-by issue links~~ (dropped 2026-10-07, see D-06-08).
 
 **Out of scope:**
 - Any dashboard aggregation (Phase 8).
@@ -38,6 +38,34 @@ model) and a codebase assumptions scan, all run 2026-10-07.
 
 **Phase 6 research/planning must not start until 02-04 has run.** Everything else here is designable
 now.
+
+**02-04 ran on 2026-10-07: GO.** Read `02-DEVSTATUS-SPIKE.md` for the full findings. Summary:
+- **Calls.** `applicationType=AzureRepos` works. It is the summary's `byInstanceType` key; a wrong value
+  returns an empty `detail`, which looks exactly like "no link". The numeric issue id is required.
+  `dataType=branch` and `dataType=pullrequest` return the same payload (branches plus PRs), and
+  `dataType=repository` returns commits, so each ticket needs 2 dev-status calls.
+- **Commit coverage.** dev-status lists **only commits whose message mentions the key** (1 for
+  CNV-2896, although its branch holds more work). That changes these decisions:
+  - **D-06-09 (user, 2026-10-07): the ADO PAT is optional; enrichment is Jira-first.**
+    - Everything (branches, PRs, key-tagged commits, ADO-01/03, INSIGHT-02, document placeholders)
+      works from Jira dev-status alone, with no ADO token.
+    - When an org PAT is configured, complete per-ticket commit lists and dates come from ADO's PR
+      commits API, for the ticket's own PRs only.
+    - Without a PAT, INSIGHT-03 commit counts are **key-tagged commits only**, and every display of them
+      is labelled that way. Each stored commit list records which source it came from.
+    - A PAT that is missing, expired or rejected never fails enrichment: it falls back to the
+      Jira-only data.
+  - **Environment-merge PRs are excluded from commit counts.** The PR list includes e.g. `develop →
+    testing` merges linked only by title, and their commits include other tickets' work. Count commits
+    only from PRs whose source branch is the ticket's own branch. The exact rule is a planning item,
+    pending the user confirming the branch naming convention.
+- **Caused-by bugs are dropped.** The tenant has a `Problem/Incident` ("is caused by") link type, but the user
+  says bugs are **not linked consistently**, so the count would mostly read zero and mislead.
+- **Branch rule confirmed.** Ticket branches start with the key (e.g. `CNV-2896-…`, optionally after a
+  prefix such as `feature/`). Count commits only from PRs whose source branch contains the key as a
+  whole token.
+- **Credential confirmed.** The user can create an org-scoped Code (Read) PAT, so the shared org PAT
+  stands.
 </domain>
 
 <decisions>
@@ -124,10 +152,9 @@ exposed to templates.
     at minimum the reopen intervals, so Phase 8 can count reopens and classify commits.
   - Done means **Jira status category Done**, not status names.
   - This is the scoped `/changelog` reversal recorded in `PROJECT.md` (2026-10-07).
-- **Caused-by bugs.** Store the ticket's Jira issue links (standard `issuelinks` field, already
-  available from the search call), keeping link type name/direction and the linked issue key/type/status.
-  Which link type(s) mean "caused by" is a **planning question**. Check this tenant's configured link
-  types (needs a live token, which can be done alongside 02-04) rather than guessing.
+- **Caused-by bugs: dropped (2026-10-07).** Bugs are not linked consistently in Jira, so a
+  caused-by count would mostly read zero. Issue links are **not** captured. The testing signal is
+  reopens plus post-Done commits. Recorded as a deferred idea.
 - History reads follow the same failure rule as ADO: a `/changelog` failure marks history unavailable
   for that item and never fails the refresh.
 
@@ -145,8 +172,7 @@ exposed to templates.
 - **Expiry warning:** 14 days before the stored expiry, as an app-wide banner (reusing the
   `credentialStatus.ts` pattern), plus a Settings indicator. Checked on read, with no scheduler.
 - **Who may set it:** any signed-in user, since no role model exists. Record `updated_by`.
-- **If dev-status alone carries enough detail** (decided by 02-04), the ADO PAT becomes an optional
-  enhancement rather than a requirement. Planning re-checks this after the spike.
+- **Resolved by D-06-09:** the ADO PAT is an optional enhancement for complete commit lists.
 - **Concurrency:** a small fixed pool (single digits) on virtual threads with a semaphore, an overall
   deadline (pending items become `FAILED / TIMEOUT`, partial results are returned), one honoured
   `Retry-After` on 429 per ticket, and de-duplication by PR id and commit sha within a run. No cache

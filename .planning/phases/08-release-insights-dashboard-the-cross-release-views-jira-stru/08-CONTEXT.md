@@ -57,16 +57,15 @@ That falsely shows paperwork as STALE on the dashboard. Fix it here, the same wa
     the ticket's **first** transition into status category Done.
   - **Testing rework:** the **reopen count** (transitions from a Done-category status back to a
     non-Done one) and the **commits made after first Done**.
-  - Caused-by bugs: the count of bugs Jira-linked to the ticket as caused-by. Link type mapping is set in
-    Phase 6 planning.
+  - ~~Caused-by bugs~~: **dropped 2026-10-07.** Bugs are not linked consistently in Jira, so the count
+    would mostly read zero and mislead. Testing rework is reopens plus post-Done commits.
 - **D-08-06: "Done" = Jira status category Done**, not status names. Status history comes from
   Phase 6's scoped, cached `/changelog` capture (D-06-08), not from the resolution date, which is
   overwritten on re-resolution and would misfile reopen-window commits as development.
 - **D-08-07: Display.**
-  - Per ticket, on the release page: commits-to-done, reopen count, post-Done commits, and caused-by bug
-    count.
+  - Per ticket, on the release page: commits-to-done, reopen count, and post-Done commits.
   - Per release, in the dashboard matrix: median commits-to-done, total reopens, post-Done commit share,
-    and caused-by bug count, with the outlier tickets flagged.
+    with the outlier tickets flagged.
   - Tickets with no history or no linked commits are excluded from medians and counted as "no data",
     never as zero.
 - These measure *this release's code and test churn*, which Jira cannot compute because it does not

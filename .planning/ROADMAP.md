@@ -13,7 +13,7 @@ The journey starts with a horizontal foundation (Spring Boot/React skeleton, hex
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Foundation & Authentication** - Spring Boot/React skeleton with hexagonal boundaries, single-jar deployment, Jira site configuration, and sign-in via the release manager's own Jira credentials
-- [ ] **Phase 2: Jira Ticket Browsing** - Browse/filter the complete candidate ticket set from the configured Jira Cloud site; run the Jira→ADO link-discovery spike
+- [x] **Phase 2: Jira Ticket Browsing** - Browse/filter the complete candidate ticket set from the configured Jira Cloud site; run the Jira→ADO link-discovery spike (completed 2026-10-07)
 - [x] **Phase 3: Release Assembly** - Create, freeze, and manage named/versioned releases built from browsed tickets (completed 2026-08-06)
 - [ ] **Phase 4: Template Authoring** - Author, validate, and live-preview per-document-type templates against a safe, documented view-model (all code merged 2026-08-10; awaiting the 04-11 live-tenant verification)
 - [x] **Phase 5: Document Generation** - Generate, preview, and export release notes, runbooks, and approval documents as immutable snapshots (completed 2026-08-11)
@@ -401,8 +401,8 @@ Plans:
   5. Enriching a release containing many tickets completes in bounded time through parallel, cached lookups rather than one sequential call per ticket
   6. *(added 2026-10-07, data for INSIGHT-03)* Each stored commit keeps its author date, and each Jira-backed item stores its status-category history (scoped, cached `/changelog`, status changes only) and its issue links, so Phase 8 can separate development churn from testing rework
 
-**Discussed 2026-10-07** alongside Phase 8. See `06-CONTEXT.md` (D-06-01..08). **Research and planning
-still wait on plan 02-04's live `dev-status` capture.**
+**Discussed 2026-10-07** alongside Phase 8. See `06-CONTEXT.md` (D-06-01..08). **02-04 ran 2026-10-07 — GO** (`02-DEVSTATUS-SPIKE.md`): `applicationType=AzureRepos`; dev-status lists only
+key-tagged commits, so the ADO PAT is **optional** and adds complete commit lists (D-06-09). Ready to plan.
 **Plans**: TBD
 **UI hint**: yes
 
@@ -443,7 +443,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Authentication | 7/8 | In Progress|  |
-| 2. Jira Ticket Browsing | 6/7 | In Progress|  |
+| 2. Jira Ticket Browsing | 7/7 | Complete | 2026-10-07 |
 | 3. Release Assembly | 8/8 | Complete   | 2026-08-06 |
 | 4. Template Authoring | 11/11 | Code merged, awaiting live-tenant verification (04-11 task 3) |  |
 | 5. Document Generation | 13/13 | Complete   | 2026-08-11 |
@@ -491,7 +491,7 @@ been reworked once Phase 7 landed.
 4. Release manager sees how long releases take through their own lifecycle — created to frozen, frozen to production — computed from timestamps this system owns (`INSIGHT-01`)
 5. Release manager sees each release's composition: ticket count, manual versus ticket-backed split, and what share of tickets carry linked Azure DevOps commits or pull requests (`INSIGHT-02`)
 6. Every figure on the dashboard is derived from this system's own database — no new Jira integration surface, and specifically no Agile board/burndown/story-point reads beyond the sprint listing Phase 2 already uses *(amended 2026-10-07: Phase 6 adds a scoped, cached `/changelog` read for status history, captured at refresh time, never at render time)*
-7. *(added 2026-10-07, INSIGHT-03)* Release manager can distinguish development problems (commits needed to reach first Done) from testing problems (reopens after Done, commits after first Done, caused-by bugs), per ticket and summarised per release
+7. *(added 2026-10-07, INSIGHT-03)* Release manager can distinguish development problems (commits needed to reach first Done) from testing problems (reopens after Done, commits after first Done), per ticket and summarised per release
 
 **Discussed 2026-10-07.** See `08-CONTEXT.md` (D-08-01..14).
 
