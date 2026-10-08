@@ -399,7 +399,7 @@ Plans:
   3. Release manager can tell the difference between a ticket that has no Azure DevOps link and one whose enrichment was attempted and failed
   4. Release manager configures an org-scoped Azure DevOps credential with a tracked expiry date and is warned before it expires
   5. Enriching a release containing many tickets completes in bounded time through parallel, cached lookups rather than one sequential call per ticket
-  6. *(added 2026-10-07, data for INSIGHT-03)* Each stored commit keeps its author date, and each Jira-backed item stores its status-category history (scoped, cached `/changelog`, status changes only) and its issue links, so Phase 8 can separate development churn from testing rework
+  6. *(added 2026-10-07, data for INSIGHT-03)* Each stored commit keeps its author date, and each Jira-backed item stores its status-category history (scoped, cached `/changelog`, status changes only), so Phase 8 can separate development churn from testing rework
 
 **Discussed 2026-10-07** alongside Phase 8. See `06-CONTEXT.md` (D-06-01..08). **02-04 ran 2026-10-07 — GO** (`02-DEVSTATUS-SPIKE.md`): `applicationType=AzureRepos`; dev-status lists only
 key-tagged commits, so the ADO PAT is **optional** and adds complete commit lists (D-06-09). Ready to plan.

@@ -27,7 +27,7 @@ D-08-02, D-08-14).
 **Today:** `ReleaseStatus` has only `OPEN` / `FROZEN`
 (`src/main/java/com/evision/releasemgmt/domain/release/ReleaseStatus.java`), and freeze is one-way
 (`Release.java:25-31`). No ladder, environment or promotion table exists. The latest migration is
-`V7__template_user_default.sql` (Phase 05.4), so this phase starts at `V8`.
+`V7__template_user_default.sql` (Phase 05.4). **Phase 6 takes `V8`** (06-RESEARCH), so this phase uses the next free number after Phase 6's migrations. Check `src/main/resources/db/migration/` at planning time; never hard-code `V8`.
 </domain>
 
 <decisions>
