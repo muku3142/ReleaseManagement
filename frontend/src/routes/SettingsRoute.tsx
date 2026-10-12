@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useAdoCredential, useUpdateAdoCredential } from '../api/adoCredential';
 import { useJiraSite, useUpdateJiraSite } from '../api/jiraSite';
 import { ApiError } from '../api/client';
 import { useSession, useReplaceJiraToken as useReplaceToken, messageForReason } from '../api/auth';
@@ -146,6 +147,128 @@ export function SettingsRoute() {
           </p>
         )}
       </form>
+
+      <AzureDevOpsSection />
     </div>
+  );
+}
+
+const ADO_STATE_BADGE = {
+  OK: { label: 'OK', className: 'text-green-600' },
+  EXPIRING: { label: 'Expiring soon', className: 'text-amber-700' },
+  EXPIRED: { label: 'Expired', className: 'text-red-600' },
+} as const;
+
+function AzureDevOpsSection() {
+  const credential = useAdoCredential();
+  const update = useUpdateAdoCredential();
+  const [organization, setOrganization] = useState('');
+  const [token, setToken] = useState('');
+  const [expiresOn, setExpiresOn] = useState('');
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    if (credential.data?.configured) {
+      setOrganization(credential.data.organization ?? '');
+      setExpiresOn(credential.data.expiresOn ?? '');
+    }
+  }, [credential.data]);
+
+  const problem = update.isError && update.error instanceof ApiError ? update.error.problem : undefined;
+  const configured = credential.data?.configured ? credential.data : undefined;
+  const badge = configured?.state ? ADO_STATE_BADGE[configured.state] : undefined;
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    setSaved(false);
+    update.mutate(
+      { organization, token, expiresOn },
+      {
+        onSuccess: () => {
+          setToken('');
+          setSaved(true);
+        },
+      },
+    );
+  }
+
+  return (
+    <>
+      <h2 className="mt-8 text-base font-semibold text-gray-900">Azure DevOps</h2>
+      {configured && (
+        <p className="mt-2 text-sm text-gray-600">
+          Organization <span className="font-medium">{configured.organization}</span>, token expires{' '}
+          {configured.expiresOn && new Date(configured.expiresOn + 'T00:00:00').toLocaleDateString()}
+          {badge && (
+            <span data-state={configured.state} className={`ml-2 font-medium ${badge.className}`}>
+              {badge.label}
+            </span>
+          )}
+        </p>
+      )}
+      <p className="mt-1 text-sm text-gray-600">
+        Optional. Without a token, each ticket shows only the commits whose message names the ticket key. Create a
+        Personal Access Token in Azure DevOps with the Code (Read) scope, select one organization (not &quot;All
+        accessible organizations&quot;: those tokens stop working on 1 December 2026), and enter the expiry date you
+        chose.
+      </p>
+
+      <form onSubmit={handleSubmit} className="mt-4 space-y-2">
+        <label htmlFor="adoOrganization" className="block text-sm font-medium text-gray-700">
+          Azure DevOps organization
+        </label>
+        <input
+          id="adoOrganization"
+          name="adoOrganization"
+          type="text"
+          required
+          value={organization}
+          onChange={(event) => setOrganization(event.target.value)}
+          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+        />
+        <label htmlFor="adoToken" className="block text-sm font-medium text-gray-700">
+          Personal Access Token
+        </label>
+        <input
+          id="adoToken"
+          name="adoToken"
+          type="password"
+          autoComplete="off"
+          value={token}
+          onChange={(event) => setToken(event.target.value)}
+          placeholder={configured ? 'Leave blank to change only the expiry date' : undefined}
+          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+        />
+        <label htmlFor="adoExpiresOn" className="block text-sm font-medium text-gray-700">
+          Token expiry date
+        </label>
+        <input
+          id="adoExpiresOn"
+          name="adoExpiresOn"
+          type="date"
+          required
+          value={expiresOn}
+          onChange={(event) => setExpiresOn(event.target.value)}
+          className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={update.isPending}
+          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+        >
+          Save Azure DevOps token
+        </button>
+        {saved && !update.isError && (
+          <p role="status" className="text-sm text-green-600">
+            Azure DevOps settings saved.
+          </p>
+        )}
+        {problem && (
+          <p role="alert" data-reason={problem.reason} className="text-sm text-red-600">
+            {messageForReason(problem)}
+          </p>
+        )}
+      </form>
+    </>
   );
 }
