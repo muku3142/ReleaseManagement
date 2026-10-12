@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.web;
 
+import com.evision.releasemgmt.adapters.web.dto.CorrectPromotionRequest;
 import com.evision.releasemgmt.adapters.web.dto.PromotionEntryResponse;
 import com.evision.releasemgmt.adapters.web.dto.PromotionHistoryResponse;
 import com.evision.releasemgmt.adapters.web.dto.RecordPromotionRequest;
@@ -53,6 +54,17 @@ public class PromotionController {
         PromotionDraft draft = new PromotionDraft(request.stageId(), request.outcome(), request.deployedAt(),
                 request.note());
         return respond(service.record(releaseId, draft, principal.getName()));
+    }
+
+    @PostMapping("/{promotionId}/corrections")
+    @ResponseStatus(HttpStatus.CREATED)
+    public PromotionHistoryResponse correct(@PathVariable UUID releaseId,
+                                            @PathVariable UUID promotionId,
+                                            @Valid @RequestBody CorrectPromotionRequest request,
+                                            Principal principal) {
+        PromotionDraft draft = new PromotionDraft(request.stageId(), request.outcome(), request.deployedAt(),
+                request.note());
+        return respond(service.correct(releaseId, promotionId, draft, request.reason(), principal.getName()));
     }
 
     private PromotionHistoryResponse respond(PromotionHistory history) {

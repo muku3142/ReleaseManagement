@@ -276,6 +276,84 @@ class PromotionHistoryTest {
     }
 
     @Test
+    void correctingAnUnknownEntryIsNotFound() {
+        assertThatThrownBy(() -> history().correct(UUID.randomUUID(), new PromotionDraft(dev.id(), SUCCESS, day(1), null), "typo", "acc-1", NOW))
+                .isInstanceOf(PromotionNotFoundException.class);
+    }
+
+    @Test
+    void anEntryCannotBeCorrectedTwiceButItsCorrectionCan() {
+        Promotion original = entry(dev, SUCCESS, 1);
+        Promotion fix = correction(original, FAILED);
+        PromotionHistory h = history(original, fix);
+        PromotionDraft again = new PromotionDraft(dev.id(), SUCCESS, day(1), null);
+
+        assertRejected(() -> h.correct(original.id(), again, "typo", "acc-1", NOW), PromotionRejection.PROMOTION_ALREADY_SUPERSEDED);
+        assertThat(h.correct(fix.id(), again, "typo", "acc-1", NOW).supersedesId()).isEqualTo(fix.id());
+    }
+
+    @Test
+    void correctionSkipsTheLadderSequenceRules() {
+        Promotion devOk = entry(dev, SUCCESS, 1);
+        Promotion testOk = entry(test, SUCCESS, 2);
+        PromotionHistory h = history(devOk, testOk);
+
+        Promotion fix = h.correct(devOk.id(), new PromotionDraft(dev.id(), FAILED, day(1), null), "wrong result", "acc-1", NOW);
+
+        PromotionHistory after = history(devOk, testOk, fix);
+        assertThat(after.currentStage()).contains(test);
+    }
+
+    @Test
+    void correctingToVoidedRemovesBothFromEffect() {
+        Promotion devOk = entry(dev, SUCCESS, 1);
+        PromotionHistory h = history(devOk);
+
+        Promotion voided = h.correct(devOk.id(), new PromotionDraft(dev.id(), VOIDED, day(1), null), "never happened", "acc-1", NOW);
+
+        PromotionHistory after = history(devOk, voided);
+        assertThat(voided.outcome()).isEqualTo(VOIDED);
+        assertThat(after.isEffective(devOk)).isFalse();
+        assertThat(after.currentStage()).isEmpty();
+    }
+
+    @Test
+    void correctionMayKeepItsOwnRetiredStageButNotMoveToAnotherRetiredOne() {
+        Promotion devOk = entry(dev, SUCCESS, 1);
+        PromotionHistory h = history(List.of(retired(dev), retired(test), uat, prod), devOk);
+
+        assertThat(h.correct(devOk.id(), new PromotionDraft(dev.id(), VOIDED, day(1), null), "typo", "acc-1", NOW).stageId())
+                .isEqualTo(dev.id());
+        assertRejected(() -> h.correct(devOk.id(), new PromotionDraft(test.id(), SUCCESS, day(1), null), "typo", "acc-1", NOW),
+                PromotionRejection.PROMOTION_TARGET_RETIRED);
+    }
+
+    @Test
+    void correctionDeployedAtIsBounded() {
+        Promotion devOk = entry(dev, SUCCESS, 1);
+        PromotionHistory h = history(devOk);
+
+        assertRejected(() -> h.correct(devOk.id(), new PromotionDraft(dev.id(), SUCCESS, NOW.plus(Duration.ofMinutes(3)), null), "typo", "acc-1", NOW),
+                PromotionRejection.PROMOTION_DEPLOYED_AT_INVALID);
+        assertRejected(() -> h.correct(devOk.id(), new PromotionDraft(dev.id(), SUCCESS, FROZEN_AT.minusSeconds(1), null), "typo", "acc-1", NOW),
+                PromotionRejection.PROMOTION_DEPLOYED_AT_INVALID);
+    }
+
+    @Test
+    void acceptedCorrectionCarriesProvenance() {
+        Promotion devOk = entry(dev, SUCCESS, 1);
+
+        Promotion fix = history(devOk).correct(devOk.id(), new PromotionDraft(dev.id(), FAILED, day(2), "  "), "  wrong  ", "acc-9", NOW);
+
+        assertThat(fix.id()).isNotEqualTo(devOk.id());
+        assertThat(fix.supersedesId()).isEqualTo(devOk.id());
+        assertThat(fix.correctionReason()).isEqualTo("wrong");
+        assertThat(fix.recordedAt()).isEqualTo(NOW);
+        assertThat(fix.recordedBy()).isEqualTo("acc-9");
+        assertThat(fix.note()).isNull();
+    }
+
+    @Test
     void blankNoteBecomesNull() {
         assertThat(history().record(new PromotionDraft(dev.id(), SUCCESS, null, "   "), "acc-1", NOW).note()).isNull();
     }

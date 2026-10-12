@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -53,13 +54,8 @@ public record PromotionHistory(UUID releaseId, boolean frozen, Instant frozenAt,
         // Postgres stores microseconds; truncating keeps in-memory comparisons identical to what is read back.
         Instant nowMicros = now.truncatedTo(ChronoUnit.MICROS);
         Instant deployedAt = draft.deployedAt() == null ? nowMicros : draft.deployedAt().truncatedTo(ChronoUnit.MICROS);
-        if (deployedAt.isAfter(nowMicros.plus(FUTURE_TOLERANCE)) || deployedAt.isBefore(frozenAt)) {
-            throw reject(PromotionRejection.PROMOTION_DEPLOYED_AT_INVALID);
-        }
-        Stage target = stages.stream()
-                .filter(s -> s.id().equals(draft.stageId()))
-                .findFirst()
-                .orElseThrow(StageNotFoundException::new);
+        requireDeployedAtInBounds(deployedAt, nowMicros);
+        Stage target = findStage(draft.stageId());
         if (target.retired()) {
             throw reject(PromotionRejection.PROMOTION_TARGET_RETIRED);
         }
@@ -70,6 +66,41 @@ public record PromotionHistory(UUID releaseId, boolean frozen, Instant frozenAt,
         }
         return new Promotion(UUID.randomUUID(), releaseId, target.id(), outcome, deployedAt, nowMicros, actor,
                 trimToNull(draft.note()), null, null);
+    }
+
+    // D-07-14: a correction passes field checks only, never the ladder-sequence rules - replaying D-07-07 over corrected
+    // history would make early entries impossible to fix.
+    public Promotion correct(UUID originalId, PromotionDraft draft, String reason, String actor, Instant now) {
+        Promotion original = entries.stream()
+                .filter(e -> e.id().equals(originalId))
+                .findFirst()
+                .orElseThrow(PromotionNotFoundException::new);
+        if (!isEffective(original)) {
+            throw reject(PromotionRejection.PROMOTION_ALREADY_SUPERSEDED);
+        }
+        Instant nowMicros = now.truncatedTo(ChronoUnit.MICROS);
+        Instant deployedAt = Objects.requireNonNull(draft.deployedAt()).truncatedTo(ChronoUnit.MICROS);
+        requireDeployedAtInBounds(deployedAt, nowMicros);
+        Stage target = findStage(draft.stageId());
+        // The entry may keep its own stage even once retired, otherwise it could never be voided or re-timed.
+        if (target.retired() && !target.id().equals(original.stageId())) {
+            throw reject(PromotionRejection.PROMOTION_TARGET_RETIRED);
+        }
+        return new Promotion(UUID.randomUUID(), releaseId, target.id(), draft.outcome(), deployedAt, nowMicros, actor,
+                trimToNull(draft.note()), originalId, reason.strip());
+    }
+
+    private void requireDeployedAtInBounds(Instant deployedAt, Instant nowMicros) {
+        if (deployedAt.isAfter(nowMicros.plus(FUTURE_TOLERANCE)) || deployedAt.isBefore(frozenAt)) {
+            throw reject(PromotionRejection.PROMOTION_DEPLOYED_AT_INVALID);
+        }
+    }
+
+    private Stage findStage(UUID stageId) {
+        return stages.stream()
+                .filter(s -> s.id().equals(stageId))
+                .findFirst()
+                .orElseThrow(StageNotFoundException::new);
     }
 
     private void checkRollback(Stage target, Instant deployedAt) {
