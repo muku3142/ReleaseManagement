@@ -63,11 +63,11 @@ public class PromotionRepositoryAdapter implements PromotionRepository {
                 release.getFrozenAt(), stages, entries);
     }
 
-    private static Stage toStage(EnvironmentStageEntity e) {
+    static Stage toStage(EnvironmentStageEntity e) {
         return new Stage(e.getId(), e.getName(), e.getPosition(), e.isProduction(), e.getRetiredAt());
     }
 
-    private static Promotion toPromotion(PromotionEntity e) {
+    static Promotion toPromotion(PromotionEntity e) {
         return new Promotion(e.getId(), e.getReleaseId(), e.getStageId(), e.getOutcome(), e.getDeployedAt(),
                 e.getRecordedAt(), e.getRecordedBy(), e.getNote(), e.getSupersedesId(), e.getCorrectionReason());
     }
