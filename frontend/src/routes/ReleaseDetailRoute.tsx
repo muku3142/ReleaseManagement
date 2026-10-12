@@ -21,6 +21,7 @@ import { AddTicketsToReleaseDialog } from '../components/AddTicketsToReleaseDial
 import { CodeLinksChip, CodeLinksDetail } from '../components/CodeLinks';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DocumentsSection } from '../components/DocumentsSection';
+import { PromotionSection } from '../components/PromotionSection';
 
 // D-03-13: idempotent add, honest feedback - never phrased as a warning, because a duplicate
 // add is a success, not a partial failure. A key Jira did not return is neither added nor
@@ -655,6 +656,7 @@ export function ReleaseDetailRoute() {
         </form>
       )}
 
+      <PromotionSection releaseId={data.id} isFrozen={isFrozen} />
       <DocumentsSection releaseId={data.id} releaseName={data.name} version={data.version} />
     </div>
   );

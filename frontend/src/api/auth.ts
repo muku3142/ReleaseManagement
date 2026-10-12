@@ -98,6 +98,24 @@ const REASON_MESSAGES: Record<string, string> = {
   NO_TEMPLATE: 'No template is available for this document type. Create one from Templates, or choose one, before generating.',
   TEMPLATE_TYPE_MISMATCH: 'The chosen template is for a different document type. Choose a template of this document type.',
   CHOSEN_TEMPLATE_NOT_FOUND: 'The chosen template no longer exists. Choose another template and try again.',
+  RELEASE_NOT_FROZEN: 'Only frozen releases can be promoted. Freeze the release first.',
+  PROMOTION_STAGE_SKIPPED:
+    'A promotion can only target the next stage of the ladder, or the current stage for a redeploy or a rollback.',
+  PROMOTION_TARGET_RETIRED: 'That stage has been retired from the environment ladder and can no longer be targeted.',
+  PROMOTION_ROLLBACK_WITHOUT_SUCCESS:
+    'A rollback needs a successful deployment to that stage dated at or before the rollback.',
+  PROMOTION_ALREADY_SUPERSEDED: 'This entry has already been corrected. Correct the latest correction instead.',
+  PROMOTION_DEPLOYED_AT_INVALID: 'The deployment time cannot be in the future or before the release was frozen.',
+  PROMOTION_OUTCOME_NOT_RECORDABLE: 'An entry can only be marked VOIDED by correcting it.',
+  PROMOTION_NOT_FOUND: "This promotion entry doesn't exist on this release.",
+  STAGE_NOT_FOUND: "This environment stage doesn't exist.",
+  STAGE_IN_USE: 'Promotions reference this stage, so it can be retired but not deleted.',
+  STAGE_NAME_DUPLICATE: 'A stage with this name already exists, including retired stages.',
+  PRODUCTION_STAGE_PROTECTED:
+    'The Production stage cannot be retired or deleted. Move the Production flag to another stage first.',
+  LAST_ACTIVE_STAGE: 'The ladder must keep at least one active stage.',
+  STAGE_RETIRED: 'A retired stage cannot carry the Production flag. Restore it first.',
+  STAGE_ORDER_MISMATCH: 'The new order must list every stage exactly once.',
   EXPORT_FAILED: "The document couldn't be exported. Try again, and check the server logs if it persists.",
 };
 

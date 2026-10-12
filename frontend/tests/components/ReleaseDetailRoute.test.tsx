@@ -36,6 +36,8 @@ const RELEASE: Release = {
   ],
 };
 
+const EMPTY_PROMOTIONS = { stages: [], currentStageId: null, nextStageId: null, entries: [] };
+
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -92,6 +94,7 @@ function mockAddTicketsApi(
     if (url === `/api/releases/${release.id}/items` && method === 'POST') {
       return overrides.addResponse ?? json(200, { release, added: 0, alreadyPresent: 0, notFound: 0 });
     }
+    if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
     if (url.startsWith('/api/documents/readiness')) return json(200, { entries: [] });
     if (url.includes('/revisions')) return json(200, { revisions: [] });
     return json(200, release);
@@ -129,6 +132,7 @@ describe('ReleaseDetailRoute', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith('/freeze')) return json(409, { status: 409, reason: 'RELEASE_FROZEN' });
+      if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
       return json(200, RELEASE);
     });
 
@@ -151,7 +155,9 @@ describe('ReleaseDetailRoute', () => {
   // release_manual_item has no uniqueness constraint, so submitting the prefilled form silently
   // created a second copy of the item that was being edited.
   it('reopens the manual-item form empty after an edit was abandoned', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(200, RELEASE));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+      String(input).endsWith('/promotions') ? json(200, EMPTY_PROMOTIONS) : json(200, RELEASE),
+    );
 
     await renderRoute();
     await act(async () => byText('Edit').click());
@@ -174,6 +180,7 @@ describe('ReleaseDetailRoute', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       requested.push(`${init?.method ?? 'GET'} ${String(input)}`);
       if (init?.method === 'DELETE') return new Response(null, { status: 204 });
+      if (String(input).endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
       return json(200, RELEASE);
     });
 
@@ -193,8 +200,9 @@ describe('ReleaseDetailRoute', () => {
   });
 
   it('closes the delete confirmation on failure so the error is readable', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (_input, init) => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       if (init?.method === 'DELETE') return json(409, { status: 409, reason: 'RELEASE_FROZEN' });
+      if (String(input).endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
       return json(200, RELEASE);
     });
 
@@ -217,6 +225,7 @@ describe('ReleaseDetailRoute', () => {
   it('documentsSectionIsRenderedLastWithItsAnchorId', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
+      if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
       if (url.startsWith('/api/documents/readiness')) return json(200, { entries: [] });
       if (url.includes('/revisions')) return json(200, { revisions: [] });
       return json(200, RELEASE);
@@ -229,6 +238,17 @@ describe('ReleaseDetailRoute', () => {
     expect(section).not.toBeNull();
     const wrapper = container.firstElementChild;
     expect(wrapper?.lastElementChild).toBe(section);
+  });
+
+  it('aFrozenReleaseShowsRecordPromotionInAHistorySectionAboveDocuments', async () => {
+    mockAddTicketsApi({ ...RELEASE, status: 'FROZEN', frozenAt: '2026-08-06T00:00:00Z', frozenBy: 'rm@acme.com' });
+    await renderRoute();
+    await flush();
+
+    expect(byText('Record promotion')).toBeDefined();
+    const history = container.querySelector('#history')!;
+    const documents = container.querySelector('#documents')!;
+    expect(history.compareDocumentPosition(documents) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('anOpenReleaseOffersAnAddTicketsAffordance', async () => {
@@ -374,6 +394,7 @@ describe('ReleaseDetailRoute', () => {
         const url = String(input);
         const method = init?.method ?? 'GET';
         if (method === 'POST') calls.push(`${method} ${url}`);
+        if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
         if (url.startsWith('/api/documents/readiness')) return json(200, { entries: [] });
         if (url.includes('/revisions')) return json(200, { revisions: [] });
         return json(200, release);
