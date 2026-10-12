@@ -495,4 +495,27 @@ class JiraRestTicketAdapterTest {
                 .satisfies(ex -> assertThat(((JiraTicketReadException) ex).reason())
                         .isEqualTo(JiraAuthFailureReason.JIRA_UNREACHABLE));
     }
+
+    private static com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder badRequest(String message) {
+        return aResponse().withStatus(400).withHeader("Content-Type", "application/json")
+                .withBody("{\"errorMessages\":[\"" + message + "\"],\"errors\":{}}");
+    }
+
+    @Test
+    void unknownKeyBadRequestIsAnEmptyResult(WireMockRuntimeInfo wm) {
+        stubFor(post(urlEqualTo(SEARCH_URL))
+                .willReturn(badRequest("An issue with key 'CNV-999' does not exist for field 'key'.")));
+
+        assertThat(adapter(50).searchAll(context(wm), "key = CNV-999", fieldIds())).isEmpty();
+    }
+
+    @Test
+    void otherBadRequestsStayAJiraError(WireMockRuntimeInfo wm) {
+        stubFor(post(urlEqualTo(SEARCH_URL)).willReturn(badRequest("Error in the JQL Query: bad")));
+
+        assertThatThrownBy(() -> adapter(50).searchAll(context(wm), "bad", fieldIds()))
+                .isInstanceOf(JiraTicketReadException.class)
+                .satisfies(ex -> assertThat(((JiraTicketReadException) ex).reason())
+                        .isEqualTo(JiraAuthFailureReason.JIRA_ERROR));
+    }
 }

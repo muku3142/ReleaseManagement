@@ -70,6 +70,15 @@ class TicketSearchServiceTest {
     }
 
     @Test
+    void findByKeySearchesByKeyAndIsEmptyWhenJiraHasNoMatch() {
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), eq("key = CNV-9"), any())).thenReturn(List.of());
+
+        assertThat(service.findByKey("CNV-9")).isEmpty();
+    }
+
+    @Test
     void resolvesCredentialAndAllNineFieldsBeforeSearchingWithComposedJql() {
         when(accessContextService.currentContext()).thenReturn(ACCESS);
         when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);

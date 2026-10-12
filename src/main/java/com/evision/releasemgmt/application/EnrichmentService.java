@@ -55,6 +55,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @Service
@@ -113,7 +114,8 @@ public class EnrichmentService {
                 continue;
             }
             CodeLinks previous = previousByKey.getOrDefault(ticket.key(), CodeLinks.notAttempted());
-            futures.put(ticket.key(), executor.submit(() -> boundedEnrichOne(access, ticket, previous, adoRun)));
+            futures.put(ticket.key(), executor.submit(
+                    () -> bounded(previous, () -> enrichOne(access, ticket, previous, adoRun))));
         }
 
         long deadlineNanos = System.nanoTime() + deadline.toNanos();
@@ -146,8 +148,21 @@ public class EnrichmentService {
         }
     }
 
-    private CodeLinks boundedEnrichOne(JiraAccessContext access, TicketDetail ticket, CodeLinks previous,
-                                       AdoRun adoRun) {
+    // On-demand ticket-browser lookup for a ticket that is not in a release: stores nothing, so the status history
+    // (which has nowhere to be kept) is skipped.
+    public CodeLinks lookup(TicketDetail ticket) {
+        if (ticket.jiraIssueId() == null) {
+            return CodeLinks.notAttempted();
+        }
+        JiraAccessContext access = accessContextService.currentContext();
+        AdoRun adoRun = adoRun();
+        CodeLinks none = CodeLinks.notAttempted();
+        Future<CodeLinks> future = executor.submit(() -> bounded(none,
+                () -> discover(access, ticket, none, adoRun, StatusHistory.notRead())));
+        return await(future, System.nanoTime() + deadline.toNanos(), none);
+    }
+
+    private CodeLinks bounded(CodeLinks previous, Supplier<CodeLinks> work) {
         try {
             permits.acquire();
         } catch (InterruptedException e) {
@@ -155,7 +170,7 @@ public class EnrichmentService {
             return timedOut(previous);
         }
         try {
-            return enrichOne(access, ticket, previous, adoRun);
+            return work.get();
         } finally {
             permits.release();
         }
@@ -182,7 +197,11 @@ public class EnrichmentService {
     }
 
     CodeLinks enrichOne(JiraAccessContext access, TicketDetail ticket, CodeLinks previous, AdoRun adoRun) {
-        StatusHistory history = statusHistory(access, ticket, previous.history());
+        return discover(access, ticket, previous, adoRun, statusHistory(access, ticket, previous.history()));
+    }
+
+    private CodeLinks discover(JiraAccessContext access, TicketDetail ticket, CodeLinks previous, AdoRun adoRun,
+                               StatusHistory history) {
         try {
             DevStatusLinks links = devStatusPort.fetchLinks(access, ticket.jiraIssueId(), ticket.key());
             // release_item_commit.authored_at is NOT NULL, so a commit without an author date cannot be stored.
