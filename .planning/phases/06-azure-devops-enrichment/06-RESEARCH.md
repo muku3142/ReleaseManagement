@@ -2,7 +2,7 @@
 
 **Researched:** 2026-10-08
 **Domain:** Jira dev-status discovery + optional Azure DevOps REST 7.1 enrichment, Jira `/changelog` status history, per-item persistence, bounded fan-out
-**Confidence:** MEDIUM-HIGH (ADO and Jira endpoint shapes verified against official docs; three wire-level details are flagged `[ASSUMED]` and need a captured fixture before they are locked)
+**Confidence:** MEDIUM-HIGH (ADO and Jira endpoint shapes verified against official docs; A1, A3, A4 and A9 locked by the 2026-10-12 real-tenant capture, see "Captured Fixture Findings")
 
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
@@ -53,7 +53,7 @@
 
 Phase 6 is mostly a persistence-and-orchestration phase, not an API-integration phase. The external surface is small: three Jira calls per ticket at most (dev-status summary, plus `pullrequest` and `repository` detail only when the summary says AzureRepos data exists), an optional changelog read per changed ticket, and, only when an org PAT is configured, **one ADO call per key-branch PR** (Get Pull Request Commits, 100 per page). The discovered key insight is that **two documented ADO endpoints from the brief are unnecessary**: PR title/status/url/source-branch already arrive from dev-status on every refresh (so Get Pull Request by id is not needed), and the PR-commits response (`GitCommitRef`) already carries `commitId`, `comment`, `author{name,date}` and `url` (so Get Commit is not needed). That keeps ADO traffic far below the shared 200 TSTU / 5 min budget.
 
-The riskiest parts are not the HTTP calls. They are (1) the data model that Phase 8 will aggregate with set-based SQL (commits need real rows with `authored_at`; PRs need a "counts toward commits" flag), (2) keeping enrichment strictly outside the existing all-or-nothing refresh path while still writing under the `lockOpen` row lock, (3) making "Refresh code links" stamp `items_changed_at` only when the **document-visible** content changed, and (4) the Jira-side trap that a wrong `applicationType` is indistinguishable from "no link". Three wire details could not be confirmed from docs and must be locked by a captured fixture during the first plan (see Assumptions Log A1-A3).
+The riskiest parts are not the HTTP calls. They are (1) the data model that Phase 8 will aggregate with set-based SQL (commits need real rows with `authored_at`; PRs need a "counts toward commits" flag), (2) keeping enrichment strictly outside the existing all-or-nothing refresh path while still writing under the `lockOpen` row lock, (3) making "Refresh code links" stamp `items_changed_at` only when the **document-visible** content changed, and (4) the Jira-side trap that a wrong `applicationType` is indistinguishable from "no link". The wire details the docs left open (A1, A3, A4) were locked by a real-tenant capture on 2026-10-12; it also overturned the cited invalid-PAT behaviour (a 302, not a 203) and showed Jira timestamps carry the tenant's non-zero offset. See "Captured Fixture Findings".
 
 **Primary recommendation:** Build `EnrichmentService` (application) that, given an already-resolved `JiraAccessContext`, fans out per-item work on virtual threads (semaphore 6, overall deadline ~45 s), returns pure results, and then persists them in ONE transaction through a new `ReleaseRepository` method that takes the `lockOpen` lock; call it best-effort (catch-all) after the existing snapshot refresh, after create/add, and from a new "Refresh code links" endpoint. Store commits and PRs as child tables, status history as three scalar/TEXT columns on `release_ticket_item`, and the ADO credential as a singleton row updated with JPQL (never loaded to be replaced).
 
@@ -206,27 +206,42 @@ One `AtomicReference<Instant> notBefore` per run (or per adapter instance). Afte
 
 **Key insight:** every "hard" part here already has a local pattern. The work is wiring them so that failure of an optional dependency (ADO) or of a best-effort one (changelog) degrades one item's state and never the release operation.
 
+## Captured Fixture Findings (2026-10-12)
+
+Real responses captured by `phase6-capture.sh` (D-06-13) against CNV-2896 and its key-branch PR 3127. Raw files in `spike-capture/` (git-excluded, unredacted).
+
+| Call | Result | Consequence |
+|------|--------|-------------|
+| `POST /search/jql` | 200; issue has top-level `id` (string); `fields.updated` = `2026-08-13T16:31:06.042+0300`; `fields.status.statusCategory.key` present | A4 resolved; one search gives id, updated and current category |
+| `GET /issue/{key}/changelog` (100 and 2 per page) | 200; `startAt`, `maxResults`, `total`, `isLast`, `values`; `nextPage` only on a non-last page; status items match A3 | A3 field names resolved; offset is `+0300`, so never assume UTC |
+| `GET /rest/api/3/status` | 200; 54 statuses, many project-scoped; `Resolved` and `DEFERRED` map to different categories by project | Map by id only |
+| `GET {org}/_apis/git/repositories` valid PAT | 200 JSON, `count` 62 | PAT validation call works (A9) |
+| same, invalid PAT | **302** to `vssps.visualstudio.com/_signin`, `text/html`, `WWW-Authenticate` | Overturns the cited 203; redirects off, 3xx = unauthorized |
+| PR commits `$top=3` | 200, `{count, value}`, header `x-ms-continuationtoken` | A1 resolved |
+| PR commits, no `$top` | 200, all 34 commits, no continuation header | Default page >= 34; header absent when done |
+| Commit shape | `commitId`, `author{name,email,date}`, `committer`, `comment`, `url`; dates UTC `Z` (`2026-07-12T09:35:11Z`) | `Instant.parse` works for ADO dates |
+
 ## Verified External API Details
 
 ### Azure DevOps REST 7.1
 - **Get Pull Request Commits:** `GET https://dev.azure.com/{organization}/{project}/_apis/git/repositories/{repositoryId}/pullRequests/{pullRequestId}/commits?$top={n}&continuationToken={t}&api-version=7.1`. `project` is optional; `repositoryId` accepts the GUID or name; `pullRequestId` is int32; scope `vso.code`. Response `GitCommitRef[]` with `commitId`, `comment`, `commentTruncated`, `author{name,email,date}`, `committer{...}`, `url`, `remoteUrl`. [CITED: learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-request-commits/get-pull-request-commits?view=azure-devops-rest-7.1]
 - Wrapping: ADO list endpoints return `{ "count": n, "value": [...] }` (see the Repositories-List sample below). [CITED: same docs family]
-- **Pagination:** the page documents `$top` and `continuationToken` but not the maximum page size or the response header carrying the next token. Azure DevOps convention is a response header (`x-ms-continuationtoken`, sometimes written `x-ms-continuation-token` in secondary sources) that is absent when done. [ASSUMED: header name and default/max page size; see A1] Implement: always send an explicit `$top=100`, read the header case-insensitively under both spellings, loop until absent, and enforce a hard per-PR page ceiling.
+- **Pagination:** the page documents `$top` and `continuationToken` but not the maximum page size or the response header carrying the next token. The next token arrives in the response header `x-ms-continuationtoken`, absent on the last page. [VERIFIED: 2026-10-12 capture, A1] The default page size is at least 34 (an unpaged call on PR 3127 returned all 34 commits with no token); the maximum was not probed. Implement: always send an explicit `$top=100`, read `x-ms-continuationtoken` (Spring `HttpHeaders` is case-insensitive), loop until absent, and enforce a hard per-PR page ceiling.
 - **Get Pull Request:** `GET .../pullrequests/{id}?api-version=7.1`, `status` enum `notSet|active|abandoned|completed|all`, plus `closedDate`, `creationDate`, `sourceRefName` (`refs/heads/...`), `targetRefName`. Not needed in v1 because dev-status already supplies title/status/url/branches. [CITED: learn.microsoft.com/en-us/rest/api/azure/devops/git/pull-requests/get-pull-request?view=azure-devops-rest-7.1]
 - **Cheap PAT validation (recommended):** `GET https://dev.azure.com/{org}/_apis/git/repositories?api-version=7.1` (project is optional; sample at `https://dev.azure.com/fabrikam/_apis/git/repositories?api-version=7.1`; scope `vso.code`). It proves token validity, `vso.code` scope AND that the org name is correct in one call. [CITED: learn.microsoft.com/en-us/rest/api/azure/devops/git/repositories/list?view=azure-devops-rest-7.1] Do NOT use `_apis/projects` (needs `vso.project`, which a Code-Read PAT lacks) or rely on `connectionData` (does not prove `vso.code`).
 - **Auth:** `Authorization: Basic base64(":" + PAT)` (empty username). Same as the project's stack notes. [CITED: learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate]
 - **Rate limits:** global consumption limit is **200 TSTUs per sliding 5-minute window, per identity** (so one shared PAT = one shared budget for all users of this tool). Delays up to 30 s per request; blocked requests get HTTP 429 `TF400733`. Headers: `Retry-After` (seconds), `X-RateLimit-Delay`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` (epoch), `X-RateLimit-Resource`, `X-RateLimit-Cost`. Best practice from the docs: honour `Retry-After` even on HTTP 200; track `Remaining`. The tool's identity can get higher limits with Basic + Test Plans access. [CITED: learn.microsoft.com/en-us/azure/devops/integrate/concepts/rate-limits, page updated 2026-07-31]
-- **Invalid-PAT behaviour:** invalid or insufficiently scoped credentials on `dev.azure.com` are commonly answered with HTTP **203 Non-Authoritative** and an HTML sign-in page instead of 401. [CITED: learn.microsoft.com/en-us/answers/a/559812 (community Q&A, MEDIUM)] Treat 203, 401 and 403 all as `ADO_UNAUTHORIZED`; use `RestClient.retrieve().onStatus(s -> s.value() == 203, ...)` so the HTML body is never decoded as JSON.
+- **Invalid-PAT behaviour:** an invalid PAT on `dev.azure.com` is answered with **HTTP 302 Found**, `Location` pointing to a `vssps.visualstudio.com/_signin` page, `Content-Type: text/html` and `WWW-Authenticate` headers - not 401, and not the 203 that community answers report. [VERIFIED: 2026-10-12 capture; overturns learn.microsoft.com/en-us/answers/a/559812] Build the ADO `HttpClient` like `JiraRestClientConfig` does (`HttpClient.newBuilder()` defaults to `Redirect.NEVER`; never enable redirects, or the 302 becomes a 200 HTML sign-in page). Spring's default error handler ignores 3xx, so register `onStatus` for any 3xx and for 203, 401 and 403, all mapping to `ADO_UNAUTHORIZED`, so the HTML body is never decoded as JSON.
 - **Global PAT retirement:** creation of global PATs is still allowed until 1 Dec 2026; all existing global PATs stop working on **1 Dec 2026** (today is 2026-10-08, 54 days away). [CITED: devblogs.microsoft.com/devops/retirement-of-global-personal-access-tokens-in-azure-devops] The Settings help text must say "select one organization", and the expiry date entered must be the real PAT expiry.
 
 ### Deriving org / project / repo from dev-status (fixture-verified)
 Repository URL shape (from `devstatus-cnv-2896-detail.json`): `https://dev.azure.com/{org}/{project}/_git/{repo}`, plus a GUID `repositoryId` on every PR and `repositories[].id`. PR `url` = `{repoUrl}/pullrequest/{id}`; commit `url` = `{repoUrl}/commit/{sha}`; branch `url` = `{repoUrl}?version=GB{branch}`. Parse with `java.net.URI`: host must equal `dev.azure.com`; path segments `[org, project, "_git", repo]`; percent-decode project/repo; validate org against `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` before it is ever put in a URL path. **Use the `repositoryId` GUID, not the name, for the API path.** Legacy `https://{org}.visualstudio.com/...` URLs were not observed; an unparseable URL means "no ADO call for this item" (Jira-only data, not an error). [ASSUMED for the visualstudio.com form; A2]
 
 ### Jira Cloud
-- **Changelog:** `GET /rest/api/3/issue/{key}/changelog?startAt=&maxResults=` returns a paginated list sorted oldest-first; `maxResults` defaults to 100; the response has `startAt`, `maxResults`, `total`, `isLast`, `values[]`. [CITED: community summary of developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/ (official page too long to fetch)] Each history entry has `created` and `items[]`; a status item has `field: "status"`, `fieldId: "status"`, `from`/`to` (status ids) and `fromString`/`toString` (names). [ASSUMED from API knowledge; capture a fixture, A3] Paginate with `startAt += values.size()` and stop when `isLast`, an empty page, or `startAt >= total` (belt and braces, given the project's own note that `isLast` misbehaves on `/search/jql`), with a page ceiling.
-- **Status -> category:** changelog items carry only status id/name. The category map comes from `GET /rest/api/3/status`, which returns each status with `id`, `name`, `statusCategory{key,name}`; results are limited to statuses visible to the user. [CITED: developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-workflow-statuses/ (fetch summary)] Cache the id-to-category map in a `volatile` field exactly like `FieldMetadataService.fieldsByLowerCasedName`, refreshing once when an id is missing. A historical status that no longer exists in an active workflow can be absent: store its category as `UNKNOWN`, never guess Done from the name, and mark history `UNAVAILABLE` if the first-Done decision depends on an unknown (see Pitfall 6). The **current** status's category is free: `fields.status.statusCategory.key` (`new|indeterminate|done`) is already inside the status field returned by `/search/jql`.
+- **Changelog:** `GET /rest/api/3/issue/{key}/changelog?startAt=&maxResults=` returns a paginated list sorted oldest-first; `maxResults` defaults to 100; the response has `startAt`, `maxResults`, `total`, `isLast`, `values[]`. [CITED: community summary of developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/ (official page too long to fetch)] Each history entry has `created` and `items[]`; a status item has `field: "status"`, `fieldId: "status"`, `fieldtype: "jira"`, `from`/`to` (status ids, as strings) and `fromString`/`toString` (names). [VERIFIED: 2026-10-12 capture, A3] `created` carries the tenant's local offset with no colon (`2026-07-05T08:48:47.457+0300`); parse with the Pitfall 3 pattern (`SSSxx`), never by assuming UTC. A non-last page also carries `nextPage`; `isLast` was correct on both captured pages. Paginate with `startAt += values.size()` and stop when `isLast`, an empty page, or `startAt >= total` (belt and braces, given the project's own note that `isLast` misbehaves on `/search/jql`), with a page ceiling.
+- **Status -> category:** changelog items carry only status id/name. The category map comes from `GET /rest/api/3/status`, which returns each status with `id`, `name`, `statusCategory{key,name}`; results are limited to statuses visible to the user. [CITED: developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-workflow-statuses/ (fetch summary)] **Status names are not unique:** the capture returned 54 statuses, many `scope.type: PROJECT`, and the same name maps to different categories (`Resolved` is `new`, `indeterminate` and `done` in different projects). Map by status **id** only, never by name. [VERIFIED: 2026-10-12 capture] Cache the id-to-category map in a `volatile` field exactly like `FieldMetadataService.fieldsByLowerCasedName`, refreshing once when an id is missing. A historical status that no longer exists in an active workflow can be absent: store its category as `UNKNOWN`, never guess Done from the name, and mark history `UNAVAILABLE` if the first-Done decision depends on an unknown (see Pitfall 6). The **current** status's category is free: `fields.status.statusCategory.key` (`new|indeterminate|done`) is already inside the status field returned by `/search/jql`.
 - **Cheap "changed since last fetch":** the `updated` system field from the existing `/search/jql` call. Add the literal field id `updated` to the requested ids (system field ids are fixed; no need to route it through `FieldMetadataService` name resolution). Store it on the item as `jira_updated_at`; compare against `history_synced_updated_at` (the `updated` value in force when history was last read, captured from the SEARCH response, not from the changelog time, so a change between search and changelog read is caught next run).
-- **Numeric issue id:** `/search/jql` issue objects carry top-level `id` (the existing adapter already reads the sibling `key` from the same object). `TicketDetail` has no id today; add `jiraIssueId`, `updatedAt` and `statusCategory` to `TicketDetail` (17 `new TicketDetail(` sites across 8 files, mostly tests; mechanical). [VERIFIED: grep]. Confirm `id` presence in a JiraRestTicketAdapterTest stub when updating it. [ASSUMED: id always present at top level of each issue in /search/jql, A4]
+- **Numeric issue id:** `/search/jql` issue objects carry top-level `id` (the existing adapter already reads the sibling `key` from the same object). `TicketDetail` has no id today; add `jiraIssueId`, `updatedAt` and `statusCategory` to `TicketDetail` (17 `new TicketDetail(` sites across 8 files, mostly tests; mechanical). [VERIFIED: grep]. The id is a JSON string (`"id": "…"`), alongside `expand`, `self`, `key` and `fields`. [VERIFIED: 2026-10-12 capture, A4]
 - **Rate limiting:** points-based model, burst limits GET 100 rps per endpoint; 429 carries `Retry-After`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `RateLimit-Reason`; backoff 2 s doubling, jitter. [CITED: developer.atlassian.com/cloud/jira/platform/rate-limiting/] How API-token (non-app) traffic is metered was not confirmable from the page; treat as per-user and keep concurrency single-digit. [ASSUMED, A5]
 
 ### Jira dev-status call plan (per ticket, signed-in user's credential)
@@ -314,8 +329,8 @@ Decisions behind the shape:
 **What goes wrong:** PR 1001 (fixture) is `develop -> testing`, linked only by title; its commits contain other tickets' work.
 **How to avoid:** `TicketBranchRule`: source branch matches `(?<![A-Za-z0-9])` + `Pattern.quote(KEY)` + `(?![0-9])`, case-insensitive (so `feature/CNV-2896-x` and `cnv-2896` match, `CNV-28961` and `XCNV-2896` do not). Non-matching PRs are stored with `counts_toward_commits=false` and still shown as links. Never request their commits from ADO.
 
-### Pitfall 3: Timestamps with `+0000` offsets
-**What goes wrong:** `Instant.parse("2026-07-13T09:41:34.000+0000")` throws. Applies to dev-status `authorTimestamp`/`lastUpdate` and Jira changelog `created`.
+### Pitfall 3: Timestamps with no-colon offsets (`+0000`, `+0300`)
+**What goes wrong:** `Instant.parse("2026-07-13T09:41:34.000+0000")` throws. Applies to dev-status `authorTimestamp`/`lastUpdate` and Jira changelog `created`/`fields.updated`, which the 2026-10-12 capture showed in the tenant offset (`+0300`), not UTC.
 **How to avoid:** one shared formatter (`yyyy-MM-dd'T'HH:mm:ss.SSSxx`); ADO PR-commit `author.date` is ISO-8601 with `Z` and parses normally. Unit-test both.
 
 ### Pitfall 4: Stamping `items_changed_at` on a no-op code-links refresh
@@ -352,7 +367,7 @@ Commit messages, PR titles and author names are user-controlled strings that flo
 
 ### ADO PR commits page loop (sketch)
 ```java
-// Source: ADO REST 7.1 Get Pull Request Commits; header name per A1 (read both spellings case-insensitively)
+// Source: ADO REST 7.1 Get Pull Request Commits; header name and 302-on-bad-PAT verified by the 2026-10-12 capture
 String token = null;
 int pages = 0;
 do {
@@ -361,11 +376,12 @@ do {
              + "?$top={top}&api-version=7.1" + (token == null ? "" : "&continuationToken={t}"), vars)
         .header(HttpHeaders.AUTHORIZATION, "Basic " + Base64.getEncoder().encodeToString((":" + pat).getBytes(UTF_8)))
         .retrieve()
-        .onStatus(s -> s.value() == 203, (rq, rs) -> { throw new AdoUnauthorizedException(); })
+        .onStatus(s -> s.is3xxRedirection() || s.value() == 203 || s.value() == 401 || s.value() == 403,
+                  (rq, rs) -> { throw new AdoUnauthorizedException(); })
         .toEntity(JsonNode.class);
     gate.observe(res.getHeaders());                       // Retry-After / X-RateLimit-Remaining
     for (JsonNode c : res.getBody().path("value")) { /* commitId, comment, author.name, author.date, url */ }
-    token = firstHeader(res.getHeaders(), "x-ms-continuationtoken", "x-ms-continuation-token");
+    token = res.getHeaders().getFirst("x-ms-continuationtoken");
 } while (token != null && ++pages < MAX_PAGES);
 ```
 
@@ -420,26 +436,26 @@ Existing config: `app.jira.connect-timeout PT5S`, `read-timeout PT10S` (a 45 s o
 
 | # | Claim | Section | Risk if Wrong |
 |---|-------|---------|---------------|
-| A1 | PR-commits continuation is returned in response header `x-ms-continuationtoken` (or `x-ms-continuation-token`), absent when done; default page size ~100 and `$top` up to ~500 | Verified External API / Code Examples | Pagination silently truncates commit lists (undercounted churn). Mitigation: capture one real PR-commits response with headers into a fixture in plan 1; assert both spellings |
+| A1 | ~~PR-commits continuation in `x-ms-continuationtoken` or `x-ms-continuation-token`~~ **VERIFIED 2026-10-12:** `x-ms-continuationtoken`, absent on the last page; default page size >= 34, max not probed | Verified External API / Code Examples | Resolved. Explicit `$top=100` plus page ceiling still applies |
 | A2 | dev-status repo URLs are always `https://dev.azure.com/{org}/{project}/_git/{repo}`; legacy `*.visualstudio.com` form is unobserved | Deriving org/project/repo | Legacy-URL orgs get Jira-only data with no error. Low impact |
-| A3 | Changelog status items use `field: "status"`/`fieldId: "status"` with `from`/`to` ids and `fromString`/`toString`; `created` uses the `+0000` offset form | Jira Cloud | Wrong field filter would yield empty history. Capture a redacted changelog fixture (like 02-04 did) before coding the parser |
-| A4 | `/search/jql` issue objects always carry top-level `id` | Jira Cloud | If absent, the numeric id needs the spike's extra `issue/{key}?fields=id` call (the existing adapter method `resolveNumericIssueId` is the fallback) |
+| A3 | **VERIFIED 2026-10-12** for field names (`field`/`fieldId` = `status`, `from`/`to` ids, `fromString`/`toString`). **Corrected** for timestamps: `created` uses the tenant offset (`+0300`), not `+0000` | Jira Cloud | Resolved. The Pitfall 3 `SSSxx` pattern handles it; a parser that hard-codes `+0000` or UTC would shift every transition by 3 h |
+| A4 | **VERIFIED 2026-10-12:** `/search/jql` issue objects carry top-level `id` (JSON string) | Jira Cloud | Resolved. The `resolveNumericIssueId` extra call is not needed |
 | A5 | Jira API-token traffic is limited per user and single-digit concurrency stays well under burst limits | Jira Cloud | Throttling shows as `JIRA_RATE_LIMITED` per item, never failing refresh; tune `max-concurrent` down |
 | A6 | dev-status PR `status` values beyond `OPEN` and `MERGED` (likely `DECLINED`) are unobserved | Integration Points / catalog wording | Store the raw string; wording says "such as OPEN or MERGED" |
 | A7 | An ADO PR's commit list is closed once the PR is completed/abandoned, so skipping re-fetch is safe | Pattern 4 | A late-pushed commit to a merged PR's branch is not part of the PR; acceptable. If wrong, drop the skip rule (more ADO calls, still bounded) |
 | A8 | ADO org name charset `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$` is a safe superset | Credential/URL parsing | Rejecting a valid org name at save time; loosen the regex |
-| A9 | `GET .../_apis/git/repositories` validates `vso.code` + org with one call and low TSTU cost | PAT validation | Payload size for orgs with hundreds of repos; acceptable once per save |
+| A9 | **VERIFIED 2026-10-12:** `GET .../_apis/git/repositories` returns 200 with a valid Code (Read) PAT (62 repos, ~50 KB); an invalid PAT returns **302** to a sign-in page (not 401/203) | PAT validation | Resolved. Treat 3xx/203/401/403 as unauthorized with redirects disabled |
 
 ## Environment Availability
 
 | Dependency | Required By | Available | Version | Fallback |
 |------------|------------|-----------|---------|----------|
-| Live Jira tenant + user API token | Capturing the changelog/status fixtures (A3, A4) | human-only | - | Fixtures redacted from a real capture like plan 02-04 |
-| Live ADO org + `vso.code` PAT | Capturing the PR-commits headers/pagination fixture (A1) | human-only (user confirmed they can create one) | - | Hand-built WireMock stub from the documented shape, flagged unverified |
+| Live Jira tenant + user API token | Capturing the changelog/status fixtures (A3, A4) | **captured 2026-10-12** (`spike-capture/`, git-excluded, unredacted) | - | Redact into test fixtures like plan 02-04 |
+| Live ADO org + `vso.code` PAT | Capturing the PR-commits headers/pagination fixture (A1) | **captured 2026-10-12** (`spike-capture/`, git-excluded, unredacted) | - | Redact into test fixtures |
 | Docker (Testcontainers Postgres) | Persistence ITs | assumed available (existing ITs run) | - | - |
 | JDK 25 / Maven | Build | requires `export JAVA_HOME="$HOME/.jdks/jdk-25"` per shell | 25 | - |
 
-**Missing with no fallback:** none for coding; a human capture task is required to lock A1/A3 (schedule it as the first task of the first plan, as 02-04 did).
+**Missing with no fallback:** none. The human capture (D-06-13) is done; the first plan only needs to redact the raw files into committed fixtures.
 
 ## Validation Architecture
 
@@ -459,17 +475,17 @@ Existing config: `app.jira.connect-timeout PT5S`, `read-timeout PT10S` (a 45 s o
 | ADO-02 | NO_LINK and FAILED items give empty `commits`/`pullRequests` in `ReleaseViewAssembler`; generation succeeds | unit | extend `ReleaseViewAssemblerTest` |
 | ADO-02 | Enrichment exceptions never escape `refresh`/`create`/`add`; refresh with ADO 500 still returns the release | service test with failing ports | `ReleaseServiceTicketsTest` additions |
 | ADO-03 | Summary advertises AzureRepos but detail empty => `FAILED/DEV_STATUS_UNRECOGNISED`; zero byInstanceType keys => `NO_LINK` | WireMock | adapter/service |
-| ADO-04 | Save validates (200 ok, 401/203 rejected, wrong org 404), writes nothing on failure; state OK/EXPIRING(<=14d)/EXPIRED; token never in any response | controller test + `AdoCredentialPersistenceIT` | IT must include **key-rotation case**: write with key A, read status via projection and replace under key B without exception (locked decision) |
+| ADO-04 | Save validates (200 ok, 302/203/401/403 rejected, wrong org 404), writes nothing on failure; state OK/EXPIRING(<=14d)/EXPIRED; token never in any response | controller test + `AdoCredentialPersistenceIT` | IT must include **key-rotation case**: write with key A, read status via projection and replace under key B without exception (locked decision) |
 | ADO-05 | N tickets sharing a PR make one ADO call; 6-permit cap respected; deadline turns pending items into `FAILED/TIMEOUT` with partial results; `Retry-After` honoured once | unit with latch/stubs + WireMock `withFixedDelay` | `EnrichmentServiceTest` |
-| INSIGHT-03 | Pagination of changelog (>100 entries) and status-id to category mapping; first_done/reopen derivation incl. unknown category => UNAVAILABLE; `+0000` timestamp parse; changelog skipped when `updated` unchanged | WireMock + unit | `JiraIssueHistoryAdapterTest`, `StatusHistoryTest` |
+| INSIGHT-03 | Pagination of changelog (>100 entries) and status-id to category mapping; first_done/reopen derivation incl. unknown category => UNAVAILABLE; `+0000` and `+0300` no-colon offset timestamp parse; status mapped by id where names collide; changelog skipped when `updated` unchanged | WireMock + unit | `JiraIssueHistoryAdapterTest`, `StatusHistoryTest` |
 | D-06-04 | Standalone refresh stamps `items_changed_at` only on fingerprint change (no-op, FAILED->NO_LINK: no stamp; LINKED->FAILED: stamp) | `ReleasePersistenceIT` | uses Testcontainers |
 | D-06-01 | Frozen release rejects enrichment writes (`lockOpen`) | persistence IT | |
 | Catalog | `PlaceholderCatalogTest` bidirectional tests still pass; "until Phase 6" tag gone | unit | |
 | Frontend | chip text ("3 commits · 1 PR"), "No link" vs "Couldn't fetch (reason)" distinct, freeze dialog count, expiry banner at 14 days/expired, Settings help text, `href` rejects non-`https://dev.azure.com/` | vitest | `frontend/tests/components/*` |
 
 ### Wave 0 Gaps
-- [ ] Redacted changelog fixture + `/rest/api/3/status` fixture (human capture, A3)
-- [ ] Redacted ADO PR-commits fixture including pagination headers (human capture, A1); if unavailable, hand-built and flagged
+- [ ] Redact the captured `search-jql`, `changelog-*` and `statuses` responses into committed fixtures (captured 2026-10-12; redact names, emails and account ids)
+- [ ] Redact the captured ADO `pr-commits-*` responses and their headers into committed fixtures, plus the invalid-PAT 302 (`Location` and HTML body need no detail beyond status and content type)
 - [ ] Add `app.ado.*` / `app.enrichment.*` to BOTH `application.yml` files
 - [ ] Update the 17 `new TicketDetail(` call sites when the record gains components
 
@@ -519,10 +535,10 @@ Existing config: `app.jira.connect-timeout PT5S`, `read-timeout PT10S` (a 45 s o
 ### Secondary (MEDIUM confidence)
 - https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/ and https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-workflow-statuses/ - changelog and status endpoints (page too long for full fetch; shape corroborated by community threads)
 - https://community.developer.atlassian.com/t/bulk-fetch-changelogs-experimental-api/87240 - bulk changelog is Experimental
-- https://learn.microsoft.com/en-us/answers/a/559812 - HTTP 203 for bad credentials/scopes
+- https://learn.microsoft.com/en-us/answers/a/559812 - HTTP 203 for bad credentials/scopes (contradicted by the 2026-10-12 capture, which returned 302)
 
-### Tertiary (LOW confidence, validate via fixtures)
-- Continuation-token header spelling and PR-commits page size (A1); changelog item field names (A3); issue `id` always present in `/search/jql` (A4)
+### Real-tenant capture (HIGH confidence)
+- `phase6-capture.sh` run 2026-10-12 against the eVision Jira Cloud tenant (CNV-2896) and the ADO org (PR 3127); raw files in `spike-capture/` (git-excluded). Locks A1, A3, A4, A9.
 
 ## Metadata
 

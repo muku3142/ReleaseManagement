@@ -158,6 +158,22 @@ exposed to templates.
 - History reads follow the same failure rule as ADO: a `/changelog` failure marks history unavailable
   for that item and never fails the refresh.
 
+### Decided after research (2026-10-09)
+- **D-06-10: A ticket with a branch only is `NO_LINK`.** If dev-status shows a branch but no PR and no
+  key-tagged commit, there is nothing to show or count. The branch is still listed on the release page
+  as context.
+- **D-06-11: With a PAT, the counted commit set is the union of two sources:**
+  - all commits in the ticket's own-branch PRs (from ADO);
+  - the key-tagged commits dev-status lists elsewhere.
+  De-duplicate by sha. Environment-merge PRs never contribute.
+- **D-06-12: A failed re-fetch of a `LINKED` item keeps its last good rows and becomes `FAILED`.**
+  - The release page shows the previous links marked "couldn't refresh (reason)".
+  - Documents get empty sections (ADO-02).
+  - The dashboard counts the item as failed.
+- **D-06-13: Real fixtures are captured before planning.** Covered: Jira search/jql, changelog
+  (paged), and /status; ADO repositories (PAT validation, plus an invalid-PAT probe); PR commits (paged).
+  This resolves 06-RESEARCH assumptions A1, A3 and A4.
+
 ### Claude's Discretion (recorded from research, not chosen by the user; flag if you disagree)
 - **Credential model: one shared org-scoped PAT** (`vso.code`, Code read), set in Settings, stored in a
   singleton row reusing `EncryptedTokenConverter` and the JPQL "upsert without decrypting" rule
