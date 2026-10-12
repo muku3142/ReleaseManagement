@@ -54,7 +54,7 @@ Requirements for initial release. Each maps to exactly one roadmap phase.
 - [ ] **DOC-06**: Release manager can export any generated document as DOCX
 - [x] **DOC-07**: Each generated document is stored as an immutable snapshot recording the template version, content and generation timestamp, so regenerating creates a new revision instead of altering the previous one
 - [ ] **DOC-08**: Both the PDF and DOCX export of a document render that template's cover page, running header, footer and page numbering, with the two formats visually equivalent rather than merely both present
-- [ ] **DOC-09**: Release manager can see across all releases which of the three documents have been generated, which are **stale** relative to the release's current ticket set, and which were never generated — so outstanding release paperwork is visible without opening each release one at a time
+- [x] **DOC-09**: Release manager can see across all releases which of the three documents have been generated, which are **stale** relative to the release's current ticket set, and which were never generated — so outstanding release paperwork is visible without opening each release one at a time
 
 ### Azure DevOps Enrichment
 
@@ -198,7 +198,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | DOC-06 | Phase 5 | Pending |
 | DOC-07 | Phase 5 | Complete |
 | DOC-08 | Phase 5 | Pending |
-| DOC-09 | Phase 5 | Pending |
+| DOC-09 | Phase 5 | Complete |
 | ADO-01 | Phase 6 | Pending |
 | ADO-02 | Phase 6 | Pending |
 | ADO-03 | Phase 6 | Pending |
