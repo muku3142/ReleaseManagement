@@ -10,6 +10,10 @@ import com.evision.releasemgmt.domain.document.ExportFailedException;
 import com.evision.releasemgmt.domain.document.ChosenTemplateNotFoundException;
 import com.evision.releasemgmt.domain.document.NoTemplateException;
 import com.evision.releasemgmt.domain.document.TemplateTypeMismatchException;
+import com.evision.releasemgmt.domain.promotion.LadderEditRejectedException;
+import com.evision.releasemgmt.domain.promotion.PromotionNotFoundException;
+import com.evision.releasemgmt.domain.promotion.PromotionRejectedException;
+import com.evision.releasemgmt.domain.promotion.StageNotFoundException;
 import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
@@ -144,6 +148,62 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem(HttpStatus.CONFLICT, "Duplicate release",
                 "A release with this name and version already exists. Choose a different name or version.",
                 "RELEASE_DUPLICATE");
+    }
+
+    @ExceptionHandler(PromotionRejectedException.class)
+    public ProblemDetail handlePromotionRejected(PromotionRejectedException ex) {
+        return switch (ex.reason()) {
+            case RELEASE_NOT_FROZEN -> problem(HttpStatus.CONFLICT, "Release not frozen",
+                    "Only frozen releases can be promoted. Freeze the release first.", "RELEASE_NOT_FROZEN");
+            case PROMOTION_STAGE_SKIPPED -> problem(HttpStatus.CONFLICT, "Stage cannot be targeted",
+                    "A promotion can only target the next stage of the ladder, or the current stage for a redeploy or a rollback.",
+                    "PROMOTION_STAGE_SKIPPED");
+            case PROMOTION_TARGET_RETIRED -> problem(HttpStatus.CONFLICT, "Stage retired",
+                    "That stage has been retired from the environment ladder and can no longer be targeted.",
+                    "PROMOTION_TARGET_RETIRED");
+            case PROMOTION_ROLLBACK_WITHOUT_SUCCESS -> problem(HttpStatus.CONFLICT, "Nothing to roll back",
+                    "A rollback needs a successful deployment to that stage dated at or before the rollback.",
+                    "PROMOTION_ROLLBACK_WITHOUT_SUCCESS");
+            case PROMOTION_ALREADY_SUPERSEDED -> problem(HttpStatus.CONFLICT, "Entry already corrected",
+                    "This entry has already been corrected. Correct the latest correction instead.",
+                    "PROMOTION_ALREADY_SUPERSEDED");
+            case PROMOTION_DEPLOYED_AT_INVALID -> problem(HttpStatus.UNPROCESSABLE_ENTITY, "Invalid deployment time",
+                    "The deployment time cannot be in the future or before the release was frozen.",
+                    "PROMOTION_DEPLOYED_AT_INVALID");
+            case PROMOTION_OUTCOME_NOT_RECORDABLE -> problem(HttpStatus.UNPROCESSABLE_ENTITY, "Outcome not allowed",
+                    "An entry can only be marked VOIDED by correcting it.", "PROMOTION_OUTCOME_NOT_RECORDABLE");
+        };
+    }
+
+    @ExceptionHandler(LadderEditRejectedException.class)
+    public ProblemDetail handleLadderEditRejected(LadderEditRejectedException ex) {
+        return switch (ex.reason()) {
+            case STAGE_IN_USE -> problem(HttpStatus.CONFLICT, "Stage in use",
+                    "Promotions reference this stage, so it can be retired but not deleted.", "STAGE_IN_USE");
+            case STAGE_NAME_DUPLICATE -> problem(HttpStatus.CONFLICT, "Duplicate stage name",
+                    "A stage with this name already exists, including retired stages.", "STAGE_NAME_DUPLICATE");
+            case PRODUCTION_STAGE_PROTECTED -> problem(HttpStatus.CONFLICT, "Production stage protected",
+                    "The Production stage cannot be retired or deleted. Move the Production flag to another stage first.",
+                    "PRODUCTION_STAGE_PROTECTED");
+            case LAST_ACTIVE_STAGE -> problem(HttpStatus.CONFLICT, "Last active stage",
+                    "The ladder must keep at least one active stage.", "LAST_ACTIVE_STAGE");
+            case STAGE_RETIRED -> problem(HttpStatus.CONFLICT, "Stage retired",
+                    "A retired stage cannot carry the Production flag. Restore it first.", "STAGE_RETIRED");
+            case STAGE_ORDER_MISMATCH -> problem(HttpStatus.UNPROCESSABLE_ENTITY, "Invalid stage order",
+                    "The new order must list every stage exactly once.", "STAGE_ORDER_MISMATCH");
+        };
+    }
+
+    @ExceptionHandler(StageNotFoundException.class)
+    public ProblemDetail handleStageNotFound(StageNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Stage not found",
+                "This environment stage doesn't exist.", "STAGE_NOT_FOUND");
+    }
+
+    @ExceptionHandler(PromotionNotFoundException.class)
+    public ProblemDetail handlePromotionNotFound(PromotionNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Promotion not found",
+                "This promotion entry doesn't exist on this release.", "PROMOTION_NOT_FOUND");
     }
 
     @ExceptionHandler(TemplateNotFoundException.class)
