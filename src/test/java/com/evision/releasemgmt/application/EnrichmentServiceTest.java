@@ -1,5 +1,8 @@
 package com.evision.releasemgmt.application;
 
+import com.evision.releasemgmt.domain.ado.AdoAccessException;
+import com.evision.releasemgmt.domain.ado.AdoCredential;
+import com.evision.releasemgmt.domain.ado.AdoFailureReason;
 import com.evision.releasemgmt.domain.auth.JiraAccessContext;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
 import com.evision.releasemgmt.domain.enrichment.CodeLinks;
@@ -16,6 +19,8 @@ import com.evision.releasemgmt.domain.jira.StatusCategory;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
+import com.evision.releasemgmt.ports.AdoCredentialRepository;
+import com.evision.releasemgmt.ports.AdoRepositoryPort;
 import com.evision.releasemgmt.ports.JiraDevStatusPort;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +29,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -53,18 +59,23 @@ class EnrichmentServiceTest {
     private JiraAccessContextService accessService;
     private JiraDevStatusPort port;
     private ReleaseRepository repository;
+    private AdoCredentialRepository credentials;
+    private AdoRepositoryPort ado;
 
     @BeforeEach
     void setUp() {
         accessService = mock(JiraAccessContextService.class);
         port = mock(JiraDevStatusPort.class);
         repository = mock(ReleaseRepository.class);
+        credentials = mock(AdoCredentialRepository.class);
+        ado = mock(AdoRepositoryPort.class);
+        when(credentials.findForUse()).thenReturn(Optional.empty());
         when(accessService.currentContext()).thenReturn(ACCESS);
         when(repository.findById(RELEASE_ID)).thenReturn(Optional.empty());
     }
 
     private EnrichmentService service(int concurrent, Duration deadline, int cap) {
-        return new EnrichmentService(accessService, port, repository, concurrent, deadline, cap);
+        return new EnrichmentService(accessService, port, credentials, ado, repository, concurrent, deadline, cap);
     }
 
     private static TicketDetail ticket(String key, String issueId) {
@@ -238,5 +249,201 @@ class EnrichmentServiceTest {
         assertThat(result.incomplete()).isTrue();
         assertThat(result.reason()).isEqualTo(EnrichmentReason.COMMIT_LIMIT);
         assertThat(result.commits()).extracting(LinkedCommit::sha).containsExactlyInAnyOrder("b", "d");
+    }
+
+    private static final String REPO_ID = "00000000-0000-0000-0000-000000000001";
+    private static final AdoCredential VALID = new AdoCredential("example-org", "pat", LocalDate.of(2999, 1, 1));
+
+    private static LinkedPullRequest adoPr(String id, String status, boolean counts, Instant fetchedAt) {
+        return new LinkedPullRequest(REPO_ID, id, "t", status,
+                "https://dev.azure.com/example-org/example-project/_git/example-repo/pullrequest/" + id,
+                "feature/x", "main", counts, fetchedAt);
+    }
+
+    private void devStatus(String issueId, String key, List<LinkedPullRequest> prs, List<LinkedCommit> commits) {
+        when(port.fetchLinks(ACCESS, issueId, key)).thenReturn(new DevStatusLinks(prs, commits, List.of()));
+    }
+
+    private void previousRelease(String key, String issueId, CodeLinks previous) {
+        Release release = new Release(RELEASE_ID, "r", "1", com.evision.releasemgmt.domain.release.ReleaseStatus.OPEN,
+                null, T0, "acc", null, null, null, null,
+                List.of(new ReleaseItem(ticket(key, issueId), T0, previous)), List.of());
+        when(repository.findById(RELEASE_ID)).thenReturn(Optional.of(release));
+    }
+
+    private void assertIncompleteKeyTagged(CodeLinks result, EnrichmentReason reason) {
+        assertThat(result.status()).isEqualTo(EnrichmentStatus.LINKED);
+        assertThat(result.incomplete()).isTrue();
+        assertThat(result.reason()).isEqualTo(reason);
+        assertThat(result.commitsSource()).isEqualTo(CommitsSource.KEY_TAGGED);
+        assertThat(result.commits()).extracting(LinkedCommit::sha).containsExactly("tagged");
+    }
+
+    @Test
+    void noCredentialIsDesignedJiraOnlyModeWithoutAFlagOrAnAdoCall() {
+        devStatus("1", "EX-1", List.of(adoPr("1002", "MERGED", true, null)), List.of(commit("tagged", T0)));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        CodeLinks result = saved().get("EX-1");
+        assertThat(result.commitsSource()).isEqualTo(CommitsSource.KEY_TAGGED);
+        assertThat(result.incomplete()).isFalse();
+        assertThat(result.reason()).isNull();
+        verify(ado, never()).pullRequestCommits(any(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void ownBranchPullRequestsAreUnionedWithKeyTaggedCommitsAndEnvMergeIsSkipped() {
+        when(credentials.findForUse()).thenReturn(Optional.of(VALID));
+        devStatus("1", "EX-1", List.of(adoPr("1001", "MERGED", false, null), adoPr("1002", "MERGED", true, null),
+                adoPr("1003", "OPEN", true, null)), List.of(commit("tagged", T0), commit("shared", T0)));
+        when(ado.pullRequestCommits(eq(VALID), any(), eq(REPO_ID), eq("1002")))
+                .thenReturn(List.of(commit("a", T0), commit("shared", T0)));
+        when(ado.pullRequestCommits(eq(VALID), any(), eq(REPO_ID), eq("1003"))).thenReturn(List.of(commit("b", T0)));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        CodeLinks result = saved().get("EX-1");
+        assertThat(result.commitsSource()).isEqualTo(CommitsSource.ADO_COMPLETE);
+        assertThat(result.incomplete()).isFalse();
+        assertThat(result.commits()).extracting(LinkedCommit::sha).containsExactlyInAnyOrder("a", "shared", "b", "tagged");
+        assertThat(result.pullRequests()).filteredOn(pr -> pr.id().equals("1001"))
+                .allMatch(pr -> pr.commitsFetchedAt() == null);
+        assertThat(result.pullRequests()).filteredOn(pr -> !pr.id().equals("1001"))
+                .allMatch(pr -> pr.commitsFetchedAt() != null);
+        verify(ado, never()).pullRequestCommits(any(), any(), anyString(), eq("1001"));
+        verify(ado, times(1)).pullRequestCommits(any(), any(), anyString(), eq("1002"));
+    }
+
+    @Test
+    void twoTicketsSharingAPullRequestMakeOneAdoCall() {
+        when(credentials.findForUse()).thenReturn(Optional.of(VALID));
+        devStatus("1", "EX-1", List.of(adoPr("1003", "MERGED", true, null)), List.of());
+        devStatus("2", "EX-2", List.of(adoPr("1003", "MERGED", true, null)), List.of());
+        when(ado.pullRequestCommits(any(), any(), anyString(), eq("1003"))).thenAnswer(invocation -> {
+            Thread.sleep(100);
+            return List.of(commit("a", T0));
+        });
+
+        service(2, Duration.ofSeconds(5), 400)
+                .enrich(RELEASE_ID, List.of(ticket("EX-1", "1"), ticket("EX-2", "2")));
+
+        verify(ado, times(1)).pullRequestCommits(any(), any(), anyString(), eq("1003"));
+        assertThat(saved().values()).allMatch(r -> r.commitsSource() == CommitsSource.ADO_COMPLETE);
+    }
+
+    @Test
+    void expiredCredentialMakesNoCallAndFlagsTheItem() {
+        when(credentials.findForUse()).thenReturn(Optional.of(new AdoCredential("example-org", "pat", LocalDate.of(2000, 1, 1))));
+        devStatus("1", "EX-1", List.of(adoPr("1002", "MERGED", true, null)), List.of(commit("tagged", T0)));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        assertIncompleteKeyTagged(saved().get("EX-1"), EnrichmentReason.ADO_CREDENTIAL_EXPIRED);
+        verify(ado, never()).pullRequestCommits(any(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void unreadableCredentialFlagsLinkedItemsAndStillSaves() {
+        when(credentials.findForUse()).thenThrow(new IllegalStateException("cannot decrypt"));
+        devStatus("1", "EX-1", List.of(adoPr("1002", "MERGED", true, null)), List.of(commit("tagged", T0)));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        assertIncompleteKeyTagged(saved().get("EX-1"), EnrichmentReason.ADO_CREDENTIAL_UNREADABLE);
+        verify(ado, never()).pullRequestCommits(any(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void credentialForAnotherOrganizationIsAMismatchWithoutACall() {
+        when(credentials.findForUse()).thenReturn(Optional.of(new AdoCredential("other-org", "pat", LocalDate.of(2999, 1, 1))));
+        devStatus("1", "EX-1", List.of(adoPr("1002", "MERGED", true, null)), List.of(commit("tagged", T0)));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        assertIncompleteKeyTagged(saved().get("EX-1"), EnrichmentReason.ADO_ORG_MISMATCH);
+        verify(ado, never()).pullRequestCommits(any(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void everyAdoFailureKeepsTheItemLinkedAndFlagged() {
+        when(credentials.findForUse()).thenReturn(Optional.of(VALID));
+        Map<AdoFailureReason, EnrichmentReason> expected = Map.of(
+                AdoFailureReason.UNAUTHORIZED, EnrichmentReason.ADO_UNAUTHORIZED,
+                AdoFailureReason.NOT_FOUND, EnrichmentReason.ADO_NOT_FOUND,
+                AdoFailureReason.RATE_LIMITED, EnrichmentReason.ADO_RATE_LIMITED,
+                AdoFailureReason.UNREACHABLE, EnrichmentReason.ADO_UNREACHABLE,
+                AdoFailureReason.ERROR, EnrichmentReason.ADO_ERROR,
+                AdoFailureReason.TOO_LARGE, EnrichmentReason.COMMIT_LIMIT);
+        List<TicketDetail> tickets = new ArrayList<>();
+        List<AdoFailureReason> reasons = new ArrayList<>(expected.keySet());
+        for (int i = 0; i < reasons.size(); i++) {
+            String id = String.valueOf(2000 + i);
+            devStatus(String.valueOf(i), "EX-" + i, List.of(adoPr(id, "MERGED", true, null)), List.of(commit("tagged", T0)));
+            when(ado.pullRequestCommits(any(), any(), anyString(), eq(id))).thenThrow(new AdoAccessException(reasons.get(i)));
+            tickets.add(ticket("EX-" + i, String.valueOf(i)));
+        }
+
+        service(3, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, tickets);
+
+        Map<String, CodeLinks> results = saved();
+        for (int i = 0; i < reasons.size(); i++) {
+            assertIncompleteKeyTagged(results.get("EX-" + i), expected.get(reasons.get(i)));
+        }
+    }
+
+    @Test
+    void unexpectedAdoExceptionIsAnAdoErrorNeverAFailedItem() {
+        when(credentials.findForUse()).thenReturn(Optional.of(VALID));
+        devStatus("1", "EX-1", List.of(adoPr("1002", "MERGED", true, null)), List.of(commit("tagged", T0)));
+        when(ado.pullRequestCommits(any(), any(), anyString(), anyString())).thenThrow(new IllegalArgumentException("bad id"));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        assertIncompleteKeyTagged(saved().get("EX-1"), EnrichmentReason.ADO_ERROR);
+    }
+
+    @Test
+    void closedPullRequestsAlreadyFetchedAreReusedWithoutACall() {
+        when(credentials.findForUse()).thenReturn(Optional.of(VALID));
+        CodeLinks previous = new CodeLinks(EnrichmentStatus.LINKED, null, false, T0, CommitsSource.ADO_COMPLETE,
+                List.of(adoPr("1002", "MERGED", true, T0)), List.of(commit("stored", T0)), List.of(), StatusHistory.notRead());
+        previousRelease("EX-1", "1", previous);
+        devStatus("1", "EX-1", List.of(adoPr("1002", "MERGED", true, null)), List.of(commit("tagged", T0)));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        CodeLinks result = saved().get("EX-1");
+        assertThat(result.commitsSource()).isEqualTo(CommitsSource.ADO_COMPLETE);
+        assertThat(result.commits()).extracting(LinkedCommit::sha).containsExactlyInAnyOrder("stored", "tagged");
+        assertThat(result.pullRequests().get(0).commitsFetchedAt()).isEqualTo(T0);
+        verify(ado, never()).pullRequestCommits(any(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void anOpenPullRequestIsAlwaysRefetched() {
+        when(credentials.findForUse()).thenReturn(Optional.of(VALID));
+        CodeLinks previous = new CodeLinks(EnrichmentStatus.LINKED, null, false, T0, CommitsSource.ADO_COMPLETE,
+                List.of(adoPr("1002", "OPEN", true, T0)), List.of(commit("stored", T0)), List.of(), StatusHistory.notRead());
+        previousRelease("EX-1", "1", previous);
+        devStatus("1", "EX-1", List.of(adoPr("1002", "OPEN", true, null)), List.of());
+        when(ado.pullRequestCommits(any(), any(), anyString(), eq("1002"))).thenReturn(List.of(commit("fresh", T0)));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        assertThat(saved().get("EX-1").commits()).extracting(LinkedCommit::sha).containsExactly("fresh");
+        verify(ado, times(1)).pullRequestCommits(any(), any(), anyString(), eq("1002"));
+    }
+
+    @Test
+    void noLinkAndFailedItemsNeverCallAdo() {
+        when(credentials.findForUse()).thenReturn(Optional.of(VALID));
+        when(port.fetchLinks(ACCESS, "1", "EX-1")).thenReturn(DevStatusLinks.none());
+        when(port.fetchLinks(ACCESS, "2", "EX-2")).thenThrow(new DevStatusUnrecognisedException());
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1"), ticket("EX-2", "2")));
+
+        assertThat(saved()).hasSize(2);
+        verify(ado, never()).pullRequestCommits(any(), any(), anyString(), anyString());
     }
 }

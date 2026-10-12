@@ -1,6 +1,10 @@
 package com.evision.releasemgmt.application;
 
+import com.evision.releasemgmt.domain.ado.AdoAccessException;
+import com.evision.releasemgmt.domain.ado.AdoCredential;
+import com.evision.releasemgmt.domain.ado.AdoCredentialState;
 import com.evision.releasemgmt.domain.auth.JiraAccessContext;
+import com.evision.releasemgmt.domain.enrichment.AdoRepoRef;
 import com.evision.releasemgmt.domain.enrichment.CodeLinks;
 import com.evision.releasemgmt.domain.enrichment.CommitsSource;
 import com.evision.releasemgmt.domain.enrichment.DevStatusLinks;
@@ -8,9 +12,12 @@ import com.evision.releasemgmt.domain.enrichment.DevStatusUnrecognisedException;
 import com.evision.releasemgmt.domain.enrichment.EnrichmentReason;
 import com.evision.releasemgmt.domain.enrichment.EnrichmentStatus;
 import com.evision.releasemgmt.domain.enrichment.LinkedCommit;
+import com.evision.releasemgmt.domain.enrichment.LinkedPullRequest;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.Release;
+import com.evision.releasemgmt.ports.AdoCredentialRepository;
+import com.evision.releasemgmt.ports.AdoRepositoryPort;
 import com.evision.releasemgmt.ports.JiraDevStatusPort;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import jakarta.annotation.PreDestroy;
@@ -21,12 +28,20 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -34,6 +49,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 @Service
 public class EnrichmentService {
@@ -41,21 +57,26 @@ public class EnrichmentService {
     private static final Logger log = LoggerFactory.getLogger(EnrichmentService.class);
 
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-    // Service-wide so concurrent runs share one cap, which also protects the shared ADO budget later.
+    // Service-wide so concurrent runs share one cap, which also protects the shared ADO budget.
     private final Semaphore permits;
     private final Duration deadline;
     private final int maxCommitsPerTicket;
     private final JiraAccessContextService accessContextService;
     private final JiraDevStatusPort devStatusPort;
+    private final AdoCredentialRepository adoCredentialRepository;
+    private final AdoRepositoryPort adoRepositoryPort;
     private final ReleaseRepository releaseRepository;
 
     public EnrichmentService(JiraAccessContextService accessContextService, JiraDevStatusPort devStatusPort,
+                             AdoCredentialRepository adoCredentialRepository, AdoRepositoryPort adoRepositoryPort,
                              ReleaseRepository releaseRepository,
                              @Value("${app.enrichment.max-concurrent}") int maxConcurrent,
                              @Value("${app.enrichment.deadline}") Duration deadline,
                              @Value("${app.enrichment.max-commits-per-ticket}") int maxCommitsPerTicket) {
         this.accessContextService = accessContextService;
         this.devStatusPort = devStatusPort;
+        this.adoCredentialRepository = adoCredentialRepository;
+        this.adoRepositoryPort = adoRepositoryPort;
         this.releaseRepository = releaseRepository;
         this.permits = new Semaphore(maxConcurrent);
         this.deadline = deadline;
@@ -73,6 +94,7 @@ public class EnrichmentService {
         // Virtual workers do not inherit the SecurityContext, so the credential is resolved here and passed by value.
         JiraAccessContext access = accessContextService.currentContext();
         Map<String, CodeLinks> previousByKey = previousCodeLinks(releaseId);
+        AdoRun adoRun = adoRun();
 
         Map<String, Future<CodeLinks>> futures = new LinkedHashMap<>();
         for (TicketDetail ticket : tickets) {
@@ -80,7 +102,7 @@ public class EnrichmentService {
                 continue;
             }
             CodeLinks previous = previousByKey.getOrDefault(ticket.key(), CodeLinks.notAttempted());
-            futures.put(ticket.key(), executor.submit(() -> boundedEnrichOne(access, ticket, previous)));
+            futures.put(ticket.key(), executor.submit(() -> boundedEnrichOne(access, ticket, previous, adoRun)));
         }
 
         long deadlineNanos = System.nanoTime() + deadline.toNanos();
@@ -99,7 +121,22 @@ public class EnrichmentService {
         return previous;
     }
 
-    private CodeLinks boundedEnrichOne(JiraAccessContext access, TicketDetail ticket, CodeLinks previous) {
+    // Read once on the request thread; the token never reaches a log or an exception message.
+    private AdoRun adoRun() {
+        Map<String, CompletableFuture<List<LinkedCommit>>> prCommits = new ConcurrentHashMap<>();
+        try {
+            Optional<AdoCredential> credential = adoCredentialRepository.findForUse();
+            boolean expired = credential.isPresent()
+                    && AdoCredentialState.of(credential.get().expiresOn(), LocalDate.now(ZoneOffset.UTC))
+                    == AdoCredentialState.EXPIRED;
+            return new AdoRun(credential, expired ? EnrichmentReason.ADO_CREDENTIAL_EXPIRED : null, prCommits);
+        } catch (IllegalStateException e) {
+            return new AdoRun(Optional.empty(), EnrichmentReason.ADO_CREDENTIAL_UNREADABLE, prCommits);
+        }
+    }
+
+    private CodeLinks boundedEnrichOne(JiraAccessContext access, TicketDetail ticket, CodeLinks previous,
+                                       AdoRun adoRun) {
         try {
             permits.acquire();
         } catch (InterruptedException e) {
@@ -107,7 +144,7 @@ public class EnrichmentService {
             return timedOut(previous);
         }
         try {
-            return enrichOne(access, ticket, previous);
+            return enrichOne(access, ticket, previous, adoRun);
         } finally {
             permits.release();
         }
@@ -133,22 +170,16 @@ public class EnrichmentService {
         return previous.failed(EnrichmentReason.TIMEOUT, Instant.now(), previous.history());
     }
 
-    CodeLinks enrichOne(JiraAccessContext access, TicketDetail ticket, CodeLinks previous) {
+    CodeLinks enrichOne(JiraAccessContext access, TicketDetail ticket, CodeLinks previous, AdoRun adoRun) {
         try {
             DevStatusLinks links = devStatusPort.fetchLinks(access, ticket.jiraIssueId(), ticket.key());
             // release_item_commit.authored_at is NOT NULL, so a commit without an author date cannot be stored.
             List<LinkedCommit> commits = links.keyTaggedCommits().stream()
                     .filter(commit -> commit.authoredAt() != null).toList();
-            boolean capped = commits.size() > maxCommitsPerTicket;
-            if (capped) {
-                // The cap keeps any item under the template render collection limit (ADO-02).
-                commits = commits.stream()
-                        .sorted(Comparator.comparing(LinkedCommit::authoredAt).reversed())
-                        .limit(maxCommitsPerTicket).toList();
-            }
             EnrichmentStatus status = links.hasDisplayableLinks() ? EnrichmentStatus.LINKED : EnrichmentStatus.NO_LINK;
-            return new CodeLinks(status, capped ? EnrichmentReason.COMMIT_LIMIT : null, capped, Instant.now(),
-                    CommitsSource.KEY_TAGGED, links.pullRequests(), commits, links.branches(), previous.history());
+            CodeLinks result = new CodeLinks(status, null, false, Instant.now(), CommitsSource.KEY_TAGGED,
+                    links.pullRequests(), commits, links.branches(), previous.history());
+            return capCommits(status == EnrichmentStatus.LINKED ? completeFromAdo(result, previous, adoRun) : result);
         } catch (DevStatusUnrecognisedException e) {
             return failed(previous, EnrichmentReason.DEV_STATUS_UNRECOGNISED);
         } catch (JiraTicketReadException e) {
@@ -164,6 +195,133 @@ public class EnrichmentService {
         }
     }
 
+    // The cap keeps any item under the template render collection limit (ADO-02).
+    private CodeLinks capCommits(CodeLinks links) {
+        if (links.commits().size() <= maxCommitsPerTicket) {
+            return links;
+        }
+        List<LinkedCommit> newest = links.commits().stream()
+                .sorted(Comparator.comparing(LinkedCommit::authoredAt).reversed())
+                .limit(maxCommitsPerTicket).toList();
+        return new CodeLinks(links.status(), links.reason() != null ? links.reason() : EnrichmentReason.COMMIT_LIMIT,
+                true, links.attemptedAt(), links.commitsSource(), links.pullRequests(), newest, links.branches(),
+                links.history());
+    }
+
+    // D-06-09/D-06-11: ADO failures never produce FAILED; the PAT only adds completeness to a LINKED item.
+    private CodeLinks completeFromAdo(CodeLinks links, CodeLinks previous, AdoRun run) {
+        if (run.problem() != null) {
+            return flagged(links, run.problem());
+        }
+        if (run.credential().isEmpty()) {
+            return links;
+        }
+        List<LinkedPullRequest> counting = links.pullRequests().stream()
+                .filter(LinkedPullRequest::countsTowardCommits).toList();
+        if (counting.isEmpty()) {
+            return links;
+        }
+        if (isClosedAndFetched(previous, counting)) {
+            return reuseFetched(links, previous);
+        }
+        return fetchFromAdo(links, counting, run);
+    }
+
+    private static boolean isClosedAndFetched(CodeLinks previous, List<LinkedPullRequest> counting) {
+        if (previous.status() != EnrichmentStatus.LINKED || previous.commitsSource() != CommitsSource.ADO_COMPLETE) {
+            return false;
+        }
+        List<LinkedPullRequest> previousCounting = previous.pullRequests().stream()
+                .filter(LinkedPullRequest::countsTowardCommits).toList();
+        Set<String> previousIds = previousCounting.stream().map(LinkedPullRequest::id).collect(Collectors.toSet());
+        Set<String> currentIds = counting.stream().map(LinkedPullRequest::id).collect(Collectors.toSet());
+        return previousIds.equals(currentIds) && previousCounting.stream()
+                .allMatch(pr -> pr.commitsFetchedAt() != null && pr.status() != null
+                        && !"OPEN".equalsIgnoreCase(pr.status()));
+    }
+
+    private static CodeLinks reuseFetched(CodeLinks links, CodeLinks previous) {
+        Map<String, Instant> fetchedAt = previous.pullRequests().stream()
+                .filter(pr -> pr.commitsFetchedAt() != null)
+                .collect(Collectors.toMap(LinkedPullRequest::id, LinkedPullRequest::commitsFetchedAt, (a, b) -> a));
+        List<LinkedPullRequest> pullRequests = links.pullRequests().stream()
+                .map(pr -> pr.countsTowardCommits() ? stamped(pr, fetchedAt.get(pr.id())) : pr).toList();
+        return completed(links, pullRequests, union(previous.commits(), links.commits()));
+    }
+
+    private CodeLinks fetchFromAdo(CodeLinks links, List<LinkedPullRequest> counting, AdoRun run) {
+        AdoCredential credential = run.credential().orElseThrow();
+        // Start every PR first so one ticket's PRs overlap; a PR shared with another ticket is fetched once per run.
+        Map<String, CompletableFuture<List<LinkedCommit>>> started = new LinkedHashMap<>();
+        for (LinkedPullRequest pr : counting) {
+            Optional<AdoRepoRef> ref = AdoRepoRef.fromPullRequestUrl(pr.url());
+            if (ref.isEmpty()) {
+                continue;
+            }
+            if (!ref.get().organization().equalsIgnoreCase(credential.organization())) {
+                return flagged(links, EnrichmentReason.ADO_ORG_MISMATCH);
+            }
+            String key = ref.get().organization() + "|" + pr.repositoryId() + "|" + pr.id();
+            // No permit here: the calling worker already holds one.
+            started.put(pr.id(), run.prCommits().computeIfAbsent(key, k -> CompletableFuture.supplyAsync(
+                    () -> adoRepositoryPort.pullRequestCommits(credential, ref.get(), pr.repositoryId(), pr.id()),
+                    executor)));
+        }
+        if (started.isEmpty()) {
+            return links;
+        }
+        List<LinkedCommit> adoCommits = new ArrayList<>();
+        for (CompletableFuture<List<LinkedCommit>> future : started.values()) {
+            try {
+                adoCommits.addAll(future.join());
+            } catch (CompletionException e) {
+                return flagged(links, adoReason(e.getCause()));
+            }
+        }
+        Instant now = Instant.now();
+        List<LinkedPullRequest> pullRequests = links.pullRequests().stream()
+                .map(pr -> pr.countsTowardCommits() && started.containsKey(pr.id()) ? stamped(pr, now) : pr).toList();
+        return completed(links, pullRequests, union(adoCommits, links.commits()));
+    }
+
+    private static EnrichmentReason adoReason(Throwable cause) {
+        if (cause instanceof AdoAccessException e) {
+            return switch (e.reason()) {
+                case UNAUTHORIZED -> EnrichmentReason.ADO_UNAUTHORIZED;
+                case NOT_FOUND -> EnrichmentReason.ADO_NOT_FOUND;
+                case RATE_LIMITED -> EnrichmentReason.ADO_RATE_LIMITED;
+                case UNREACHABLE -> EnrichmentReason.ADO_UNREACHABLE;
+                case TOO_LARGE -> EnrichmentReason.COMMIT_LIMIT;
+                case ERROR -> EnrichmentReason.ADO_ERROR;
+            };
+        }
+        return EnrichmentReason.ADO_ERROR;
+    }
+
+    private static LinkedPullRequest stamped(LinkedPullRequest pr, Instant fetchedAt) {
+        return new LinkedPullRequest(pr.repositoryId(), pr.id(), pr.title(), pr.status(), pr.url(), pr.sourceBranch(),
+                pr.targetBranch(), pr.countsTowardCommits(), fetchedAt);
+    }
+
+    // First list wins on a shared sha, so ADO's full record is preferred over the key-tagged one.
+    private static List<LinkedCommit> union(List<LinkedCommit> first, List<LinkedCommit> second) {
+        Map<String, LinkedCommit> bySha = new LinkedHashMap<>();
+        first.forEach(commit -> bySha.putIfAbsent(commit.sha(), commit));
+        second.forEach(commit -> bySha.putIfAbsent(commit.sha(), commit));
+        return List.copyOf(bySha.values());
+    }
+
+    private static CodeLinks flagged(CodeLinks links, EnrichmentReason reason) {
+        return new CodeLinks(links.status(), reason, true, links.attemptedAt(), links.commitsSource(),
+                links.pullRequests(), links.commits(), links.branches(), links.history());
+    }
+
+    private static CodeLinks completed(CodeLinks links, List<LinkedPullRequest> pullRequests,
+                                       List<LinkedCommit> commits) {
+        return new CodeLinks(links.status(), null, false, links.attemptedAt(), CommitsSource.ADO_COMPLETE,
+                pullRequests, commits, links.branches(), links.history());
+    }
+
     private static CodeLinks failed(CodeLinks previous, EnrichmentReason reason) {
         return previous.failed(reason, Instant.now(), previous.history());
     }
@@ -171,5 +329,9 @@ public class EnrichmentService {
     @PreDestroy
     void shutdown() {
         executor.shutdownNow();
+    }
+
+    private record AdoRun(Optional<AdoCredential> credential, EnrichmentReason problem,
+                          Map<String, CompletableFuture<List<LinkedCommit>>> prCommits) {
     }
 }
