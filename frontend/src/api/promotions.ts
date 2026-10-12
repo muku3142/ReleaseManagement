@@ -46,6 +46,13 @@ export const OUTCOME_LABELS: Record<PromotionOutcome, string> = {
   VOIDED: 'Voided',
 };
 
+export const OUTCOME_COLOURS: Record<PromotionOutcome, string> = {
+  SUCCESS: 'text-green-700',
+  FAILED: 'text-red-700',
+  ROLLED_BACK: 'text-amber-700',
+  VOIDED: 'text-gray-500',
+};
+
 export const promotionsQueryKey = (releaseId: string) => ['promotions', releaseId] as const;
 
 export function usePromotions(releaseId: string) {

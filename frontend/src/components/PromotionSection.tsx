@@ -1,15 +1,9 @@
 import { useState } from 'react';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
-import { OUTCOME_LABELS, usePromotions, type PromotionEntry, type PromotionOutcome } from '../api/promotions';
+import { OUTCOME_COLOURS, OUTCOME_LABELS, usePromotions, type PromotionEntry } from '../api/promotions';
+import { LadderDots } from './LadderDots';
 import { RecordPromotionDialog } from './RecordPromotionDialog';
-
-const OUTCOME_COLOURS: Record<PromotionOutcome, string> = {
-  SUCCESS: 'text-green-700',
-  FAILED: 'text-red-700',
-  ROLLED_BACK: 'text-amber-700',
-  VOIDED: 'text-gray-500',
-};
 
 export function PromotionSection({ releaseId, isFrozen }: { releaseId: string; isFrozen: boolean }) {
   const promotions = usePromotions(releaseId);
@@ -20,7 +14,6 @@ export function PromotionSection({ releaseId, isFrozen }: { releaseId: string; i
   const problem =
     promotions.isError && promotions.error instanceof ApiError ? promotions.error.problem : undefined;
   const current = history?.stages.find((s) => s.id === history.currentStageId);
-  const drawn = history?.stages.filter((s) => !s.retired || s.id === history.currentStageId) ?? [];
 
   return (
     <section id="history" className="mt-6 rounded border border-gray-200 bg-white p-4">
@@ -41,31 +34,7 @@ export function PromotionSection({ releaseId, isFrozen }: { releaseId: string; i
 
       {history && (
         <>
-          <ol aria-label="Environment ladder" className="mt-3 flex flex-wrap items-center gap-3">
-            {drawn.map((stage) => {
-              const reached = current !== undefined && stage.position <= current.position;
-              const isCurrent = stage.id === history.currentStageId;
-              return (
-                <li
-                  key={stage.id}
-                  data-state={reached ? 'reached' : 'ahead'}
-                  aria-current={isCurrent ? 'step' : undefined}
-                  className="flex items-center gap-1"
-                >
-                  <span
-                    className={`inline-block h-3 w-3 rounded-full ${reached ? 'bg-blue-600' : 'bg-gray-300'} ${
-                      isCurrent ? 'ring-2 ring-blue-300' : ''
-                    }`}
-                  />
-                  <span className="text-xs text-gray-700">
-                    {stage.name}
-                    {stage.retired ? ' (retired)' : ''}
-                  </span>
-                  {stage.production && <span className="text-xs text-gray-500">Production</span>}
-                </li>
-              );
-            })}
-          </ol>
+          <LadderDots stages={history.stages} currentStageId={history.currentStageId} />
 
           <p className="mt-2 text-sm text-gray-700">
             {current ? `Current stage: ${current.name}` : 'Not deployed yet'}
