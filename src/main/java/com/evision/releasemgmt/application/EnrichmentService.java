@@ -136,13 +136,14 @@ public class EnrichmentService {
     CodeLinks enrichOne(JiraAccessContext access, TicketDetail ticket, CodeLinks previous) {
         try {
             DevStatusLinks links = devStatusPort.fetchLinks(access, ticket.jiraIssueId(), ticket.key());
-            List<LinkedCommit> commits = links.keyTaggedCommits();
+            // release_item_commit.authored_at is NOT NULL, so a commit without an author date cannot be stored.
+            List<LinkedCommit> commits = links.keyTaggedCommits().stream()
+                    .filter(commit -> commit.authoredAt() != null).toList();
             boolean capped = commits.size() > maxCommitsPerTicket;
             if (capped) {
                 // The cap keeps any item under the template render collection limit (ADO-02).
                 commits = commits.stream()
-                        .sorted(Comparator.comparing(LinkedCommit::authoredAt,
-                                Comparator.nullsFirst(Comparator.<Instant>naturalOrder())).reversed())
+                        .sorted(Comparator.comparing(LinkedCommit::authoredAt).reversed())
                         .limit(maxCommitsPerTicket).toList();
             }
             EnrichmentStatus status = links.hasDisplayableLinks() ? EnrichmentStatus.LINKED : EnrichmentStatus.NO_LINK;

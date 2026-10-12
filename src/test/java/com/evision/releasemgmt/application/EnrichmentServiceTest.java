@@ -216,6 +216,16 @@ class EnrichmentServiceTest {
     }
 
     @Test
+    void commitsWithoutAnAuthorDateAreDropped() {
+        when(port.fetchLinks(ACCESS, "1", "EX-1")).thenReturn(
+                new DevStatusLinks(List.of(), List.of(commit("a", null), commit("b", T0)), List.of()));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        assertThat(saved().get("EX-1").commits()).extracting(LinkedCommit::sha).containsExactly("b");
+    }
+
+    @Test
     void commitsAboveTheCapAreCutToTheNewestAndMarkedIncomplete() {
         List<LinkedCommit> commits = List.of(commit("a", T0), commit("b", T0.plusSeconds(30)),
                 commit("c", T0.plusSeconds(10)), commit("d", T0.plusSeconds(20)));
