@@ -58,7 +58,7 @@ D-08-02, D-08-14).
   - "Next" and "current" are computed from the ladder order at the time of recording, ignoring
     retired stages.
   - A release with no successful promotion can only target the first active stage.
-- **D-07-08: Outcomes are SUCCESS / FAILED / ROLLED_BACK.**
+- **D-07-08: Outcomes are SUCCESS / FAILED / ROLLED_BACK** (plus correction-only `VOIDED`, D-07-15).
   - A rollback is a new entry on the stage being rolled back, with outcome `ROLLED_BACK`.
   - **Current stage** = the highest stage, by current order, holding a SUCCESS that no later
     ROLLED_BACK on that stage cancels.
@@ -88,6 +88,21 @@ D-08-02, D-08-14).
 - **D-07-12: Any signed-in user may record or correct promotions, and edit the ladder.** No role model
   exists, and adding one is out of scope. The actor is the accountId (`principal.getName()`) and is
   displayed via the 05.3 actor resolution (`ActorResolutionService`, batched, never per row).
+
+### Decided after research (2026-10-12)
+- **D-07-13: "Later" means later by `deployed_at`, tie-broken by `recorded_at`.** This applies to
+  D-07-08's rollback cancellation. A ROLLED_BACK is rejected unless the stage holds a standing SUCCESS
+  whose `deployed_at` is not after the rollback's.
+- **D-07-14: A correction passes field checks only, never the ladder-sequence rules.**
+  - The checks are: `deployed_at` bounds (D-07-10), stage not retired, and a reason.
+  - Replaying D-07-07 over the corrected history is rejected, because it would make early entries
+    impossible to fix.
+- **D-07-15: A fourth outcome, `VOIDED`, reachable only through a correction.** This amends D-07-08.
+  - It is for entries that should never have existed, e.g. one recorded on the wrong release.
+  - A voided entry stays visible in the history with its reason.
+  - An effective VOIDED entry counts toward nothing: not the current stage, not the D-07-07 checks,
+    and not any Phase 8 metric. Phase 8 must exclude it.
+  - New entries cannot be recorded as VOIDED.
 
 ### Claude's Discretion
 - Table shapes: e.g. `environment_stage(id, name, position, is_production, retired_at)` and an

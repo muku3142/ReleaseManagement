@@ -113,6 +113,9 @@ That falsely shows paperwork as STALE on the dashboard. Fix it here, the same wa
     A rolled-back Production release still keeps its first-success shipped date;
   - **retired stages** still appear in deployment history, but not as filter defaults or matrix
     columns.
+- **Amended 2026-10-12 (D-07-13..15):** "later" rollback means later by `deployed_at` (tie-break
+  `recorded_at`), and an effective **`VOIDED`** entry (correction-only) counts toward no metric, no
+  current stage and no history count. Every Phase 8 query must exclude it.
 
 ### Claude's Discretion
 - **Read model:** a dedicated dashboard query/endpoint with set-based aggregate subqueries, not more
