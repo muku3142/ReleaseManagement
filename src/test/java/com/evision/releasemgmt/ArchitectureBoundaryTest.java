@@ -5,6 +5,7 @@ import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
+import com.evision.releasemgmt.ports.DashboardReadRepository;
 import com.evision.releasemgmt.ports.PromotionRepository;
 import org.junit.jupiter.api.Test;
 
@@ -105,6 +106,15 @@ class ArchitectureBoundaryTest {
     void promotionRepositoryExposesNoMutation() {
         ArchRule rule = ArchRuleDefinition.noMethods()
                 .that().areDeclaredIn(PromotionRepository.class)
+                .should().haveNameMatching("(update|delete|remove|save).*")
+                .allowEmptyShould(true);
+        rule.check(classes);
+    }
+
+    @Test
+    void dashboardReadRepositoryExposesNoMutation() {
+        ArchRule rule = ArchRuleDefinition.noMethods()
+                .that().areDeclaredIn(DashboardReadRepository.class)
                 .should().haveNameMatching("(update|delete|remove|save).*")
                 .allowEmptyShould(true);
         rule.check(classes);
