@@ -80,6 +80,16 @@ class ArchitectureBoundaryTest {
     }
 
     @Test
+    void theWebAdapterCannotReachTheTokenBearingAdoCredentialPort() {
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..adapters.web..")
+                .should().dependOnClassesThat()
+                .haveFullyQualifiedName("com.evision.releasemgmt.ports.AdoCredentialRepository")
+                .allowEmptyShould(true);
+        rule.check(classes);
+    }
+
+    @Test
     void actorResolutionResolvesThroughActorDirectoryOnly() {
         ArchRule rule = noClasses()
                 .that().haveSimpleName("ActorResolutionService")
