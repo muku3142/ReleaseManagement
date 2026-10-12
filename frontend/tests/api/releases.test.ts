@@ -1,3 +1,6 @@
+import { act, createElement, useEffect } from 'react';
+import { createRoot } from 'react-dom/client';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, apiFetch } from '../../src/api/client';
 import { messageForReason } from '../../src/api/auth';
@@ -305,6 +308,46 @@ describe('releases API client', () => {
     ).rejects.toSatisfy(
       (error) => error instanceof ApiError && error.problem.fieldErrors?.title === 'must not be blank',
     );
+  });
+
+  describe('useRefreshCodeLinks', () => {
+    async function runRefresh(vars: { releaseId: string; ticketKey?: string }): Promise<string> {
+      const release: Release = { ...summary({ id: 'r1' }), items: [], manualItems: [] };
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, release));
+      (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+      const container = document.createElement('div');
+      const root = createRoot(container);
+      function Probe() {
+        const mutation = releasesModule.useRefreshCodeLinks();
+        useEffect(() => mutation.mutate(vars), []); // eslint-disable-line react-hooks/exhaustive-deps
+        return null;
+      }
+      await act(async () => {
+        root.render(
+          createElement(QueryClientProvider, { client: new QueryClient() }, createElement(Probe)),
+        );
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      await act(async () => root.unmount());
+      const [url, init] = fetchSpy.mock.calls.at(-1)!;
+      expect(init?.method).toBe('POST');
+      return String(url);
+    }
+
+    it('posts to code-links/refresh without a ticketKey for the whole release', async () => {
+      expect(await runRefresh({ releaseId: 'r1' })).toBe('/api/releases/r1/code-links/refresh');
+    });
+
+    it('adds the encoded ticketKey for a per-ticket retry', async () => {
+      expect(await runRefresh({ releaseId: 'r1', ticketKey: 'EXAMPLE-1' })).toBe(
+        '/api/releases/r1/code-links/refresh?ticketKey=EXAMPLE-1',
+      );
+      expect(await runRefresh({ releaseId: 'r1', ticketKey: 'A B&C' })).toBe(
+        '/api/releases/r1/code-links/refresh?ticketKey=A%20B%26C',
+      );
+    });
   });
 
   it('exports no hook whose name contains unfreeze (D-03-10)', () => {
