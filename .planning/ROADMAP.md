@@ -453,13 +453,13 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 5.4 Template Selection At Generation Time | 6/7 | In Progress | - |
 | 6. Azure DevOps Enrichment | 9/10 | In Progress|  |
 | 7. Promotion Tracking & Audit Trail | 6/7 | In Progress|  |
-| 8. Release Insights Dashboard | 0/TBD | Not started | - |
+| 8. Release Insights Dashboard | 0/8 | Planned    |  |
 
 ### Phase 8: Release Insights Dashboard
 **Goal**: Release manager opens one screen and sees what Jira structurally cannot answer — which releases have outstanding paperwork, where each sits on the environment ladder, what went to each environment and when, and how long releases actually take
 **Depends on**: Phase 7 (promotion and ladder data), Phase 6 (enrichment coverage), Phase 5 (documentation readiness)
 **Requirements**: AUDIT-04, INSIGHT-01, INSIGHT-02, INSIGHT-03
-**Plans**: TBD
+**Plans**: 8 across 5 waves
 **UI hint**: yes
 
 **Why this is Phase 8 and not a decimal after Phase 5 (decided 2026-08-11).** The user asked for
