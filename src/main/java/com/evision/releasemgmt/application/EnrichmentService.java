@@ -13,12 +13,17 @@ import com.evision.releasemgmt.domain.enrichment.EnrichmentReason;
 import com.evision.releasemgmt.domain.enrichment.EnrichmentStatus;
 import com.evision.releasemgmt.domain.enrichment.LinkedCommit;
 import com.evision.releasemgmt.domain.enrichment.LinkedPullRequest;
+import com.evision.releasemgmt.domain.enrichment.StatusChange;
+import com.evision.releasemgmt.domain.enrichment.StatusHistory;
+import com.evision.releasemgmt.domain.enrichment.StatusTransition;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
+import com.evision.releasemgmt.domain.jira.StatusCategory;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.ports.AdoCredentialRepository;
 import com.evision.releasemgmt.ports.AdoRepositoryPort;
 import com.evision.releasemgmt.ports.JiraDevStatusPort;
+import com.evision.releasemgmt.ports.JiraIssueHistoryPort;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -33,6 +38,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,10 +72,13 @@ public class EnrichmentService {
     private final AdoCredentialRepository adoCredentialRepository;
     private final AdoRepositoryPort adoRepositoryPort;
     private final ReleaseRepository releaseRepository;
+    private final JiraIssueHistoryPort historyPort;
+    private final StatusCategoryService statusCategoryService;
 
     public EnrichmentService(JiraAccessContextService accessContextService, JiraDevStatusPort devStatusPort,
                              AdoCredentialRepository adoCredentialRepository, AdoRepositoryPort adoRepositoryPort,
-                             ReleaseRepository releaseRepository,
+                             ReleaseRepository releaseRepository, JiraIssueHistoryPort historyPort,
+                             StatusCategoryService statusCategoryService,
                              @Value("${app.enrichment.max-concurrent}") int maxConcurrent,
                              @Value("${app.enrichment.deadline}") Duration deadline,
                              @Value("${app.enrichment.max-commits-per-ticket}") int maxCommitsPerTicket) {
@@ -78,6 +87,8 @@ public class EnrichmentService {
         this.adoCredentialRepository = adoCredentialRepository;
         this.adoRepositoryPort = adoRepositoryPort;
         this.releaseRepository = releaseRepository;
+        this.historyPort = historyPort;
+        this.statusCategoryService = statusCategoryService;
         this.permits = new Semaphore(maxConcurrent);
         this.deadline = deadline;
         this.maxCommitsPerTicket = maxCommitsPerTicket;
@@ -171,6 +182,7 @@ public class EnrichmentService {
     }
 
     CodeLinks enrichOne(JiraAccessContext access, TicketDetail ticket, CodeLinks previous, AdoRun adoRun) {
+        StatusHistory history = statusHistory(access, ticket, previous.history());
         try {
             DevStatusLinks links = devStatusPort.fetchLinks(access, ticket.jiraIssueId(), ticket.key());
             // release_item_commit.authored_at is NOT NULL, so a commit without an author date cannot be stored.
@@ -178,20 +190,48 @@ public class EnrichmentService {
                     .filter(commit -> commit.authoredAt() != null).toList();
             EnrichmentStatus status = links.hasDisplayableLinks() ? EnrichmentStatus.LINKED : EnrichmentStatus.NO_LINK;
             CodeLinks result = new CodeLinks(status, null, false, Instant.now(), CommitsSource.KEY_TAGGED,
-                    links.pullRequests(), commits, links.branches(), previous.history());
+                    links.pullRequests(), commits, links.branches(), history);
             return capCommits(status == EnrichmentStatus.LINKED ? completeFromAdo(result, previous, adoRun) : result);
         } catch (DevStatusUnrecognisedException e) {
-            return failed(previous, EnrichmentReason.DEV_STATUS_UNRECOGNISED);
+            return failed(previous, EnrichmentReason.DEV_STATUS_UNRECOGNISED, history);
         } catch (JiraTicketReadException e) {
             return failed(previous, switch (e.reason()) {
                 case INVALID_CREDENTIALS, JIRA_FORBIDDEN -> EnrichmentReason.JIRA_UNAUTHORIZED;
                 case JIRA_RATE_LIMITED -> EnrichmentReason.JIRA_RATE_LIMITED;
                 case JIRA_UNREACHABLE -> EnrichmentReason.JIRA_UNREACHABLE;
                 default -> EnrichmentReason.DEV_STATUS_ERROR;
-            });
+            }, history);
         } catch (RuntimeException e) {
             log.warn("Enrichment of {} failed", ticket.key(), e);
-            return failed(previous, EnrichmentReason.DEV_STATUS_ERROR);
+            return failed(previous, EnrichmentReason.DEV_STATUS_ERROR, history);
+        }
+    }
+
+    // D-06-08: history is independent of code links and never fails the item. The recorded updated time is the one from
+    // the SEARCH response, so a change between search and changelog read is caught on the next run.
+    private StatusHistory statusHistory(JiraAccessContext access, TicketDetail ticket, StatusHistory previous) {
+        if (!previous.needsRead(ticket.updatedAt())) {
+            return previous;
+        }
+        try {
+            List<StatusTransition> transitions = historyPort.statusTransitions(access, ticket.key());
+            Set<String> ids = new HashSet<>();
+            for (StatusTransition transition : transitions) {
+                if (transition.fromStatusId() != null) {
+                    ids.add(transition.fromStatusId());
+                }
+                ids.add(transition.toStatusId());
+            }
+            Map<String, StatusCategory> categories = statusCategoryService.categoriesFor(access, ids);
+            List<StatusChange> changes = transitions.stream()
+                    .map(t -> new StatusChange(t.at(), t.fromStatusId(), t.toStatusId(),
+                            t.fromStatusId() == null ? null : categories.get(t.fromStatusId()),
+                            categories.get(t.toStatusId())))
+                    .toList();
+            return StatusHistory.derive(changes, ticket.updatedAt());
+        } catch (RuntimeException e) {
+            log.warn("Status history of {} unavailable", ticket.key(), e);
+            return StatusHistory.unavailable();
         }
     }
 
@@ -322,8 +362,8 @@ public class EnrichmentService {
                 pullRequests, commits, links.branches(), links.history());
     }
 
-    private static CodeLinks failed(CodeLinks previous, EnrichmentReason reason) {
-        return previous.failed(reason, Instant.now(), previous.history());
+    private static CodeLinks failed(CodeLinks previous, EnrichmentReason reason, StatusHistory history) {
+        return previous.failed(reason, Instant.now(), history);
     }
 
     @PreDestroy

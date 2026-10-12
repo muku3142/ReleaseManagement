@@ -13,7 +13,9 @@ import com.evision.releasemgmt.domain.enrichment.EnrichmentReason;
 import com.evision.releasemgmt.domain.enrichment.EnrichmentStatus;
 import com.evision.releasemgmt.domain.enrichment.LinkedCommit;
 import com.evision.releasemgmt.domain.enrichment.LinkedPullRequest;
+import com.evision.releasemgmt.domain.enrichment.HistoryState;
 import com.evision.releasemgmt.domain.enrichment.StatusHistory;
+import com.evision.releasemgmt.domain.enrichment.StatusTransition;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
 import com.evision.releasemgmt.domain.jira.StatusCategory;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
@@ -22,6 +24,7 @@ import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.ports.AdoCredentialRepository;
 import com.evision.releasemgmt.ports.AdoRepositoryPort;
 import com.evision.releasemgmt.ports.JiraDevStatusPort;
+import com.evision.releasemgmt.ports.JiraIssueHistoryPort;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,6 +64,8 @@ class EnrichmentServiceTest {
     private ReleaseRepository repository;
     private AdoCredentialRepository credentials;
     private AdoRepositoryPort ado;
+    private JiraIssueHistoryPort historyPort;
+    private StatusCategoryService categories;
 
     @BeforeEach
     void setUp() {
@@ -69,13 +74,16 @@ class EnrichmentServiceTest {
         repository = mock(ReleaseRepository.class);
         credentials = mock(AdoCredentialRepository.class);
         ado = mock(AdoRepositoryPort.class);
+        historyPort = mock(JiraIssueHistoryPort.class);
+        categories = mock(StatusCategoryService.class);
         when(credentials.findForUse()).thenReturn(Optional.empty());
         when(accessService.currentContext()).thenReturn(ACCESS);
         when(repository.findById(RELEASE_ID)).thenReturn(Optional.empty());
     }
 
     private EnrichmentService service(int concurrent, Duration deadline, int cap) {
-        return new EnrichmentService(accessService, port, credentials, ado, repository, concurrent, deadline, cap);
+        return new EnrichmentService(accessService, port, credentials, ado, repository, historyPort,
+                categories, concurrent, deadline, cap);
     }
 
     private static TicketDetail ticket(String key, String issueId) {
@@ -154,7 +162,7 @@ class EnrichmentServiceTest {
 
     @Test
     void failureKeepsPreviousLinksAndHistory() {
-        StatusHistory history = StatusHistory.unavailable();
+        StatusHistory history = new StatusHistory(HistoryState.AVAILABLE, T0, null, 0, List.of());
         CodeLinks previous = new CodeLinks(EnrichmentStatus.LINKED, null, false, T0, CommitsSource.KEY_TAGGED,
                 List.of(pr("5")), List.of(commit("abc", T0)), List.of(), history);
         Release release = new Release(RELEASE_ID, "r", "1", com.evision.releasemgmt.domain.release.ReleaseStatus.OPEN,
@@ -445,5 +453,118 @@ class EnrichmentServiceTest {
 
         assertThat(saved()).hasSize(2);
         verify(ado, never()).pullRequestCommits(any(), any(), anyString(), anyString());
+    }
+
+    private static StatusTransition transition(int minute, String from, String to) {
+        return new StatusTransition(T0.plusSeconds(60L * minute), from, to);
+    }
+
+    private void categoriesKnown() {
+        when(categories.categoriesFor(any(), any())).thenReturn(Map.of(
+                "1", StatusCategory.TO_DO, "2", StatusCategory.IN_PROGRESS, "3", StatusCategory.DONE));
+    }
+
+    private void withPreviousHistory(StatusHistory history) {
+        previousRelease("EX-1", "1", new CodeLinks(EnrichmentStatus.NOT_ATTEMPTED, null, false, null, null,
+                List.of(), List.of(), List.of(), history));
+    }
+
+    @Test
+    void historyIsDerivedFromCategorisedTransitions() {
+        categoriesKnown();
+        when(port.fetchLinks(ACCESS, "1", "EX-1")).thenReturn(DevStatusLinks.none());
+        when(historyPort.statusTransitions(ACCESS, "EX-1")).thenReturn(List.of(
+                transition(1, "1", "2"), transition(2, "2", "3"), transition(3, "3", "2"), transition(4, "2", "3")));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        StatusHistory history = saved().get("EX-1").history();
+        assertThat(history.state()).isEqualTo(HistoryState.AVAILABLE);
+        assertThat(history.firstDoneAt()).isEqualTo(T0.plusSeconds(120));
+        assertThat(history.reopenCount()).isEqualTo(1);
+        assertThat(history.syncedUpdatedAt()).isEqualTo(T0);
+    }
+
+    @Test
+    void unchangedTicketSkipsTheChangelogAndKeepsPreviousHistory() {
+        StatusHistory previous = new StatusHistory(HistoryState.AVAILABLE, T0, T0, 0, List.of());
+        withPreviousHistory(previous);
+        when(port.fetchLinks(ACCESS, "1", "EX-1")).thenReturn(DevStatusLinks.none());
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        verify(historyPort, never()).statusTransitions(any(), anyString());
+        assertThat(saved().get("EX-1").history()).isSameAs(previous);
+    }
+
+    @Test
+    void changedTicketRereadsTheChangelog() {
+        withPreviousHistory(new StatusHistory(HistoryState.AVAILABLE, T0.minusSeconds(5), null, 0, List.of()));
+        categoriesKnown();
+        when(port.fetchLinks(ACCESS, "1", "EX-1")).thenReturn(DevStatusLinks.none());
+        when(historyPort.statusTransitions(ACCESS, "EX-1")).thenReturn(List.of(transition(1, "1", "3")));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        StatusHistory history = saved().get("EX-1").history();
+        assertThat(history.firstDoneAt()).isEqualTo(T0.plusSeconds(60));
+        assertThat(history.syncedUpdatedAt()).isEqualTo(T0);
+    }
+
+    @Test
+    void changelogFailureMarksHistoryUnavailableWithoutAffectingCodeLinks() {
+        when(port.fetchLinks(ACCESS, "1", "EX-1")).thenReturn(
+                new DevStatusLinks(List.of(pr("5")), List.of(commit("abc", T0)), List.of()));
+        when(historyPort.statusTransitions(ACCESS, "EX-1"))
+                .thenThrow(new JiraTicketReadException(JiraAuthFailureReason.JIRA_RATE_LIMITED));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        CodeLinks result = saved().get("EX-1");
+        assertThat(result.status()).isEqualTo(EnrichmentStatus.LINKED);
+        assertThat(result.history().state()).isEqualTo(HistoryState.UNAVAILABLE);
+        assertThat(result.history().syncedUpdatedAt()).isNull();
+    }
+
+    @Test
+    void aStatusIdMissingFromTheCategoryMapMakesHistoryUnavailable() {
+        when(categories.categoriesFor(any(), any())).thenReturn(Map.of("1", StatusCategory.TO_DO));
+        when(port.fetchLinks(ACCESS, "1", "EX-1")).thenReturn(DevStatusLinks.none());
+        when(historyPort.statusTransitions(ACCESS, "EX-1")).thenReturn(List.of(transition(1, "1", "99")));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        StatusHistory history = saved().get("EX-1").history();
+        assertThat(history.state()).isEqualTo(HistoryState.UNAVAILABLE);
+        assertThat(history.syncedUpdatedAt()).isEqualTo(T0);
+    }
+
+    @Test
+    void historyIsCapturedEvenWhenDevStatusFails() {
+        categoriesKnown();
+        when(port.fetchLinks(ACCESS, "1", "EX-1")).thenThrow(new DevStatusUnrecognisedException());
+        when(historyPort.statusTransitions(ACCESS, "EX-1")).thenReturn(List.of(transition(1, "1", "3")));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(ticket("EX-1", "1")));
+
+        CodeLinks result = saved().get("EX-1");
+        assertThat(result.status()).isEqualTo(EnrichmentStatus.FAILED);
+        assertThat(result.history().state()).isEqualTo(HistoryState.AVAILABLE);
+        assertThat(result.history().firstDoneAt()).isEqualTo(T0.plusSeconds(60));
+    }
+
+    @Test
+    void aTicketWithoutUpdatedTimeIsReadEveryTimeAndStoredWithoutSyncedTime() {
+        categoriesKnown();
+        TicketDetail noUpdated = new TicketDetail("EX-1", "s", "Bug", "Done", null, null, null, List.of(), null, "",
+                List.of(), 0, "1", null, StatusCategory.DONE);
+        withPreviousHistory(new StatusHistory(HistoryState.AVAILABLE, T0, null, 0, List.of()));
+        when(port.fetchLinks(ACCESS, "1", "EX-1")).thenReturn(DevStatusLinks.none());
+        when(historyPort.statusTransitions(ACCESS, "EX-1")).thenReturn(List.of(transition(1, "1", "2")));
+
+        service(2, Duration.ofSeconds(5), 400).enrich(RELEASE_ID, List.of(noUpdated));
+
+        verify(historyPort, times(1)).statusTransitions(ACCESS, "EX-1");
+        assertThat(saved().get("EX-1").history().syncedUpdatedAt()).isNull();
     }
 }
