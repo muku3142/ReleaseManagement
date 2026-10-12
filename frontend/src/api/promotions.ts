@@ -30,6 +30,15 @@ export type RecordPromotionInput = {
   note?: string;
 };
 
+export type CorrectPromotionInput = {
+  promotionId: string;
+  stageId: string;
+  outcome: PromotionOutcome;
+  deployedAt: string;
+  note?: string;
+  reason: string;
+};
+
 export const OUTCOME_LABELS: Record<PromotionOutcome, string> = {
   SUCCESS: 'Success',
   FAILED: 'Failed',
@@ -44,6 +53,18 @@ export function usePromotions(releaseId: string) {
     queryKey: promotionsQueryKey(releaseId),
     queryFn: () => apiFetch<PromotionHistory>(`/api/releases/${releaseId}/promotions`),
     retry: false,
+  });
+}
+
+export function useCorrectPromotion(releaseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ promotionId, ...body }: CorrectPromotionInput) =>
+      apiFetch<PromotionHistory>(`/api/releases/${releaseId}/promotions/${promotionId}/corrections`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    onSuccess: (history) => queryClient.setQueryData(promotionsQueryKey(releaseId), history),
   });
 }
 

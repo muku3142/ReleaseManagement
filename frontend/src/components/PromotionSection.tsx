@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
-import { OUTCOME_LABELS, usePromotions, type PromotionOutcome } from '../api/promotions';
+import { OUTCOME_LABELS, usePromotions, type PromotionEntry, type PromotionOutcome } from '../api/promotions';
 import { RecordPromotionDialog } from './RecordPromotionDialog';
 
 const OUTCOME_COLOURS: Record<PromotionOutcome, string> = {
@@ -14,6 +14,7 @@ const OUTCOME_COLOURS: Record<PromotionOutcome, string> = {
 export function PromotionSection({ releaseId, isFrozen }: { releaseId: string; isFrozen: boolean }) {
   const promotions = usePromotions(releaseId);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [correcting, setCorrecting] = useState<PromotionEntry>();
 
   const history = promotions.data;
   const problem =
@@ -80,10 +81,14 @@ export function PromotionSection({ releaseId, isFrozen }: { releaseId: string; i
                 Record promotion
               </button>
               <RecordPromotionDialog
-                open={dialogOpen}
+                open={dialogOpen || correcting !== undefined}
                 releaseId={releaseId}
                 history={history}
-                onClose={() => setDialogOpen(false)}
+                correcting={correcting}
+                onClose={() => {
+                  setDialogOpen(false);
+                  setCorrecting(undefined);
+                }}
               />
             </>
           ) : (
@@ -95,14 +100,31 @@ export function PromotionSection({ releaseId, isFrozen }: { releaseId: string; i
           ) : (
             <ul className="mt-4 divide-y divide-gray-100">
               {history.entries.map((entry) => (
-                <li key={entry.id} className="py-2 text-sm">
-                  <span className="font-semibold text-gray-900">{entry.stageName}</span>{' '}
-                  <span className={OUTCOME_COLOURS[entry.outcome]}>{OUTCOME_LABELS[entry.outcome]}</span>
-                  <div className="text-xs text-gray-600">
+                <li key={entry.id} className={`py-2 text-sm ${entry.effective ? '' : 'text-gray-400'}`}>
+                  <span className={entry.effective ? 'font-semibold text-gray-900' : 'font-semibold'}>
+                    {entry.stageName}
+                  </span>{' '}
+                  <span className={entry.effective ? OUTCOME_COLOURS[entry.outcome] : ''}>
+                    {OUTCOME_LABELS[entry.outcome]}
+                  </span>
+                  {!entry.effective && <span className="ml-2 text-xs">Superseded</span>}
+                  <div className={`text-xs ${entry.effective ? 'text-gray-600' : ''}`}>
                     Deployed {new Date(entry.deployedAt).toLocaleString()} · Recorded{' '}
                     {new Date(entry.recordedAt).toLocaleString()} by {entry.recordedBy}
                   </div>
-                  {entry.note && <p className="mt-1 text-gray-700">{entry.note}</p>}
+                  {entry.note && <p className={`mt-1 ${entry.effective ? 'text-gray-700' : ''}`}>{entry.note}</p>}
+                  {entry.correctionReason && (
+                    <p className="mt-1 text-xs">Correction: {entry.correctionReason}</p>
+                  )}
+                  {isFrozen && entry.effective && (
+                    <button
+                      type="button"
+                      onClick={() => setCorrecting(entry)}
+                      className="mt-1 rounded border border-gray-300 px-2 py-1 text-xs text-gray-700"
+                    >
+                      Correct
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
