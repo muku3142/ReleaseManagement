@@ -365,4 +365,69 @@ class PromotionHistoryTest {
         assertThat(p.recordedAt()).isEqualTo(NOW.plusNanos(123_456_000));
         assertThat(p.deployedAt()).isEqualTo(p.recordedAt());
     }
+
+    @Test
+    void firstProductionSuccessIgnoresRepromotion() {
+        assertThat(history(entry(prod, SUCCESS, 3), entry(prod, SUCCESS, 5)).firstProductionSuccess()).contains(day(3));
+    }
+
+    @Test
+    void firstProductionSuccessIgnoresFailedAttempts() {
+        assertThat(history(entry(prod, FAILED, 2), entry(prod, SUCCESS, 4)).firstProductionSuccess()).contains(day(4));
+    }
+
+    @Test
+    void firstProductionSuccessSurvivesRollback() {
+        PromotionHistory h = history(entry(prod, SUCCESS, 4), entry(prod, ROLLED_BACK, 6));
+        assertThat(h.firstProductionSuccess()).contains(day(4));
+        assertThat(h.currentStage()).isNotEqualTo(java.util.Optional.of(prod));
+    }
+
+    @Test
+    void firstProductionSuccessIsEmptyWhenOnlySuccessIsVoided() {
+        Promotion success = entry(prod, SUCCESS, 4);
+        assertThat(history(success, correction(success, VOIDED)).firstProductionSuccess()).isEmpty();
+    }
+
+    @Test
+    void firstProductionSuccessFollowsTheCurrentProductionFlag() {
+        Stage uatProd = new Stage(uat.id(), "UAT", 3, true, null);
+        Stage prodNotProd = new Stage(prod.id(), "PROD", 4, false, null);
+        List<Stage> ladder = List.of(dev, test, uatProd, prodNotProd);
+        assertThat(history(ladder, entry(uat, SUCCESS, 3), entry(prod, SUCCESS, 4)).firstProductionSuccess())
+                .contains(day(3));
+        assertThat(history(ladder, entry(prod, SUCCESS, 4)).firstProductionSuccess()).isEmpty();
+    }
+
+    @Test
+    void firstProductionSuccessIsEmptyWithoutProductionStage() {
+        assertThat(history(List.of(dev, test), entry(dev, SUCCESS, 1)).firstProductionSuccess()).isEmpty();
+    }
+
+    @Test
+    void latestEffectiveIsTheFailedEntryUntilALaterSuccess() {
+        Promotion failed = entry(test, FAILED, 2);
+        assertThat(history(entry(dev, SUCCESS, 1), failed).latestEffective()).contains(failed);
+        Promotion success = entry(test, SUCCESS, 3);
+        assertThat(history(entry(dev, SUCCESS, 1), failed, success).latestEffective()).contains(success);
+    }
+
+    @Test
+    void latestEffectiveIgnoresVoidedCorrectionAndItsOriginal() {
+        Promotion devSuccess = entry(dev, SUCCESS, 1);
+        Promotion failed = entry(test, FAILED, 2);
+        assertThat(history(devSuccess, failed, correction(failed, VOIDED)).latestEffective()).contains(devSuccess);
+    }
+
+    @Test
+    void latestEffectiveBreaksDeployedAtTiesByRecordedAt() {
+        Promotion earlier = entry(dev, SUCCESS, day(1), day(1));
+        Promotion later = entry(test, FAILED, day(1), day(1).plusSeconds(5));
+        assertThat(history(earlier, later).latestEffective()).contains(later);
+    }
+
+    @Test
+    void latestEffectiveIsEmptyWithoutEntries() {
+        assertThat(history().latestEffective()).isEmpty();
+    }
 }
