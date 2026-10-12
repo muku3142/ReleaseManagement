@@ -12,6 +12,8 @@ import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
 import com.evision.releasemgmt.ports.ReleaseRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -34,25 +36,32 @@ public class ReleaseService {
     // so refresh fetches in chunks rather than one enormous key list.
     private static final int FETCH_BATCH_SIZE = 100;
 
+    private static final Logger log = LoggerFactory.getLogger(ReleaseService.class);
+
     private final ReleaseRepository repository;
     private final TicketSearchService ticketSearchService;
+    private final EnrichmentService enrichmentService;
 
-    public ReleaseService(ReleaseRepository repository, TicketSearchService ticketSearchService) {
+    public ReleaseService(ReleaseRepository repository, TicketSearchService ticketSearchService,
+                          EnrichmentService enrichmentService) {
         this.repository = repository;
         this.ticketSearchService = ticketSearchService;
+        this.enrichmentService = enrichmentService;
     }
 
     public AddTicketsResult createWithTickets(String name, String version, String jiraProjectKey,
                                               List<String> ticketKeys, String actor) {
         Instant now = Instant.now();
         List<String> requested = distinct(ticketKeys);
-        List<ReleaseItem> items = fetchTickets(requested).stream()
+        List<TicketDetail> fetched = fetchTickets(requested);
+        List<ReleaseItem> items = fetched.stream()
                 .map(ticket -> new ReleaseItem(ticket, now, CodeLinks.notAttempted()))
                 .toList();
         Release release = Release.create(name.trim(), version.trim(), blankToNull(jiraProjectKey),
                 actor, now);
         Release created = repository.create(release, items);
-        return new AddTicketsResult(created, items.size(), 0, requested.size() - items.size());
+        enrichQuietly(created.id(), fetched);
+        return new AddTicketsResult(get(created.id()), items.size(), 0, requested.size() - items.size());
     }
 
     public Release get(UUID id) {
@@ -83,11 +92,18 @@ public class ReleaseService {
         // between projects is requested as OLD-1 and comes back as NEW-5, so filtering the
         // request alone would insert a key already on the release and trip the unique constraint.
         List<TicketDetail> fetched = fetchTickets(toFetch);
-        List<ReleaseItem> items = fetched.stream()
+        List<TicketDetail> inserted = fetched.stream()
                 .filter(ticket -> !present.contains(ticket.key()))
+                .toList();
+        List<ReleaseItem> items = inserted.stream()
                 .map(ticket -> new ReleaseItem(ticket, now, CodeLinks.notAttempted()))
                 .toList();
-        Release updated = items.isEmpty() ? release : repository.addItems(releaseId, items);
+        Release updated = release;
+        if (!items.isEmpty()) {
+            repository.addItems(releaseId, items);
+            enrichQuietly(releaseId, inserted);
+            updated = get(releaseId);
+        }
         return new AddTicketsResult(updated, items.size(),
                 alreadyPresent + (fetched.size() - items.size()), toFetch.size() - fetched.size());
     }
@@ -102,7 +118,8 @@ public class ReleaseService {
         release.requireOpen();                 // freeze is simply the point after which this is refused
         List<String> keys = repository.findTicketKeys(releaseId);
         Instant now = Instant.now();
-        List<ReleaseItem> refreshed = fetchTickets(keys).stream()
+        List<TicketDetail> fetched = fetchTickets(keys);
+        List<ReleaseItem> refreshed = fetched.stream()
                 .map(ticket -> new ReleaseItem(ticket, now, CodeLinks.notAttempted()))
                 .toList();
         if (refreshed.size() != keys.size()) {
@@ -110,7 +127,23 @@ public class ReleaseService {
             // release, so a partial response would leave stale rows under a fresh timestamp.
             throw new ReleaseRefreshIncompleteException();
         }
-        return repository.replaceItemSnapshots(releaseId, refreshed, now);
+        repository.replaceItemSnapshots(releaseId, refreshed, now);
+        enrichQuietly(releaseId, fetched);
+        return get(releaseId);
+    }
+
+    /** D-06-04: the standalone action; a frozen release is refused (409) and per-item failures are stored, not thrown. */
+    public Release refreshCodeLinks(UUID releaseId, String ticketKeyOrNull) {
+        get(releaseId).requireOpen();
+        List<String> keys = repository.findTicketKeys(releaseId);
+        if (ticketKeyOrNull != null) {
+            keys = keys.contains(ticketKeyOrNull) ? List.of(ticketKeyOrNull) : List.of();
+        }
+        // The search is re-run so pre-Phase-6 rows get their numeric id and history sees the current updated;
+        // snapshots are not overwritten here, so a no-op run cannot mark documents stale (saveEnrichment
+        // stamps only on document-visible change).
+        enrichmentService.enrich(releaseId, fetchTickets(keys));
+        return get(releaseId);
     }
 
     public Release freeze(UUID id, String actor) {
@@ -149,6 +182,16 @@ public class ReleaseService {
     public Release removeManualItem(UUID releaseId, UUID manualItemId) {
         get(releaseId).requireOpen();
         return repository.removeManualItem(releaseId, manualItemId);
+    }
+
+    // D-06-04: enrichment is best effort on these paths. It runs after the core write, so its failure (including a freeze
+    // that landed during the fan-out, which saveEnrichment's lock rejects) can never undo or fail the add/refresh asked for.
+    private void enrichQuietly(UUID releaseId, List<TicketDetail> tickets) {
+        try {
+            enrichmentService.enrich(releaseId, tickets);
+        } catch (RuntimeException e) {
+            log.warn("Code-link enrichment for release {} did not complete", releaseId, e);
+        }
     }
 
     private static String nullToEmpty(String value) {

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -29,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -43,11 +46,14 @@ class ReleaseServiceTicketsTest {
     @Mock
     private TicketSearchService ticketSearchService;
 
+    @Mock
+    private EnrichmentService enrichmentService;
+
     private ReleaseService service;
 
     @BeforeEach
     void setUp() {
-        service = new ReleaseService(repository, ticketSearchService);
+        service = new ReleaseService(repository, ticketSearchService, enrichmentService);
     }
 
     private static TicketDetail ticket(String key) {
@@ -70,7 +76,6 @@ class ReleaseServiceTicketsTest {
         TicketDetail cnv1 = ticket("CNV-1");
         TicketDetail cnv2 = ticket("CNV-2");
         when(ticketSearchService.search(any())).thenReturn(List.of(cnv1, cnv2));
-        when(repository.addItems(eq(id), any())).thenReturn(release(id, ReleaseStatus.OPEN));
 
         AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2"));
 
@@ -105,7 +110,6 @@ class ReleaseServiceTicketsTest {
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-2"), ticket("CNV-3")));
-        when(repository.addItems(eq(id), any())).thenReturn(release(id, ReleaseStatus.OPEN));
 
         AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2", "CNV-3"));
 
@@ -119,7 +123,6 @@ class ReleaseServiceTicketsTest {
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         when(repository.findTicketKeys(id)).thenReturn(List.of());
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1"), ticket("CNV-2")));
-        when(repository.addItems(eq(id), any())).thenReturn(release(id, ReleaseStatus.OPEN));
 
         AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-1", "CNV-2"));
 
@@ -135,7 +138,6 @@ class ReleaseServiceTicketsTest {
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         when(repository.findTicketKeys(id)).thenReturn(List.of());
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
-        when(repository.addItems(eq(id), any())).thenReturn(release(id, ReleaseStatus.OPEN));
 
         AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2"));
 
@@ -153,7 +155,6 @@ class ReleaseServiceTicketsTest {
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         when(repository.findTicketKeys(id)).thenReturn(List.of());
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
-        when(repository.addItems(eq(id), any())).thenReturn(release(id, ReleaseStatus.OPEN));
 
         AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "not a key"));
 
@@ -184,7 +185,6 @@ class ReleaseServiceTicketsTest {
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-2")));
-        when(repository.addItems(eq(id), any())).thenReturn(release(id, ReleaseStatus.OPEN));
 
         AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2", "CNV-3"));
 
@@ -195,7 +195,9 @@ class ReleaseServiceTicketsTest {
     @Test
     void createWithTicketsCountsTheKeysJiraDidNotReturnAsNotFound() {
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
-        when(repository.create(any(), any())).thenReturn(release(UUID.randomUUID(), ReleaseStatus.OPEN));
+        UUID createdId = UUID.randomUUID();
+        when(repository.create(any(), any())).thenReturn(release(createdId, ReleaseStatus.OPEN));
+        when(repository.findById(createdId)).thenReturn(Optional.of(release(createdId, ReleaseStatus.OPEN)));
 
         AddTicketsResult result = service.createWithTickets("Sprint 42", "2026.08", "CNV",
                 List.of("CNV-1", "CNV-2"), "557058:abc-123");
@@ -210,7 +212,6 @@ class ReleaseServiceTicketsTest {
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         when(repository.findTicketKeys(id)).thenReturn(List.of());
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1"), ticket("CNV-2")));
-        when(repository.addItems(eq(id), any())).thenReturn(release(id, ReleaseStatus.OPEN));
 
         service.addTickets(id, List.of("CNV-1", "CNV-2"));
 
@@ -225,7 +226,6 @@ class ReleaseServiceTicketsTest {
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         when(repository.findTicketKeys(id)).thenReturn(List.of());
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
-        when(repository.addItems(eq(id), any())).thenReturn(release(id, ReleaseStatus.OPEN));
 
         service.addTickets(id, List.of("CNV-1", "CNV-1) OR project = SECRET--"));
 
@@ -280,8 +280,6 @@ class ReleaseServiceTicketsTest {
                 "Dev Person", "Reporter Person", List.of("2026.1"), null, "Full description CNV-1",
                 List.of("Comment 1", "Comment 2"), 2, null, null, null);
         when(ticketSearchService.search(any())).thenReturn(List.of(changed));
-        when(repository.replaceItemSnapshots(any(), any(), any()))
-                .thenReturn(release(id, ReleaseStatus.OPEN));
 
         service.refresh(id);
 
@@ -307,8 +305,6 @@ class ReleaseServiceTicketsTest {
         when(repository.findTicketKeys(id)).thenReturn(keys);
         when(ticketSearchService.search(any()))
                 .thenReturn(tickets(1, 100), tickets(101, 200), tickets(201, 250));
-        when(repository.replaceItemSnapshots(any(), any(), any()))
-                .thenReturn(release(id, ReleaseStatus.OPEN));
 
         service.refresh(id);
 
@@ -344,7 +340,9 @@ class ReleaseServiceTicketsTest {
     @Test
     void createWithTicketsWritesTheReleaseAndItsItemsInOneRepositoryCall() {
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1"), ticket("CNV-2")));
-        when(repository.create(any(), any())).thenReturn(release(UUID.randomUUID(), ReleaseStatus.OPEN));
+        UUID createdId = UUID.randomUUID();
+        when(repository.create(any(), any())).thenReturn(release(createdId, ReleaseStatus.OPEN));
+        when(repository.findById(createdId)).thenReturn(Optional.of(release(createdId, ReleaseStatus.OPEN)));
 
         AddTicketsResult result = service.createWithTickets("Sprint 42", "2026.08", "CNV",
                 List.of("CNV-1", "CNV-2"), "557058:abc-123");
@@ -367,6 +365,95 @@ class ReleaseServiceTicketsTest {
                 .isInstanceOf(JiraTicketReadException.class);
 
         verify(repository, never()).create(any(), any());
+    }
+
+    @Test
+    void refreshStillSucceedsWhenEnrichmentThrows() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
+        doThrow(new IllegalStateException("boom")).when(enrichmentService).enrich(any(), any());
+
+        Release result = service.refresh(id);
+
+        assertThat(result.id()).isEqualTo(id);
+        verify(repository).replaceItemSnapshots(eq(id), any(), any());
+    }
+
+    @Test
+    void refreshEnrichesOnlyAfterTheSnapshotsAreWritten() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
+
+        service.refresh(id);
+
+        InOrder order = inOrder(repository, enrichmentService);
+        order.verify(repository).replaceItemSnapshots(eq(id), any(), any());
+        order.verify(enrichmentService).enrich(eq(id), any());
+    }
+
+    @Test
+    void addEnrichesOnlyTheNewlyInsertedTickets() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
+        TicketDetail added = ticket("CNV-2");
+        when(ticketSearchService.search(any())).thenReturn(List.of(added));
+
+        service.addTickets(id, List.of("CNV-1", "CNV-2"));
+
+        verify(enrichmentService).enrich(id, List.of(added));
+    }
+
+    @Test
+    void createEnrichesTheFetchedTickets() {
+        UUID createdId = UUID.randomUUID();
+        TicketDetail fetched = ticket("CNV-1");
+        when(ticketSearchService.search(any())).thenReturn(List.of(fetched));
+        when(repository.create(any(), any())).thenReturn(release(createdId, ReleaseStatus.OPEN));
+        when(repository.findById(createdId)).thenReturn(Optional.of(release(createdId, ReleaseStatus.OPEN)));
+
+        service.createWithTickets("Sprint 42", "2026.08", "CNV", List.of("CNV-1"), "557058:abc-123");
+
+        verify(enrichmentService).enrich(createdId, List.of(fetched));
+    }
+
+    @Test
+    void refreshCodeLinksOnAFrozenReleaseIsRefusedWithoutEnriching() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.FROZEN)));
+
+        assertThatThrownBy(() -> service.refreshCodeLinks(id, null)).isInstanceOf(ReleaseFrozenException.class);
+
+        verify(enrichmentService, never()).enrich(any(), any());
+    }
+
+    @Test
+    void refreshCodeLinksForAKeyNotOnTheReleaseEnrichesNothing() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
+
+        service.refreshCodeLinks(id, "NOPE-1");
+
+        verify(enrichmentService).enrich(id, List.of());
+        verify(ticketSearchService, never()).search(any());
+    }
+
+    @Test
+    void refreshCodeLinksForOneKeyFetchesAndEnrichesOnlyThatTicket() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1", "CNV-2"));
+        TicketDetail one = ticket("CNV-2");
+        when(ticketSearchService.search(any())).thenReturn(List.of(one));
+
+        service.refreshCodeLinks(id, "CNV-2");
+
+        verify(enrichmentService).enrich(id, List.of(one));
     }
 
     @Test

@@ -10,6 +10,11 @@ import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
 import com.evision.releasemgmt.domain.enrichment.CodeLinks;
+import com.evision.releasemgmt.domain.enrichment.CommitsSource;
+import com.evision.releasemgmt.domain.enrichment.EnrichmentStatus;
+import com.evision.releasemgmt.domain.enrichment.LinkedCommit;
+import com.evision.releasemgmt.domain.enrichment.LinkedPullRequest;
+import com.evision.releasemgmt.domain.enrichment.StatusHistory;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.ManualItem;
@@ -434,6 +439,57 @@ class ReleaseControllerTest {
         mockMvc.perform(post("/api/releases/{id}/refresh", id).with(csrf()).with(authenticated()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.lastRefreshedAt").exists());
+    }
+
+    private static Release releaseWithLinkedItem(UUID id) {
+        TicketDetail ticket = new TicketDetail("EXAMPLE-1", "Summary", "Bug", "Done", "Fixed", null, null,
+                List.of(), null, "", List.of(), 0, "10001", null, null);
+        CodeLinks links = new CodeLinks(EnrichmentStatus.LINKED, null, false, Instant.parse("2026-08-05T09:00:00Z"),
+                CommitsSource.KEY_TAGGED,
+                List.of(new LinkedPullRequest("repo", "7", "Fix", "MERGED", "https://pr", "feature/x", "main", true, null)),
+                List.of(new LinkedCommit("0123456789abcdef", "msg", "Dev", Instant.parse("2026-08-04T10:00:00Z"), "https://c")),
+                List.of("feature/x"), StatusHistory.notRead());
+        return new Release(id, "Sprint 42", "2026.08", ReleaseStatus.OPEN, "EXAMPLE",
+                Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null, null, null,
+                List.of(new ReleaseItem(ticket, Instant.parse("2026-08-04T09:30:00Z"), links)), List.of());
+    }
+
+    @Test
+    void getExposesCodeLinksOnEveryItem() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.get(id)).thenReturn(releaseWithLinkedItem(id));
+        stubActors();
+
+        mockMvc.perform(get("/api/releases/{id}", id).with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].codeLinks.status").value("LINKED"))
+                .andExpect(jsonPath("$.items[0].codeLinks.commitsSource").value("KEY_TAGGED"))
+                .andExpect(jsonPath("$.items[0].codeLinks.commits[0].shortSha").value("0123456"))
+                .andExpect(jsonPath("$.items[0].codeLinks.commits[0].authoredAt").exists())
+                .andExpect(jsonPath("$.items[0].codeLinks.pullRequests[0].id").value("7"))
+                .andExpect(jsonPath("$.items[0].codeLinks.branches[0]").value("feature/x"));
+    }
+
+    @Test
+    void codeLinksRefreshForOneTicketReturnsTheRelease() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.refreshCodeLinks(id, "EXAMPLE-1")).thenReturn(releaseWithLinkedItem(id));
+        stubActors();
+
+        mockMvc.perform(post("/api/releases/{id}/code-links/refresh", id).param("ticketKey", "EXAMPLE-1")
+                        .with(csrf()).with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].codeLinks.status").value("LINKED"));
+    }
+
+    @Test
+    void codeLinksRefreshOnAFrozenReleaseMapsTo409ReleaseFrozen() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.refreshCodeLinks(id, null)).thenThrow(new ReleaseFrozenException());
+
+        mockMvc.perform(post("/api/releases/{id}/code-links/refresh", id).with(csrf()).with(authenticated()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.reason").value("RELEASE_FROZEN"));
     }
 
     @Test
