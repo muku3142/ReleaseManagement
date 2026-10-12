@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReleaseDetailRoute, addResultMessage } from '../../src/routes/ReleaseDetailRoute';
-import type { Release } from '../../src/api/releases';
+import type { CodeLinks, Release, ReleaseItem } from '../../src/api/releases';
 
 const navigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
@@ -306,5 +306,143 @@ describe('ReleaseDetailRoute', () => {
     const statusEl = container.querySelector('[role="status"] p');
     expect(statusEl?.textContent).toBe(addResultMessage(1, 0, 0, RELEASE.name, RELEASE.version));
     expect([...container.querySelectorAll('dialog')].every((d) => !d.open)).toBe(true);
+  });
+
+  describe('code links', () => {
+    const NO_CODE: CodeLinks = {
+      status: 'NO_LINK',
+      reason: null,
+      incomplete: false,
+      attemptedAt: null,
+      commitsSource: null,
+      pullRequests: [],
+      commits: [],
+      branches: [],
+    };
+
+    function item(key: string, codeLinks: CodeLinks): ReleaseItem {
+      return {
+        key,
+        summary: `Summary ${key}`,
+        issueType: 'Story',
+        status: 'Done',
+        resolution: null,
+        assignee: null,
+        reporter: null,
+        fixVersions: [],
+        component: null,
+        description: '',
+        comments: [],
+        commentTotal: 0,
+        addedAt: '2026-08-05T00:00:00Z',
+        codeLinks,
+      };
+    }
+
+    const LINKED: CodeLinks = {
+      ...NO_CODE,
+      status: 'LINKED',
+      commitsSource: 'ADO_COMPLETE',
+      commits: [
+        {
+          sha: 'abc1234def',
+          shortSha: 'abc1234',
+          message: 'Fix',
+          author: null,
+          authoredAt: '2026-10-01T00:00:00Z',
+          url: 'https://dev.azure.com/o/p/_git/r/commit/abc1234def',
+        },
+      ],
+      pullRequests: [
+        {
+          id: '7',
+          title: 'PR',
+          status: 'completed',
+          url: 'https://dev.azure.com/o/p/_git/r/pullrequest/7',
+          sourceBranch: 'f',
+          targetBranch: 'main',
+          countsTowardCommits: true,
+        },
+      ],
+    };
+    const FAILED: CodeLinks = { ...NO_CODE, status: 'FAILED', reason: 'ADO_UNREACHABLE' };
+    const NOT_ATTEMPTED: CodeLinks = { ...NO_CODE, status: 'NOT_ATTEMPTED' };
+
+    function mockRelease(release: Release) {
+      const calls: string[] = [];
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        if (method === 'POST') calls.push(`${method} ${url}`);
+        if (url.startsWith('/api/documents/readiness')) return json(200, { entries: [] });
+        if (url.includes('/revisions')) return json(200, { revisions: [] });
+        return json(200, release);
+      });
+      return calls;
+    }
+
+    function dialogButton(text: string): HTMLButtonElement {
+      return [...container.querySelectorAll('dialog button')].find(
+        (b) => b.textContent === text,
+      ) as HTMLButtonElement;
+    }
+
+    it('shows the chip for a linked ticket', async () => {
+      mockRelease({ ...RELEASE, items: [item('CNV-1', LINKED)] });
+      await renderRoute();
+      expect(container.querySelector('[data-status="LINKED"]')?.textContent).toBe('1 commit · 1 PR');
+    });
+
+    it('retries a failed ticket with its key', async () => {
+      const calls = mockRelease({ ...RELEASE, items: [item('CNV-1', FAILED)] });
+      await renderRoute();
+      await act(async () => byText('Retry').click());
+      expect(calls).toContain('POST /api/releases/r1/code-links/refresh?ticketKey=CNV-1');
+    });
+
+    it('refreshes all code links without a ticket key', async () => {
+      const calls = mockRelease({ ...RELEASE, items: [item('CNV-1', LINKED)] });
+      await renderRoute();
+      await act(async () => byText('Refresh code links').click());
+      expect(calls).toContain('POST /api/releases/r1/code-links/refresh');
+    });
+
+    it('warns at freeze about unchecked code links and still lets the user freeze', async () => {
+      const calls = mockRelease({ ...RELEASE, items: [item('CNV-1', LINKED), item('CNV-2', NOT_ATTEMPTED)] });
+      await renderRoute();
+      await act(async () => byText('Freeze release').click());
+      expect(container.querySelector('dialog')?.textContent).toContain(
+        '1 ticket(s) have code links that failed or were never checked',
+      );
+      expect(dialogButton('Refresh code links first')).toBeDefined();
+      await act(async () => dialogButton('Freeze release').click());
+      await flush();
+      expect(calls).toContain('POST /api/releases/r1/freeze');
+    });
+
+    it('refreshes code links from the freeze dialog and closes it', async () => {
+      const calls = mockRelease({ ...RELEASE, items: [item('CNV-1', FAILED)] });
+      await renderRoute();
+      await act(async () => byText('Freeze release').click());
+      await act(async () => dialogButton('Refresh code links first').click());
+      expect(calls).toContain('POST /api/releases/r1/code-links/refresh');
+      expect([...container.querySelectorAll('dialog')].every((d) => !d.open)).toBe(true);
+    });
+
+    it('shows no freeze warning when every ticket is linked or has no link', async () => {
+      mockRelease({ ...RELEASE, items: [item('CNV-1', LINKED), item('CNV-2', NO_CODE)] });
+      await renderRoute();
+      await act(async () => byText('Freeze release').click());
+      expect(container.querySelector('dialog')?.textContent).not.toContain('code links that failed');
+      expect(findByText('Refresh code links first')).toBeUndefined();
+    });
+
+    it('shows chips but no refresh or retry on a frozen release', async () => {
+      mockRelease({ ...RELEASE, status: 'FROZEN', items: [item('CNV-1', FAILED)] });
+      await renderRoute();
+      expect(container.querySelector('[data-status="FAILED"]')).not.toBeNull();
+      expect(findByText('Refresh code links')).toBeUndefined();
+      expect(findByText('Retry')).toBeUndefined();
+    });
   });
 });

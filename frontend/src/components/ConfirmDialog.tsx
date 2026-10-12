@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 
 // Shared by the freeze and delete confirmations - the phase's two irreversible actions. No form
 // element exists here: confirming requires an explicit click on the named button, never Enter on
@@ -12,6 +12,7 @@ export function ConfirmDialog(props: {
   pending: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  children?: ReactNode;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -30,6 +31,7 @@ export function ConfirmDialog(props: {
     >
       <h2 className="text-base font-semibold text-gray-900">{props.title}</h2>
       <p className="mt-2 text-sm text-gray-700">{props.body}</p>
+      {props.children}
       <div className="mt-4 flex gap-3">
         <button
           type="button"
