@@ -2,7 +2,13 @@ package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.security.CookieBearerTokenResolver;
 import com.evision.releasemgmt.adapters.security.ProblemDetailAuthenticationEntryPoint;
+import com.evision.releasemgmt.application.EnrichmentService;
 import com.evision.releasemgmt.application.TicketSearchService;
+import com.evision.releasemgmt.domain.enrichment.CodeLinks;
+import com.evision.releasemgmt.domain.enrichment.CommitsSource;
+import com.evision.releasemgmt.domain.enrichment.EnrichmentStatus;
+import com.evision.releasemgmt.domain.enrichment.LinkedCommit;
+import com.evision.releasemgmt.domain.enrichment.StatusHistory;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
@@ -18,16 +24,20 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.mockito.ArgumentCaptor;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -42,6 +52,9 @@ class TicketControllerTest {
 
     @MockitoBean
     private TicketSearchService service;
+
+    @MockitoBean
+    private EnrichmentService enrichmentService;
 
     private static org.springframework.test.web.servlet.request.RequestPostProcessor authenticated() {
         return jwt().jwt(b -> b.subject("557058:abc-123").claim("token_type", "access"));
@@ -291,5 +304,56 @@ class TicketControllerTest {
         ArgumentCaptor<UUID> releaseId = ArgumentCaptor.forClass(UUID.class);
         verify(service).search(any(), releaseId.capture());
         assertThat(releaseId.getValue()).isEqualTo(UUID.fromString("3f2504e0-4f89-11d3-9a0c-0305e82c3301"));
+    }
+
+    private static CodeLinks codeLinks(EnrichmentStatus status, List<LinkedCommit> commits) {
+        return new CodeLinks(status, null, false, Instant.parse("2026-01-01T00:00:00Z"), CommitsSource.KEY_TAGGED,
+                List.of(), commits, List.of(), StatusHistory.notRead());
+    }
+
+    @Test
+    void codeLinksReturnsTheLiveLookup() throws Exception {
+        TicketDetail ticket = ticket("CNV-1");
+        when(service.findByKey("CNV-1")).thenReturn(Optional.of(ticket));
+        when(enrichmentService.lookup(ticket)).thenReturn(codeLinks(EnrichmentStatus.LINKED, List.of(
+                new LinkedCommit("abcdef1234567", "msg", "dev", Instant.parse("2026-01-01T00:00:00Z"), "u"))));
+
+        mockMvc.perform(get("/api/tickets/CNV-1/code-links").with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("LINKED"))
+                .andExpect(jsonPath("$.commits[0].shortSha").exists());
+    }
+
+    @Test
+    void codeLinksWithNoLinkedCodeIsNoLink() throws Exception {
+        TicketDetail ticket = ticket("CNV-1");
+        when(service.findByKey("CNV-1")).thenReturn(Optional.of(ticket));
+        when(enrichmentService.lookup(ticket)).thenReturn(codeLinks(EnrichmentStatus.NO_LINK, List.of()));
+
+        mockMvc.perform(get("/api/tickets/CNV-1/code-links").with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("NO_LINK"));
+    }
+
+    @Test
+    void codeLinksForAnUnknownKeyIs404WithoutALookup() throws Exception {
+        when(service.findByKey("CNV-9")).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/tickets/CNV-9/code-links").with(authenticated()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.reason").value("TICKET_NOT_FOUND"));
+        verifyNoInteractions(enrichmentService);
+    }
+
+    @Test
+    void codeLinksRejectsAMalformedKeyBeforeAnyJiraCall() throws Exception {
+        mockMvc.perform(get("/api/tickets/cnv-1/code-links").with(authenticated()))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(service, enrichmentService);
+    }
+
+    @Test
+    void codeLinksRequiresAuthentication() throws Exception {
+        mockMvc.perform(get("/api/tickets/CNV-1/code-links")).andExpect(status().isUnauthorized());
     }
 }

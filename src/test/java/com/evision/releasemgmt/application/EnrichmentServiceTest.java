@@ -51,6 +51,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class EnrichmentServiceTest {
@@ -566,5 +567,45 @@ class EnrichmentServiceTest {
 
         verify(historyPort, times(1)).statusTransitions(ACCESS, "EX-1");
         assertThat(saved().get("EX-1").history().syncedUpdatedAt()).isNull();
+    }
+
+    @Test
+    void lookupReturnsLiveLinksWithoutStoringOrReadingHistory() {
+        devStatus("1", "EX-1", List.of(pr("5")), List.of(commit("abc", T0)));
+
+        CodeLinks result = service(2, Duration.ofSeconds(5), 400).lookup(ticket("EX-1", "1"));
+
+        assertThat(result.status()).isEqualTo(EnrichmentStatus.LINKED);
+        assertThat(result.commits()).extracting(LinkedCommit::sha).containsExactly("abc");
+        verifyNoInteractions(repository, historyPort);
+    }
+
+    @Test
+    void lookupWithNoLinksIsNoLinkAndStoresNothing() {
+        devStatus("1", "EX-1", List.of(), List.of());
+
+        CodeLinks result = service(2, Duration.ofSeconds(5), 400).lookup(ticket("EX-1", "1"));
+
+        assertThat(result.status()).isEqualTo(EnrichmentStatus.NO_LINK);
+        verifyNoInteractions(repository, historyPort);
+    }
+
+    @Test
+    void lookupReturnsFailedInsteadOfThrowingWhenJiraIsUnreachable() {
+        when(port.fetchLinks(ACCESS, "1", "EX-1"))
+                .thenThrow(new JiraTicketReadException(JiraAuthFailureReason.JIRA_UNREACHABLE));
+
+        CodeLinks result = service(2, Duration.ofSeconds(5), 400).lookup(ticket("EX-1", "1"));
+
+        assertThat(result.status()).isEqualTo(EnrichmentStatus.FAILED);
+        assertThat(result.reason()).isEqualTo(EnrichmentReason.JIRA_UNREACHABLE);
+    }
+
+    @Test
+    void lookupWithoutAJiraIssueIdIsNotAttemptedAndCallsNothing() {
+        CodeLinks result = service(2, Duration.ofSeconds(5), 400).lookup(ticket("EX-1", null));
+
+        assertThat(result).isEqualTo(CodeLinks.notAttempted());
+        verifyNoInteractions(port, repository, historyPort);
     }
 }

@@ -15,6 +15,7 @@ import com.evision.releasemgmt.domain.promotion.PromotionNotFoundException;
 import com.evision.releasemgmt.domain.promotion.PromotionRejectedException;
 import com.evision.releasemgmt.domain.promotion.StageNotFoundException;
 import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
+import com.evision.releasemgmt.domain.jira.TicketNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
@@ -119,6 +120,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleReleaseNotFound(ReleaseNotFoundException ex) {
         return problem(HttpStatus.NOT_FOUND, "Release not found",
                 "This release doesn't exist or has been deleted.", "RELEASE_NOT_FOUND");
+    }
+
+    @ExceptionHandler(TicketNotFoundException.class)
+    public ProblemDetail handleTicketNotFound(TicketNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Ticket not found",
+                "Jira has no ticket with this key, or you cannot see it.", "TICKET_NOT_FOUND");
     }
 
     @ExceptionHandler(ReleaseFrozenException.class)

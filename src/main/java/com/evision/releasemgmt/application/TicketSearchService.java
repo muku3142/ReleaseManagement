@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -38,6 +39,11 @@ public class TicketSearchService {
 
     public List<TicketDetail> search(TicketSearchCriteria criteria) {
         return search(criteria, null);
+    }
+
+    // The key is validated by the caller against ^[A-Z][A-Z0-9]*-[0-9]+$, so it cannot carry JQL.
+    public Optional<TicketDetail> findByKey(String key) {
+        return search(TicketSearchCriteria.byJql("key = " + key)).stream().findFirst();
     }
 
     // D-05.2-02: the release scope is a parameter, never a field on the criteria record, so the

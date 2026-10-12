@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query';
 import { apiFetch } from './client';
+import type { CodeLinks } from './releases';
 
 export type Ticket = {
   key: string;
@@ -72,5 +73,13 @@ export function useTicketSearch(releaseId?: string) {
         method: 'POST',
         body: JSON.stringify(toSearchBody(criteria, releaseId)),
       }),
+  });
+}
+
+// A live Jira/ADO lookup on explicit request, so a mutation: nothing fires on render or expand.
+export function useTicketCodeLinks() {
+  return useMutation({
+    mutationFn: (ticketKey: string) =>
+      apiFetch<CodeLinks>(`/api/tickets/${encodeURIComponent(ticketKey)}/code-links`),
   });
 }

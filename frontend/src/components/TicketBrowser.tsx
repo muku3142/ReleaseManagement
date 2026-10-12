@@ -2,15 +2,44 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { useJiraProjects, useJiraSprints } from '../api/jiraProjects';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
+import { CodeLinksDetail } from './CodeLinks';
 import {
   DEFAULT_STATUS_CATEGORIES,
   STATUS_CATEGORIES,
   STATUS_CATEGORY_LABELS,
+  useTicketCodeLinks,
   useTicketSearch,
   type StatusCategory,
   type Ticket,
   type TicketSearchCriteria,
 } from '../api/tickets';
+
+function TicketCodeLinks({ ticketKey }: { ticketKey: string }) {
+  const lookup = useTicketCodeLinks();
+  const problem =
+    lookup.isError && lookup.error instanceof ApiError ? lookup.error.problem : undefined;
+
+  if (lookup.data) {
+    return <CodeLinksDetail links={lookup.data} />;
+  }
+  return (
+    <>
+      <button
+        type="button"
+        disabled={lookup.isPending}
+        onClick={() => lookup.mutate(ticketKey)}
+        className="rounded border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-700 disabled:opacity-50"
+      >
+        {lookup.isPending ? 'Looking up…' : 'Show linked commits'}
+      </button>
+      {lookup.isError && (
+        <p role="alert" data-reason={problem?.reason} className="mt-2 text-sm text-red-600">
+          {problem ? messageForReason(problem) : 'Could not look up linked commits.'}
+        </p>
+      )}
+    </>
+  );
+}
 
 export function TicketBrowser(props: {
   actionLabel: string;
@@ -398,6 +427,10 @@ export function TicketBrowser(props: {
                               ))}
                             </ul>
                           )}
+
+                          <div className="mt-4">
+                            <TicketCodeLinks ticketKey={ticket.key} />
+                          </div>
                         </div>
                       </td>
                     </tr>

@@ -32,6 +32,8 @@ public class JiraRestTicketAdapter implements JiraTicketPort {
     // A system field id is fixed across tenants, so it needs no FieldMetadataService resolution.
     private static final String UPDATED_FIELD = "updated";
 
+    private static final String UNKNOWN_KEY_MESSAGE = "An issue with key";
+
     private final RestClient restClient;
     private final int pageSize;
     private final int maxPages;
@@ -84,6 +86,12 @@ public class JiraRestTicketAdapter implements JiraTicketPort {
                 }
             } while (pageToken != null && !pageToken.isBlank());
             return results;
+        } catch (HttpClientErrorException.BadRequest e) {
+            // For `key = X` Jira answers an unknown key with 400, not an empty page; that one message means "no match".
+            if (e.getResponseBodyAsString().contains(UNKNOWN_KEY_MESSAGE)) {
+                return List.of();
+            }
+            throw new JiraTicketReadException(JiraAuthFailureReason.JIRA_ERROR);
         } catch (HttpClientErrorException.Unauthorized e) {
             throw new JiraTicketReadException(JiraAuthFailureReason.INVALID_CREDENTIALS);
         } catch (HttpClientErrorException.Forbidden e) {
