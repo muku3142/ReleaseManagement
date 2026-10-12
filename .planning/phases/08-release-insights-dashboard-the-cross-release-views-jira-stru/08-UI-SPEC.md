@@ -1,7 +1,8 @@
 ---
 phase: 08
 slug: release-insights-dashboard
-status: draft
+status: approved
+reviewed_at: 2026-10-12
 shadcn_initialized: false
 preset: none
 created: 2026-10-12
@@ -31,8 +32,12 @@ created: 2026-10-12
 | Font | system default (Tailwind `sans`), unchanged. |
 
 Stack derived from the codebase: Vite, React, TypeScript, TanStack Query + Router (`validateSearch`
-already used by `router.tsx`), Tailwind. Dashboard data comes from one dedicated endpoint plus the
-existing `GET /api/documents/readiness` and the ladder query (`useEnvironmentLadder`).
+already used by `router.tsx`), Tailwind. Dashboard data comes from three requests (per 08-RESEARCH.md):
+- `GET /api/dashboard/releases?scope=active|all` — the matrix and summary strip. The URL param `all`
+  maps to `scope` (`all=true` sends `scope=all`, otherwise `scope=active`).
+- `GET /api/dashboard/deployments?stageId=&from=&to=&limit=&offset=` — the history table. The URL param
+  `stage` maps to `stageId`.
+- The existing `GET /api/documents/readiness` (reused unchanged) plus the ladder query (`useEnvironmentLadder`).
 
 ---
 
@@ -42,7 +47,7 @@ Reuses the Phase 2-7 scale exactly. No new tokens.
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| xs | 4px | Glyph gaps, pill padding, bar-to-label gap |
+| xs | 4px | Glyph gaps, bar-to-label gap, pill horizontal padding is 8px (see Exceptions) |
 | sm | 8px | Compact stacks, filter control gaps, stage-dot gaps (`gap-2`) |
 | md | 16px | Table cell padding (`px-4 py-2`), summary tile padding |
 | lg | 24px | Section card padding (`p-6` where a section is a card; tables keep `px-4 py-2`) |
@@ -50,7 +55,17 @@ Reuses the Phase 2-7 scale exactly. No new tokens.
 | 2xl | 48px | Not used |
 | 3xl | 64px | Not used |
 
-Exceptions: inline bars are 8px high (`h-2`) and 64px wide (`w-16`) — both multiples of 4. The stage
+Exceptions (all inherited from classes already shipped in `frontend/src`, matched exactly rather than
+re-rounded so the dashboard looks identical to `/releases` and release detail; a deliberate exception
+to the multiples-of-4 rule, not a new token):
+
+| Class | Value | Used by | Why it is kept |
+|-------|-------|---------|----------------|
+| `py-0.5` | 2px vertical | Pills and chips (`ReadinessPill` is `px-2 py-0.5`, as are CodeLinks chips); the new "Last promotion failed" pill uses the same | 12 existing uses; a dashboard pill must match the readiness pill beside it |
+| `py-1.5` | 6px vertical | Filter controls (`<select>`, date inputs), the "Load more" and "Try again" bordered buttons, as the existing `px-3 py-1.5` controls | 16 existing uses; same height as every other bordered control |
+| `px-3` | 12px horizontal | Same controls | Paired with `py-1.5` |
+
+Everything else is on the scale. Inline bars are 8px high (`h-2`) and 64px wide (`w-16`). The stage
 dot stays `h-3 w-3` (12px) exactly as Phase 7 declared it.
 
 ---
@@ -65,6 +80,10 @@ Reuses the four-role scale from Phase 5 verbatim. No new size, no new weight.
 | Label | 14px (`text-sm`) | 600 | 1.5 |
 | Heading | 16px (`text-base`) | 600 | 1.2 |
 | Display | 18px (`text-lg`) | 600 | 1.2 |
+| Small (dense cells only) | 12px (`text-xs`) | 400, or 600 inside pills | 1.5 |
+
+Small is the existing dense-grid size (readiness pill, CodeLinks chip, Phase 7 stage labels), declared so
+it is on the record; it is not used for page copy. Weights stay 400 and 600 only.
 
 Usage this phase:
 - Page title "Dashboard" and section headings ("Release matrix", "Deployment history"): Heading 16/600.
@@ -92,8 +111,9 @@ Reuses Phase 2-7 values; **no new colour is introduced**.
 Accent (`blue-600`) reserved for:
 1. Release-name links in the matrix and history (rows link to the release, D-08-08).
 2. Reached stage dots (`bg-blue-600`) and the current-stage ring (`ring-blue-300`), exactly as Phase 7.
-3. Focus-visible rings on the filter controls and toggle.
-4. "Clear filters" and "Try again" text links.
+3. The "Linked" segment of the code-links bar (`bg-blue-600`), matching the blue "linked" chip on the release page.
+4. Focus-visible rings on the filter controls and toggle.
+5. "Clear filters" text link. ("Load more" and "Try again" are gray-bordered buttons, not accent.)
 No primary filled button exists on this screen: the dashboard is read-only, so there is no `bg-blue-600` CTA.
 
 Inline-bar segment colours (all existing semantic families, reused from the CodeLinks chip map so
@@ -122,7 +142,7 @@ font-semibold text-red-700`). Failed never advances the stage (D-08-02).
 |---------|------|
 | Primary CTA | None — read-only screen. The only controls are filters and a toggle. |
 | Page heading | **"Dashboard"** |
-| Summary strip captions | **"Need paperwork"** (count of visible releases with ≥1 document NOT_GENERATED or STALE, ignoring NO_TEMPLATE), **"Stale"**, **"Median created → frozen"**, **"Median frozen → production"**; plus one tile **"Releases per stage"** (see Layout). Tile footnote: **"Over {n} visible releases."** |
+| Summary strip captions | **"Need paperwork"** (count of visible releases with ≥1 document NOT_GENERATED or STALE, ignoring NO_TEMPLATE), **"Stale"**, **"Median created → frozen"**, **"Median frozen → production"**; plus one tile **"Releases per stage"** (see Layout). The single footnote **"Over {n} visible releases."** sits once under the strip, not per tile. |
 | Matrix heading | **"Releases"** with caption `text-xs text-gray-500`: **"In-flight releases and those shipped in the last 90 days."** (swaps to **"All releases."** when the toggle is on) |
 | Toggle | Checkbox label **"Show all releases"** (unchecked default, D-08-11) |
 | Matrix column headers | **Release · Documents** (sub-columns Release Notes / Runbook / Approval, same `DOCUMENT_TYPE_LABELS`) **· Stage · Created → frozen · Frozen → production · Composition · Code links · Development churn · Testing rework** |
@@ -138,10 +158,12 @@ font-semibold text-red-700`). Failed never advances the stage (D-08-02).
 | History heading | **"Deployment history"** |
 | History filters | Labels **"Environment"** (`<select>`, first option **"All environments"**, then ladder stages in position order, retired stages listed last with " (retired)"), **"From"** and **"To"** (`<input type="date">`). Link **"Clear filters"** resets to default. Defaults: all environments, last 30 days (D-08-13). |
 | History columns | **Release · Environment · Outcome · Deployed · By** and a trailing **Note** column showing the note truncated to one line (`truncate max-w-xs`, full text in `title`). Outcome text uses `OUTCOME_COLOURS` and `OUTCOME_LABELS` from Phase 7; FAILED rows additionally show **"Failed"** (not colour-only). Deployed column is `deployed_at`, never `recorded_at` (D-07-10). VOIDED and superseded entries are never listed (server excludes them). |
-| History summary line | `text-xs text-gray-500` above the table: **"{n} promotions · {environment or 'all environments'} · {from} to {to}"**. |
+| History summary line | `text-xs text-gray-500` above the table: **"{loaded} promotions shown"**, followed by **" · more available"** when the last page reported `hasMore`. No total is shown (the endpoint has no count query). |
+| History paging | Gray-bordered button **"Load more"** below the table, shown only while `hasMore`; pending label **"Loading…"** with the spinner. |
+| History range validation | Inline `text-xs text-amber-700` beside the date inputs (not a `role="alert"` banner): **"Start date must be on or before end date."** and **"Choose a range of 366 days or less."** No request is sent while either message shows. |
 | Empty state — no releases at all | Heading **"No releases yet"**; body **"Releases are created from the ticket browser. Browse tickets, select the ones you want, and choose 'Add to release' → 'New release…'."** with **"Browse tickets"** link to `/tickets` (identical to `/releases`). Summary strip and history are still shown below with zeroes. |
 | Empty state — none visible under default window | Heading **"No in-flight or recently shipped releases"**; body **"Nothing is open, frozen or in a stage short of Production, and nothing shipped in the last 90 days."** with a **"Show all releases"** text link that sets the toggle. |
-| Empty state — history | Heading **"No promotions match these filters"**; body **"Try a wider date range or a different environment."** with **"Clear filters"**. If the whole system has no promotions: **"No promotions recorded yet. Freeze a release and record its first promotion from the release page."** |
+| Empty state — history | Heading **"No promotions match these filters"**; body **"Try a wider date range or a different environment. Promotions are recorded from a frozen release's page."** with **"Clear filters"**. A separate "no promotions anywhere" variant is deliberately dropped: without a count query it cannot be told apart from a filtered-out result. |
 | Loading | Spinner plus **"Loading dashboard…"** (matrix) and **"Loading deployment history…"** (history); each section loads independently so a slow history query never blocks the matrix. |
 | Error — dashboard load | `role="alert" data-reason={reason}` `text-red-600 text-sm`: **"Couldn't load the dashboard — {messageForReason}. Try again."** with a gray-bordered **"Try again"** button (same markup as `/releases`). |
 | Error — history load | Same pattern scoped to the history section: **"Couldn't load deployment history — {messageForReason}. Try again."** |
@@ -181,8 +203,8 @@ Page wrapper unchanged from the app shell. Top to bottom, `space-y-8` (32px):
   with " (retired)".
 - "Need paperwork" and "Stale" are plain numbers (not links); no filtering is triggered from tiles
   (assumption: keeps the screen free of a second filter model).
-- All values computed over the visible set (D-08-11). Each tile has the "Over {n} visible releases"
-  footnote once, as a single line under the strip rather than repeated per tile.
+- All values computed over the visible set (D-08-11). The "Over {n} visible releases" footnote appears
+  once, as a single line under the strip (same placement as the Copywriting Contract), not per tile.
 
 **2. Release matrix**
 - Header row: heading "Releases", caption, and the **Show all releases** checkbox right-aligned
@@ -208,17 +230,25 @@ Page wrapper unchanged from the app shell. Top to bottom, `space-y-8` (32px):
 - Filter bar: `flex flex-wrap items-end gap-4`; each control has a visible `<label>`
   (`text-xs text-gray-600`) above it; controls use `rounded border border-gray-300 px-3 py-1.5 text-sm`.
 - Filters live in URL search params via `validateSearch` on the dashboard route:
-  `env?: string` (stage id), `from?: string` (ISO date), `to?: string` (ISO date), `all?: boolean`
+  `stage?: string` (stage id), `from?: string` (ISO date), `to?: string` (ISO date), `all?: boolean`
   (show-all-releases toggle). Absent params mean defaults (all environments, last 30 days, toggle off).
   Changing a filter replaces history (`navigate({ replace: true })`), so Back does not walk through
-  every keystroke. Invalid values are dropped to defaults, not errors. A `from` later than `to` is
-  swapped silently, not blocked.
+  every keystroke. Malformed values in the URL are dropped to defaults, not errors.
+- **Date validation (client-side, so a normal filter change never produces a server 400):** the client
+  sends the half-open range [start of `from` day, start of the day after `to`) in the browser zone
+  (08-RESEARCH), so `from == to` is valid (a single day). `from > to`, or a span over **366 days**,
+  shows the inline message from the Copywriting Contract and sends **no request**; the previous results
+  stay visible unchanged because they still match the last valid filter. The URL keeps the typed values
+  so the view stays shareable. The 366-day figure is an assumption (08-RESEARCH names a server maximum
+  but gives no number); the planner must align it with the backend constant. If the server still returns
+  400 `VALIDATION_FAILED`, the history section's generic error alert is shown (defensive path only).
 - Filtering is server-side; the query key includes the filter values. Changing a filter keeps the
   previous table visible at `opacity-60` (`placeholderData: keepPreviousData`) rather than blanking.
 - Table columns per Copywriting Contract; release name links to its release. Rows newest `deployed_at`
-  first. No paging in this phase beyond a server-side cap (assumption: backend returns at most 200
-  rows and the summary line reads **"Showing latest 200 of {n}. Narrow the date range to see more."**
-  when capped).
+  first. Paging is "Load more" driven by `hasMore`: pages of 50 (`limit=50`, server max 100), each
+  further page requested with `offset` = rows loaded so far (TanStack `useInfiniteQuery`) and appended.
+  Changing any filter resets to the first page. OFFSET paging can shift if new promotions are recorded
+  between loads, so a row id already shown is dropped client-side on append.
 
 ### States
 
@@ -261,7 +291,7 @@ Page wrapper unchanged from the app shell. Top to bottom, `space-y-8` (32px):
 
 1. Summary tiles are not links and do not filter the matrix.
 2. No row expansion in the matrix; per-ticket detail stays on the release page.
-3. History is capped server-side (200 rows) with a notice, since paging of the matrix is out of scope and CONTEXT is silent on history paging.
+3. History uses "Load more" paging (50 per page, `hasMore`, no total), per 08-RESEARCH; CONTEXT is silent on history paging. The matrix is not paged (out of scope). The 366-day maximum span is assumed pending the backend constant.
 4. Filter changes use `replace` navigation; the "show all" toggle is a URL param (`all`) so a shared link reproduces the view.
 5. No manual refresh control; data refreshes on mount, window focus (TanStack default) and mutation invalidation.
 6. Release column is sticky-left for horizontal scroll; no other responsive treatment (internal desktop tool).
@@ -273,7 +303,7 @@ Page wrapper unchanged from the app shell. Top to bottom, `space-y-8` (32px):
 
 1. Backend must expose per release: stage position data, last-promotion-failed flag and the stage it targeted, first-success-Production `deployed_at`, `frozen_at`, `created_at`, ticket/manual counts, ADO status counts (linked / no link / failed / not attempted), churn medians, outlier count, reopens total, post-Done commit share, and per-metric "no data" counts, so the UI never derives a metric.
 2. `readinessFor` should become a `Map` lookup before the matrix multiplies it (CONTEXT).
-3. A new `ProblemDetail` reason is not needed; reuse the existing taxonomy for load failures.
+3. A new `ProblemDetail` reason is not needed; reuse the existing taxonomy (`VALIDATION_FAILED`) for load failures. The backend's maximum span constant must match the 366 days assumed here.
 4. Add a `05.4`-style check that `NO_TEMPLATE` is rendered, not treated as `NOT_GENERATED`.
 
 ---
