@@ -5,7 +5,7 @@ milestone_name: milestone
 status: executing
 stopped_at: Human checks pending: 06-10 (live tenant) and 07-07 (walk-through); both regressions green
 last_updated: "2026-10-12T12:19:46.209Z"
-last_activity: 2026-10-12 -- Phase 07 code complete (6/7); 07-07 regression green (backend 869, frontend 285); app at V10; 06-10 and 07-07 human checks pending
+last_activity: 2026-10-12 -- Quick task 261012-nqd merged (backend 881, frontend 289 green); Phase 08 planning; 06-10 and 07-07 human checks pending
 progress:
   total_phases: 12
   completed_phases: 7
@@ -240,6 +240,7 @@ None yet.
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260810-wc3 | Fix AdfFlattener heading and code-block newline defects | 2026-08-10 | 1396ffc | [260810-wc3-fix-adfflattener-heading-and-code-block-](./quick/260810-wc3-fix-adfflattener-heading-and-code-block-/) |
+| 261012-nqd | On-demand "Show linked commits" in the ticket browser (GET /api/tickets/{key}/code-links, read-only) | 2026-10-12 | c44f3e5 | [261012-nqd-ticket-browser-show-linked-commits](./quick/261012-nqd-ticket-browser-show-linked-commits/) |
 
 ## Deferred Items
 
