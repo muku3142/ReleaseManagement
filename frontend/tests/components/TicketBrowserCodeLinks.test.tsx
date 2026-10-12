@@ -84,7 +84,7 @@ function buttonByText(text: string): HTMLButtonElement | undefined {
   return [...container.querySelectorAll('button')].find((b) => b.textContent === text);
 }
 
-async function renderAndExpand() {
+async function renderAndSearch() {
   await act(async () => {
     root.render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -101,7 +101,15 @@ async function renderAndExpand() {
   await flush();
   await act(async () => buttonByText('Load tickets')!.click());
   await flush();
+}
+
+async function renderAndExpand() {
+  await renderAndSearch();
   await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label$="ticket details"]')!.click());
+}
+
+function summaryCell(): HTMLTableCellElement {
+  return [...container.querySelectorAll('td')].find((td) => td.textContent === 'Fix login bug')!;
 }
 
 function codeLinkCalls(fetchSpy: ReturnType<typeof mockApi>) {
@@ -153,6 +161,28 @@ describe('TicketBrowser linked commits', () => {
     expect(String(calls[0][0])).toBe('/api/tickets/CNV-1/code-links');
     expect(container.textContent).toContain('Code links');
     expect(container.textContent).toContain('abcdef1');
+  });
+
+  it('clickingAnywhereOnTheRowTogglesItsDetails', async () => {
+    mockApi(LINKED);
+    await renderAndSearch();
+
+    await act(async () => summaryCell().click());
+    expect(buttonByText('Show linked commits')).toBeDefined();
+
+    await act(async () => summaryCell().click());
+    expect(buttonByText('Show linked commits')).toBeUndefined();
+  });
+
+  it('clickingTheCheckboxSelectsWithoutExpanding', async () => {
+    mockApi(LINKED);
+    await renderAndSearch();
+
+    const checkbox = container.querySelector<HTMLInputElement>('input[aria-label="Select ticket CNV-1"]')!;
+    await act(async () => checkbox.click());
+
+    expect(checkbox.checked).toBe(true);
+    expect(buttonByText('Show linked commits')).toBeUndefined();
   });
 
   it('aFailedLookupShowsTheCouldntFetchState', async () => {

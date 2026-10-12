@@ -359,7 +359,16 @@ export function TicketBrowser(props: {
             <tbody>
               {loaded.map((ticket) => (
                 <Fragment key={ticket.key}>
-                  <tr className="border-b border-gray-100 hover:bg-gray-50">
+                  {/* The whole row toggles details; the arrow button stays for keyboard and
+                      screen-reader users. Controls inside the row and text selection don't toggle. */}
+                  <tr
+                    className="cursor-pointer border-b border-gray-100 hover:bg-gray-50"
+                    onClick={(event) => {
+                      if ((event.target as HTMLElement).closest('button, a, input, label')) return;
+                      if (window.getSelection()?.toString()) return;
+                      setExpandedKey(expandedKey === ticket.key ? null : ticket.key);
+                    }}
+                  >
                     <td className="px-4 py-2">
                       <input
                         type="checkbox"
