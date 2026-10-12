@@ -432,7 +432,7 @@ Production environment are defined. A `current_stage` column alone is insufficie
 - Each promotion is one entry, recorded after the fact, carrying `deployed_at` and `recorded_at`.
 - Corrections are append-only entries that supersede the original, with a required reason.
 - Any signed-in user may record or correct a promotion.
-**Plans**: TBD
+**Plans**: 7 across 5 waves
 **UI hint**: yes
 
 ## Progress
@@ -452,7 +452,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 5.3 Actor Identity Display | 3/3 | Complete   | 2026-08-13 |
 | 5.4 Template Selection At Generation Time | 6/7 | In Progress | - |
 | 6. Azure DevOps Enrichment | 0/10 | Planned    |  |
-| 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
+| 7. Promotion Tracking & Audit Trail | 0/7 | Planned    |  |
 | 8. Release Insights Dashboard | 0/TBD | Not started | - |
 
 ### Phase 8: Release Insights Dashboard
