@@ -29,6 +29,7 @@ function stubFetch(putResponse: Response, adoGet: unknown = UNCONFIGURED) {
       return putResponse;
     }
     if (url === ADO_URL) return json(200, adoGet);
+    if (url === '/api/environment-ladder') return json(200, { stages: [] });
     return json(404, { status: 404, reason: 'SITE_NOT_CONFIGURED' });
   });
 }
@@ -88,6 +89,13 @@ describe('SettingsRoute Azure DevOps section', () => {
 
     expect(container.textContent).toContain('select one organization');
     expect(container.querySelector('#adoToken')?.getAttribute('type')).toBe('password');
+  });
+
+  it('renders the Environment ladder section', async () => {
+    stubFetch(json(200, UNCONFIGURED));
+    await renderRoute();
+
+    expect(container.textContent).toContain('Environment ladder');
   });
 
   it('sends organization, token and expiry on submit', async () => {

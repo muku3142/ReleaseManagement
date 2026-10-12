@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAdoCredential, useUpdateAdoCredential } from '../api/adoCredential';
 import { useJiraSite, useUpdateJiraSite } from '../api/jiraSite';
 import { ApiError } from '../api/client';
+import { EnvironmentLadderSection } from '../components/EnvironmentLadderSection';
 import { useSession, useReplaceJiraToken as useReplaceToken, messageForReason } from '../api/auth';
 
 export function SettingsRoute() {
@@ -149,6 +150,7 @@ export function SettingsRoute() {
       </form>
 
       <AzureDevOpsSection />
+      <EnvironmentLadderSection />
     </div>
   );
 }
