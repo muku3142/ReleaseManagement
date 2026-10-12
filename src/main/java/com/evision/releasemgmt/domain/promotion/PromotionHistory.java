@@ -43,6 +43,24 @@ public record PromotionHistory(UUID releaseId, boolean frozen, Instant frozenAt,
         return stages.stream().filter(s -> !s.retired() && s.position() > currentPosition).findFirst();
     }
 
+    // D-08-01/D-08-16: shipped = the earliest effective SUCCESS on the stage flagged Production now; a later rollback does not move it.
+    public Optional<Instant> firstProductionSuccess() {
+        return stages.stream().filter(Stage::production).findFirst()
+                .flatMap(prod -> entries.stream()
+                        .filter(this::isEffective)
+                        .filter(e -> e.stageId().equals(prod.id()) && e.outcome() == PromotionOutcome.SUCCESS)
+                        .map(Promotion::deployedAt)
+                        .min(Comparator.naturalOrder()));
+    }
+
+    // D-08-02: "last promotion failed" = this is FAILED. VOIDED entries count toward nothing (D-07-15).
+    public Optional<Promotion> latestEffective() {
+        return entries.stream()
+                .filter(this::isEffective)
+                .filter(e -> e.outcome() != PromotionOutcome.VOIDED)
+                .max(LEDGER_ORDER);
+    }
+
     public Promotion record(PromotionDraft draft, String actor, Instant now) {
         if (!frozen) {
             throw reject(PromotionRejection.RELEASE_NOT_FROZEN);
