@@ -116,7 +116,7 @@ export function DeploymentHistory({
       {problem && (
         <div className="mt-4">
           <p role="alert" data-reason={problem.reason} className="text-sm text-red-600">
-            Couldn&apos;t load deployment history — {messageForReason(problem)}. Try again.
+            Couldn&apos;t load deployment history — {messageForReason(problem).replace(/\.$/, '')}. Try again.
           </p>
           <button type="button" onClick={() => history.refetch()} className={`mt-2 ${BORDERED_BUTTON}`}>
             Try again
