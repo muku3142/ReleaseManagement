@@ -30,6 +30,14 @@ public class EnvironmentStageEntity {
     protected EnvironmentStageEntity() {
     }
 
+    public static EnvironmentStageEntity create(String name, int position) {
+        EnvironmentStageEntity entity = new EnvironmentStageEntity();
+        entity.id = UUID.randomUUID();
+        entity.name = name;
+        entity.position = position;
+        return entity;
+    }
+
     public UUID getId() {
         return id;
     }
