@@ -1,8 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
-import { documentLogoUrl, readinessFor, useDocument, useDocumentReadiness, type ExportFormat } from '../api/documents';
+import { documentLogoUrl, readinessIndex, useDocument, useDocumentReadiness, type ExportFormat } from '../api/documents';
 import { useRelease } from '../api/releases';
 import { DOCUMENT_TYPE_LABELS, type DocumentType } from '../api/templates';
 import { ReadinessPill } from '../components/ReadinessPill';
@@ -42,6 +42,7 @@ export function DocumentViewerRoute() {
   const documentQuery = useDocument(releaseId, documentType, revision);
   const release = useRelease(releaseId);
   const readiness = useDocumentReadiness();
+  const stateOf = useMemo(() => readinessIndex(readiness.data?.entries), [readiness.data]);
 
   // Session-only, never persisted (D-05-07 declined a verification record) - resets on remount.
   const [exportedPdf, setExportedPdf] = useState(false);
@@ -108,7 +109,7 @@ export function DocumentViewerRoute() {
 
   const releaseName = release.data?.name ?? '';
   const releaseVersion = release.data?.version ?? '';
-  const readinessState = readinessFor(readiness.data?.entries, releaseId, documentType)?.state ?? 'NOT_GENERATED';
+  const readinessState = stateOf(releaseId, documentType) ?? 'NOT_GENERATED';
   const superseded = data.revision !== data.latestRevision;
   const parityHintVisible = exportedPdf && exportedDocx;
 

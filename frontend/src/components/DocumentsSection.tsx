@@ -1,9 +1,9 @@
 import { Link } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
 import {
-  readinessFor,
+  readinessIndex,
   useDocumentReadiness,
   useDocumentRevisions,
   useGenerateDocument,
@@ -32,6 +32,7 @@ type DocumentsSectionProps = {
 // document generation is orthogonal to whether the item set can still change.
 export function DocumentsSection({ releaseId, releaseName, version }: DocumentsSectionProps) {
   const readiness = useDocumentReadiness();
+  const stateOf = useMemo(() => readinessIndex(readiness.data?.entries), [readiness.data]);
 
   return (
     <section id="documents" className="mt-6 rounded border border-gray-200 bg-white p-4">
@@ -44,7 +45,7 @@ export function DocumentsSection({ releaseId, releaseName, version }: DocumentsS
           version={version}
           documentType={documentType}
           readinessState={
-            readinessFor(readiness.data?.entries, releaseId, documentType)?.state ?? 'NOT_GENERATED'
+            stateOf(releaseId, documentType) ?? 'NOT_GENERATED'
           }
         />
       ))}

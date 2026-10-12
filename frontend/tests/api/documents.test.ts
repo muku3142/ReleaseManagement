@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, apiFetchBlob, triggerDownload } from '../../src/api/client';
 import {
   documentRevisionsQueryKey,
-  readinessFor,
+  readinessIndex,
   readinessQueryKey,
   useDocument,
   useExportDocument,
@@ -87,16 +87,18 @@ describe('documents API client', () => {
     container?.remove();
   });
 
-  it('readinessFor returns the matching entry and undefined otherwise', () => {
+  it('readinessIndex returns the matching state and undefined otherwise', () => {
     const entries: ReadinessEntry[] = [
       { releaseId: 'r1', documentType: 'RELEASE_NOTES', state: 'UP_TO_DATE' },
       { releaseId: 'r1', documentType: 'RUNBOOK', state: 'STALE' },
+      { releaseId: 'r1', documentType: 'APPROVAL', state: 'NO_TEMPLATE' },
     ];
+    const stateOf = readinessIndex(entries);
 
-    expect(readinessFor(entries, 'r1', 'RELEASE_NOTES')?.state).toBe('UP_TO_DATE');
-    expect(readinessFor(entries, 'r1', 'APPROVAL')).toBeUndefined();
-    expect(readinessFor(entries, 'r2', 'RELEASE_NOTES')).toBeUndefined();
-    expect(readinessFor(undefined, 'r1', 'RELEASE_NOTES')).toBeUndefined();
+    expect(stateOf('r1', 'RELEASE_NOTES')).toBe('UP_TO_DATE');
+    expect(stateOf('r1', 'APPROVAL')).toBe('NO_TEMPLATE');
+    expect(stateOf('r2', 'RELEASE_NOTES')).toBeUndefined();
+    expect(readinessIndex(undefined)('r1', 'RELEASE_NOTES')).toBeUndefined();
   });
 
   it('generate invalidates readiness and the revisions/releases queries', async () => {
@@ -104,6 +106,7 @@ describe('documents API client', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     client.setQueryData(readinessQueryKey(), { entries: [] });
     client.setQueryData(['releases', ''], { releases: [] });
+    client.setQueryData(['dashboard'], {});
     client.setQueryData(documentRevisionsQueryKey('r1', 'RELEASE_NOTES'), { revisions: [] });
     const result = mount(() => useGenerateDocument(), client);
 
@@ -113,6 +116,7 @@ describe('documents API client', () => {
 
     expect(client.getQueryState(readinessQueryKey())?.isInvalidated).toBe(true);
     expect(client.getQueryState(['releases', ''])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(['dashboard'])?.isInvalidated).toBe(true);
     expect(client.getQueryState(documentRevisionsQueryKey('r1', 'RELEASE_NOTES'))?.isInvalidated).toBe(true);
   });
 

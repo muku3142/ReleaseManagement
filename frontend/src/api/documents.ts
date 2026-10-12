@@ -49,14 +49,12 @@ export function useDocumentReadiness() {
   });
 }
 
-// O(1) per table cell rather than an array scan per cell - the whole point of loading the grid in
-// one request is wasted if every cell then re-scans it.
-export function readinessFor(
-  entries: ReadinessEntry[] | undefined,
-  releaseId: string,
-  documentType: DocumentType,
-): ReadinessEntry | undefined {
-  return entries?.find((e) => e.releaseId === releaseId && e.documentType === documentType);
+export type ReadinessLookup = (releaseId: string, documentType: DocumentType) => DocumentReadinessState | undefined;
+
+// Built once per readiness response; the release grid and the dashboard matrix look up every cell.
+export function readinessIndex(entries: ReadinessEntry[] | undefined): ReadinessLookup {
+  const states = new Map((entries ?? []).map((e) => [`${e.releaseId}:${e.documentType}`, e.state] as const));
+  return (releaseId, documentType) => states.get(`${releaseId}:${documentType}`);
 }
 
 function documentPath(releaseId: string, documentType: DocumentType, revision?: number): string {
@@ -97,6 +95,7 @@ export function useGenerateDocument() {
     onSuccess: (document, vars) => {
       queryClient.invalidateQueries({ queryKey: ['releases'] });
       queryClient.invalidateQueries({ queryKey: readinessQueryKey() });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: documentQueryKey(vars.releaseId, vars.documentType) });
       queryClient.invalidateQueries({ queryKey: documentRevisionsQueryKey(vars.releaseId, vars.documentType) });
       queryClient.setQueryData(documentQueryKey(vars.releaseId, vars.documentType, document.revision), document);

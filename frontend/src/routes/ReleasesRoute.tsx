@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
 import { messageForReason } from '../api/auth';
 import { useReleases } from '../api/releases';
-import { readinessFor, useDocumentReadiness } from '../api/documents';
+import { readinessIndex, useDocumentReadiness } from '../api/documents';
 import { DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS } from '../api/templates';
 import { ReadinessPill } from '../components/ReadinessPill';
 
@@ -23,6 +23,7 @@ export function ReleasesRoute() {
   // DOC-09: independent of the releases query on purpose - a readiness failure must not blank the
   // whole release table (T-05-60), so its own isError branch only affects the three new cells below.
   const readiness = useDocumentReadiness();
+  const stateOf = useMemo(() => readinessIndex(readiness.data?.entries), [readiness.data]);
 
   return (
     <div className="w-full">
@@ -149,7 +150,7 @@ export function ReleasesRoute() {
                         <span className="text-gray-400">—</span>
                       ) : (
                         <ReadinessPill
-                          state={readinessFor(readiness.data?.entries, r.id, type)?.state ?? 'NOT_GENERATED'}
+                          state={stateOf(r.id, type) ?? 'NOT_GENERATED'}
                           releaseId={r.id}
                           documentType={type}
                         />
