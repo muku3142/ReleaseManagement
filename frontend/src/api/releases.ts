@@ -65,6 +65,15 @@ export type CodeLinks = {
   branches: string[];
 };
 
+// null figure = no data (D-08-07), never 0.
+export type ItemChurn = {
+  commitsToDone: number | null;
+  postDoneCommits: number | null;
+  reopens: number | null;
+  keyTaggedOnly: boolean;
+  outlier: boolean;
+};
+
 export type ReleaseItem = {
   key: string;
   summary: string;
@@ -80,6 +89,7 @@ export type ReleaseItem = {
   commentTotal: number;
   addedAt: string;
   codeLinks: CodeLinks;
+  churn: ItemChurn | null;
 };
 
 export type ManualItem = {
@@ -157,6 +167,7 @@ export function useCreateRelease() {
     onSuccess: (result) => {
       queryClient.setQueryData(releaseQueryKey(result.release.id), result.release);
       queryClient.invalidateQueries({ queryKey: ['releases'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -172,6 +183,7 @@ export function useAddTicketsToRelease() {
     onSuccess: (result) => {
       queryClient.setQueryData(releaseQueryKey(result.release.id), result.release);
       queryClient.invalidateQueries({ queryKey: ['releases'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -192,6 +204,7 @@ function useReleaseMutation<TVars>(request: (vars: TVars) => Promise<Release>) {
     onSuccess: (release) => {
       queryClient.setQueryData(releaseQueryKey(release.id), release);
       queryClient.invalidateQueries({ queryKey: ['releases'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 }
@@ -270,6 +283,7 @@ export function useDeleteRelease() {
     mutationFn: (releaseId: string) => apiFetch<void>(`/api/releases/${releaseId}`, { method: 'DELETE' }),
     onSuccess: (_data, releaseId) => {
       queryClient.invalidateQueries({ queryKey: ['releases'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       // type: 'inactive' - removing a query that still has a mounted observer makes that observer
       // re-create and refetch it, firing a GET against the release that was just deleted and
       // painting RELEASE_NOT_FOUND for a frame before the navigation lands.

@@ -356,6 +356,7 @@ describe('ReleaseDetailRoute', () => {
         commentTotal: 0,
         addedAt: '2026-08-05T00:00:00Z',
         codeLinks,
+        churn: null,
       };
     }
 
@@ -412,6 +413,17 @@ describe('ReleaseDetailRoute', () => {
       mockRelease({ ...RELEASE, items: [item('CNV-1', LINKED)] });
       await renderRoute();
       expect(container.querySelector('[data-status="LINKED"]')?.textContent).toBe('1 commit · 1 PR');
+    });
+
+    it('shows per-ticket churn in the row, and No data where there is none', async () => {
+      const churned = {
+        ...item('CNV-1', LINKED),
+        churn: { commitsToDone: 3, postDoneCommits: 1, reopens: 2, keyTaggedOnly: false, outlier: false },
+      };
+      mockRelease({ ...RELEASE, items: [churned, item('CNV-2', NO_CODE)] });
+      await renderRoute();
+      expect(container.textContent).toContain('3 to Done · 2 reopens · 1 after Done');
+      expect(container.textContent).toContain('No data');
     });
 
     it('retries a failed ticket with its key', async () => {
