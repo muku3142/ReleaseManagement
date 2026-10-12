@@ -1,7 +1,10 @@
 package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.web.dto.AddTicketsRequest;
+import com.evision.releasemgmt.adapters.web.dto.CodeLinksResponse;
+import com.evision.releasemgmt.adapters.web.dto.CommitLinkResponse;
 import com.evision.releasemgmt.adapters.web.dto.CreateReleaseRequest;
+import com.evision.releasemgmt.adapters.web.dto.PullRequestLinkResponse;
 import com.evision.releasemgmt.adapters.web.dto.ManualItemRequest;
 import com.evision.releasemgmt.adapters.web.dto.ManualItemResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseAddResultResponse;
@@ -12,6 +15,8 @@ import com.evision.releasemgmt.adapters.web.dto.ReleaseSummaryResponse;
 import com.evision.releasemgmt.application.ActorResolutionService;
 import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.application.ResolvedActors;
+import com.evision.releasemgmt.domain.enrichment.CodeLinks;
+import com.evision.releasemgmt.domain.enrichment.LinkedPullRequest;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.Release;
@@ -31,6 +36,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Principal;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -90,6 +96,12 @@ public class ReleaseController {
     @PostMapping("/{releaseId}/refresh")
     public ReleaseResponse refresh(@PathVariable UUID releaseId) {
         return toResponse(service.refresh(releaseId));
+    }
+
+    @PostMapping("/{releaseId}/code-links/refresh")
+    public ReleaseResponse refreshCodeLinks(@PathVariable UUID releaseId,
+                                            @RequestParam(name = "ticketKey", required = false) String ticketKey) {
+        return toResponse(service.refreshCodeLinks(releaseId, ticketKey));
     }
 
     @PostMapping("/{releaseId}/freeze")
@@ -152,7 +164,23 @@ public class ReleaseController {
                 item.ticket().issueType(), item.ticket().status(), item.ticket().resolution(),
                 item.ticket().assignee(), item.ticket().reporter(), item.ticket().fixVersions(),
                 item.ticket().component(), item.ticket().description(), item.ticket().comments(),
-                item.ticket().commentTotal(), item.addedAt());
+                item.ticket().commentTotal(), item.addedAt(), toCodeLinksResponse(item.codeLinks()));
+    }
+
+    private static CodeLinksResponse toCodeLinksResponse(CodeLinks links) {
+        return new CodeLinksResponse(links.status().name(),
+                links.reason() == null ? null : links.reason().name(), links.incomplete(), links.attemptedAt(),
+                links.commitsSource() == null ? null : links.commitsSource().name(),
+                links.pullRequests().stream()
+                        .sorted(Comparator.comparingLong(LinkedPullRequest::numericId))
+                        .map(pr -> new PullRequestLinkResponse(pr.id(), pr.title(), pr.status(), pr.url(),
+                                pr.sourceBranch(), pr.targetBranch(), pr.countsTowardCommits()))
+                        .toList(),
+                links.commits().stream()
+                        .map(c -> new CommitLinkResponse(c.sha(), c.shortSha(), c.message(), c.author(),
+                                c.authoredAt(), c.url()))
+                        .toList(),
+                links.branches());
     }
 
     private static ManualItemResponse toManualItemResponse(ManualItem item) {

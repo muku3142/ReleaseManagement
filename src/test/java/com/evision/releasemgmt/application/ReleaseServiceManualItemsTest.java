@@ -36,11 +36,14 @@ class ReleaseServiceManualItemsTest {
     @Mock
     private TicketSearchService ticketSearchService;
 
+    @Mock
+    private EnrichmentService enrichmentService;
+
     private ReleaseService service;
 
     @BeforeEach
     void setUp() {
-        service = new ReleaseService(repository, ticketSearchService);
+        service = new ReleaseService(repository, ticketSearchService, enrichmentService);
     }
 
     private static Release release(UUID id, ReleaseStatus status) {
