@@ -33,6 +33,14 @@ class RenderServiceTest {
     }
 
     @Test
+    void sampleViewRendersLinkedCodeForOneTicketAndNoLinkedCodeForAnother() {
+        RenderResult result = service.render(
+                "{{#items}}{{#commits}}{{id}}{{/commits}}{{^commits}}No linked code{{/commits}}{{/items}}",
+                SampleReleaseView.instance(), "Body");
+        assertThat(result.output()).contains("a1b2c3d").contains("No linked code");
+    }
+
+    @Test
     void unknownSectionRendersMarkerAndKeepsEnclosedContentVisible() {
         RenderResult result = service.render("{{#nope}}inner{{/nope}}", SampleReleaseView.instance(), "Body");
         assertThat(result.output()).contains("[[unknown: nope]]inner");

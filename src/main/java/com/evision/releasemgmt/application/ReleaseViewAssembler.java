@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.application;
 
+import com.evision.releasemgmt.domain.enrichment.CodeLinks;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemCategory;
@@ -8,7 +9,9 @@ import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.view.CommentView;
 import com.evision.releasemgmt.domain.template.view.GroupView;
+import com.evision.releasemgmt.domain.template.view.CommitView;
 import com.evision.releasemgmt.domain.template.view.ItemView;
+import com.evision.releasemgmt.domain.template.view.PullRequestView;
 import com.evision.releasemgmt.domain.template.view.ReleaseView;
 import org.springframework.stereotype.Service;
 
@@ -95,7 +98,15 @@ public class ReleaseViewAssembler {
     private static ItemView mapTicketItem(ReleaseItem item) {
         TicketDetail ticket = item.ticket();
         List<CommentView> comments = ticket.comments().stream().map(CommentView::new).toList();
-        // commits/pullRequests are always empty until Phase 6 populates them (D-04-18).
+        CodeLinks links = item.codeLinks();
+        // D-06-07: only LINKED items reach templates; FAILED renders exactly like NO_LINK and no failure flag is exposed.
+        List<CommitView> commits = links.documentCommits().stream()
+                .map(c -> new CommitView(c.shortSha(), c.message(), nullToEmpty(c.author()), nullToEmpty(c.url())))
+                .toList();
+        List<PullRequestView> pullRequests = links.documentPullRequests().stream()
+                .map(p -> new PullRequestView(p.id(), nullToEmpty(p.title()), nullToEmpty(p.status()),
+                        nullToEmpty(p.url())))
+                .toList();
         return new ItemView(
                 nullToEmpty(ticket.summary()),
                 false,
@@ -109,8 +120,8 @@ public class ReleaseViewAssembler {
                 nullToEmpty(ticket.description()),
                 "",
                 comments,
-                List.of(),
-                List.of());
+                commits,
+                pullRequests);
     }
 
     private static ItemView mapManualItem(ManualItem item) {
