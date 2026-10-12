@@ -1,0 +1,50 @@
+{
+  "count": 3,
+  "value": [
+    {
+      "commitId": "ccccccccccccccccccccccccccccccccccccccc1",
+      "author": {
+        "name": "Example Author",
+        "email": "author@example.com",
+        "date": "2026-07-12T09:35:11Z"
+      },
+      "committer": {
+        "name": "Example Author",
+        "email": "author@example.com",
+        "date": "2026-07-12T09:35:11Z"
+      },
+      "comment": "EXAMPLE-1: example commit message 1",
+      "url": "https://dev.azure.com/example-org/00000000-0000-0000-0000-0000000000aa/_apis/git/repositories/00000000-0000-0000-0000-000000000001/commits/ccccccccccccccccccccccccccccccccccccccc1"
+    },
+    {
+      "commitId": "ccccccccccccccccccccccccccccccccccccccc2",
+      "author": {
+        "name": "Example Author",
+        "email": "author@example.com",
+        "date": "2026-07-12T09:25:19Z"
+      },
+      "committer": {
+        "name": "Example Author",
+        "email": "author@example.com",
+        "date": "2026-07-12T09:25:19Z"
+      },
+      "comment": "EXAMPLE-1: example commit message 2",
+      "url": "https://dev.azure.com/example-org/00000000-0000-0000-0000-0000000000aa/_apis/git/repositories/00000000-0000-0000-0000-000000000001/commits/ccccccccccccccccccccccccccccccccccccccc2"
+    },
+    {
+      "commitId": "ccccccccccccccccccccccccccccccccccccccc3",
+      "author": {
+        "name": "Example Author",
+        "email": "author@example.com",
+        "date": "2026-07-12T09:09:56Z"
+      },
+      "committer": {
+        "name": "Example Author",
+        "email": "author@example.com",
+        "date": "2026-07-12T09:09:56Z"
+      },
+      "comment": "EXAMPLE-1: example commit message 3",
+      "url": "https://dev.azure.com/example-org/00000000-0000-0000-0000-0000000000aa/_apis/git/repositories/00000000-0000-0000-0000-000000000001/commits/ccccccccccccccccccccccccccccccccccccccc3"
+    }
+  ]
+}
