@@ -403,7 +403,7 @@ Plans:
 
 **Discussed 2026-10-07** alongside Phase 8. See `06-CONTEXT.md` (D-06-01..08). **02-04 ran 2026-10-07 — GO** (`02-DEVSTATUS-SPIKE.md`): `applicationType=AzureRepos`; dev-status lists only
 key-tagged commits, so the ADO PAT is **optional** and adds complete commit lists (D-06-09). Ready to plan.
-**Plans**: TBD
+**Plans**: 10 across 6 waves
 **UI hint**: yes
 
 ### Phase 7: Promotion Tracking & Audit Trail
@@ -451,7 +451,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 5.2 Release Ticket Selection | 3/3 | Complete   | 2026-08-12 |
 | 5.3 Actor Identity Display | 3/3 | Complete   | 2026-08-13 |
 | 5.4 Template Selection At Generation Time | 6/7 | In Progress | - |
-| 6. Azure DevOps Enrichment | 0/TBD | Not started | - |
+| 6. Azure DevOps Enrichment | 0/10 | Planned    |  |
 | 7. Promotion Tracking & Audit Trail | 0/TBD | Not started | - |
 | 8. Release Insights Dashboard | 0/TBD | Not started | - |
 
