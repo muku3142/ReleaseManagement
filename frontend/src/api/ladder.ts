@@ -28,6 +28,7 @@ function useLadderMutation<TVars>(request: (vars: TVars) => Promise<EnvironmentL
     onSuccess: (ladder) => {
       queryClient.setQueryData(ladderQueryKey, ladder);
       // A rename, reorder or retire relabels every release's history and ladder dots (D-07-03).
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       return queryClient.invalidateQueries({ queryKey: ['promotions'] });
     },
   });

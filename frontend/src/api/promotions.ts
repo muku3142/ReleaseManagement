@@ -64,7 +64,10 @@ export function useCorrectPromotion(releaseId: string) {
         method: 'POST',
         body: JSON.stringify(body),
       }),
-    onSuccess: (history) => queryClient.setQueryData(promotionsQueryKey(releaseId), history),
+    onSuccess: (history) => {
+      queryClient.setQueryData(promotionsQueryKey(releaseId), history);
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
   });
 }
 
@@ -76,6 +79,9 @@ export function useRecordPromotion(releaseId: string) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
-    onSuccess: (history) => queryClient.setQueryData(promotionsQueryKey(releaseId), history),
+    onSuccess: (history) => {
+      queryClient.setQueryData(promotionsQueryKey(releaseId), history);
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
   });
 }

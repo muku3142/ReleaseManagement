@@ -10,6 +10,7 @@ import { TemplateDetailRoute } from './routes/TemplateDetailRoute';
 import { DocumentViewerRoute } from './routes/DocumentViewerRoute';
 import { LoginRoute } from './routes/LoginRoute';
 import { fetchSessionOrNull } from './api/auth';
+import { parseDashboardSearch } from './api/dashboard';
 import { queryClient } from './api/queryClient';
 import { safeRedirectTarget } from './safeRedirect';
 
@@ -40,6 +41,7 @@ const authenticatedRoute = createRoute({
 const dashboardRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/',
+  validateSearch: parseDashboardSearch,
   component: DashboardRoute,
 });
 
