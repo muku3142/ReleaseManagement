@@ -280,7 +280,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     private static ReleaseItem toDomain(ReleaseTicketItemEntity e) {
         TicketDetail ticket = new TicketDetail(e.getTicketKey(), e.getSummary(), e.getIssueType(), e.getStatus(),
                 e.getResolution(), e.getAssignee(), e.getReporter(), e.getFixVersions(), e.getComponent(),
-                e.getDescription(), e.getComments(), e.getCommentTotal());
+                e.getDescription(), e.getComments(), e.getCommentTotal(), null, null, null);
         return new ReleaseItem(ticket, e.getAddedAt());
     }
 

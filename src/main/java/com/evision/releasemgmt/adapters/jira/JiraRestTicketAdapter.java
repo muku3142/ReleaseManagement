@@ -2,6 +2,7 @@ package com.evision.releasemgmt.adapters.jira;
 
 import com.evision.releasemgmt.domain.auth.JiraAccessContext;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
+import com.evision.releasemgmt.domain.jira.StatusCategory;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.jira.TicketField;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
@@ -18,6 +19,8 @@ import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.JsonNode;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -25,6 +28,9 @@ import java.util.Map;
 
 @Component
 public class JiraRestTicketAdapter implements JiraTicketPort {
+
+    // A system field id is fixed across tenants, so it needs no FieldMetadataService resolution.
+    private static final String UPDATED_FIELD = "updated";
 
     private final RestClient restClient;
     private final int pageSize;
@@ -45,6 +51,9 @@ public class JiraRestTicketAdapter implements JiraTicketPort {
         String basic = Base64.getEncoder()
                 .encodeToString((access.email() + ":" + access.apiToken()).getBytes(StandardCharsets.UTF_8));
         List<String> requestedIds = new ArrayList<>(fieldIds.values());
+        if (!requestedIds.contains(UPDATED_FIELD)) {
+            requestedIds.add(UPDATED_FIELD);
+        }
         try {
             List<TicketDetail> results = new ArrayList<>();
             String pageToken = null;
@@ -134,8 +143,27 @@ public class JiraRestTicketAdapter implements JiraTicketPort {
         }
         int commentTotal = commentField.path("total").asInt(comments.size());
 
+        String jiraIssueId = issue.path("id").asText(null);
+        StatusCategory statusCategory = switch (field(fields, fieldIds, TicketField.STATUS)
+                .path("statusCategory").path("key").asText("")) {
+            case "new" -> StatusCategory.TO_DO;
+            case "indeterminate" -> StatusCategory.IN_PROGRESS;
+            case "done" -> StatusCategory.DONE;
+            default -> null;
+        };
+
         return new TicketDetail(key, summary, issueType, status, resolution, assignee, reporter,
-                fixVersions, component, description, comments, commentTotal);
+                fixVersions, component, description, comments, commentTotal,
+                jiraIssueId, updatedAt(fields), statusCategory);
+    }
+
+    // A malformed timestamp must not fail the whole search; null makes the history read retry later.
+    private static Instant updatedAt(JsonNode fields) {
+        try {
+            return JiraTimestamps.parse(fields.path(UPDATED_FIELD).asText(null));
+        } catch (DateTimeParseException e) {
+            return null;
+        }
     }
 
     private static JsonNode field(JsonNode fields, Map<TicketField, String> ids, TicketField f) {

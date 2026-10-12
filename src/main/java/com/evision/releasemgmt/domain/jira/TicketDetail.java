@@ -1,7 +1,10 @@
 package com.evision.releasemgmt.domain.jira;
 
+import java.time.Instant;
 import java.util.List;
 
+// Phase 6: jiraIssueId feeds dev-status (numeric id is present on /search/jql), updatedAt scopes the changelog read (D-06-08),
+// and the current status category comes free from the status field.
 public record TicketDetail(
         String key,
         String summary,
@@ -14,5 +17,8 @@ public record TicketDetail(
         String component,
         String description,
         List<String> comments,
-        int commentTotal) {
+        int commentTotal,
+        String jiraIssueId,
+        Instant updatedAt,
+        StatusCategory statusCategory) {
 }

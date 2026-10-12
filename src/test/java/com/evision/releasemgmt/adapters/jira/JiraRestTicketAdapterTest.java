@@ -2,6 +2,7 @@ package com.evision.releasemgmt.adapters.jira;
 
 import com.evision.releasemgmt.domain.auth.JiraAccessContext;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
+import com.evision.releasemgmt.domain.jira.StatusCategory;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.jira.TicketField;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
@@ -14,6 +15,8 @@ import org.springframework.web.client.RestClient;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -413,6 +416,33 @@ class JiraRestTicketAdapterTest {
         verify(postRequestedFor(urlEqualTo(SEARCH_URL))
                 .withRequestBody(containing("\"fixVersions\""))
                 .withRequestBody(containing("\"issuetype\"")));
+    }
+
+    @Test
+    void capturesIssueIdUpdatedTimeAndStatusCategoryFromTheSearchFixture(WireMockRuntimeInfo wm) throws Exception {
+        String body = new String(getClass().getResourceAsStream("/fixtures/jira-search-jql.json").readAllBytes(),
+                StandardCharsets.UTF_8);
+        stubFor(post(urlEqualTo(SEARCH_URL)).willReturn(okJson(body)));
+
+        TicketDetail ticket = adapter(50).searchAll(context(wm), "project = EXAMPLE", fieldIds()).get(0);
+
+        assertThat(ticket.jiraIssueId()).isEqualTo("10001");
+        assertThat(ticket.updatedAt())
+                .isEqualTo(OffsetDateTime.of(2026, 8, 13, 16, 31, 6, 42_000_000, ZoneOffset.ofHours(3)).toInstant());
+        assertThat(ticket.statusCategory()).isEqualTo(StatusCategory.DONE);
+        verify(postRequestedFor(urlEqualTo(SEARCH_URL)).withRequestBody(containing("\"updated\"")));
+    }
+
+    @Test
+    void aMalformedUpdatedTimeYieldsNullInsteadOfFailingTheSearch(WireMockRuntimeInfo wm) {
+        String issue = "{\"id\":\"1\",\"key\":\"CNV-1\",\"fields\":{\"updated\":\"yesterday\","
+                + "\"status\":{\"name\":\"Open\",\"statusCategory\":{\"key\":\"new\"}}}}";
+        stubFor(post(urlEqualTo(SEARCH_URL)).willReturn(okJson("{\"issues\":[" + issue + "]}")));
+
+        TicketDetail ticket = adapter(50).searchAll(context(wm), "project = CNV", fieldIds()).get(0);
+
+        assertThat(ticket.updatedAt()).isNull();
+        assertThat(ticket.statusCategory()).isEqualTo(StatusCategory.TO_DO);
     }
 
     @Test

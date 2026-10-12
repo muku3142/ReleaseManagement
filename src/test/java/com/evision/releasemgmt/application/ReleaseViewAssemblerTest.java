@@ -24,11 +24,11 @@ class ReleaseViewAssemblerTest {
 
     private static final TicketDetail BUG_TICKET = new TicketDetail(
             "ABC-2", "Bug summary", "Bug", "Open", null, null, "Reporter Person",
-            List.of(), null, "Bug description", List.of(), 0);
+            List.of(), null, "Bug description", List.of(), 0, null, null, null);
 
     private static final TicketDetail STORY_TICKET = new TicketDetail(
             "ABC-1", "Story summary", "Story", "Done", "Fixed", "Dev Person", "Reporter Person",
-            List.of(), null, "Story description", List.of(), 0);
+            List.of(), null, "Story description", List.of(), 0, null, null, null);
 
     @Test
     void producesThreeItemsWithManualLast() {
@@ -118,10 +118,10 @@ class ReleaseViewAssemblerTest {
     void componentDimensionGroupsTicketItemsByComponentAlphabetically() {
         TicketDetail zebraComponentTicket = new TicketDetail(
                 "ABC-3", "Zebra summary", "Task", "Open", null, null, "Reporter Person",
-                List.of(), "Zebra Module", "Zebra description", List.of(), 0);
+                List.of(), "Zebra Module", "Zebra description", List.of(), 0, null, null, null);
         TicketDetail matchingComponentTicket = new TicketDetail(
                 "ABC-4", "Matching summary", "Bug", "Open", null, null, "Reporter Person",
-                List.of(), "Matching Module", "Matching description", List.of(), 0);
+                List.of(), "Matching Module", "Matching description", List.of(), 0, null, null, null);
 
         ReleaseView view = assembler.assemble(
                 releaseWith(List.of(zebraComponentTicket, matchingComponentTicket), List.of()),
@@ -135,7 +135,7 @@ class ReleaseViewAssemblerTest {
     void ticketWithNullOrBlankComponentGroupsUnderUncategorisedWhenDimensionIsComponent() {
         TicketDetail blankComponentTicket = new TicketDetail(
                 "ABC-5", "Blank summary", "Task", "Open", null, null, "Reporter Person",
-                List.of(), "", "Blank description", List.of(), 0);
+                List.of(), "", "Blank description", List.of(), 0, null, null, null);
 
         ReleaseView view = assembler.assemble(releaseWith(List.of(BUG_TICKET, blankComponentTicket), List.of()),
                 GroupingDimension.COMPONENT);
@@ -151,10 +151,10 @@ class ReleaseViewAssemblerTest {
     void uncategorisedSortsAlphabeticallyAmongOtherComponentNamesRatherThanBeingPinnedLast() {
         TicketDetail blankComponentTicket = new TicketDetail(
                 "ABC-6", "Blank summary", "Task", "Open", null, null, "Reporter Person",
-                List.of(), "", "Blank description", List.of(), 0);
+                List.of(), "", "Blank description", List.of(), 0, null, null, null);
         TicketDetail aardvarkComponentTicket = new TicketDetail(
                 "ABC-7", "Aardvark summary", "Bug", "Open", null, null, "Reporter Person",
-                List.of(), "Aardvark Module", "Aardvark description", List.of(), 0);
+                List.of(), "Aardvark Module", "Aardvark description", List.of(), 0, null, null, null);
 
         ReleaseView view = assembler.assemble(
                 releaseWith(List.of(blankComponentTicket, aardvarkComponentTicket), List.of()),

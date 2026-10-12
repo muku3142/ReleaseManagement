@@ -58,7 +58,7 @@ class ReleasePersistenceIT {
     private static ReleaseItem itemWithComponent(String key, String component) {
         return new ReleaseItem(new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed",
                 "Dev Person", "Reporter Person", List.of("2026.08"), component,
-                "Ship it", List.of("Looks good", "He said \"ship it\""), 2), Instant.now());
+                "Ship it", List.of("Looks good", "He said \"ship it\""), 2, null, null, null), Instant.now());
     }
 
     @Test
@@ -206,7 +206,7 @@ class ReleasePersistenceIT {
 
         ReleaseItem updated = new ReleaseItem(new TicketDetail("CNV-1", "Summary CNV-1", "Bug", "In Progress",
                 "Fixed", "Dev Person", "Reporter Person", List.of("2026.08"), null, "Ship it",
-                List.of("Looks good", "He said \"ship it\""), 2), Instant.now());
+                List.of("Looks good", "He said \"ship it\""), 2, null, null, null), Instant.now());
         Instant refreshedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         repository.replaceItemSnapshots(release.id(), List.of(updated), refreshedAt);
