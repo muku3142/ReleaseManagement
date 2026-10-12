@@ -1,0 +1,288 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-1/changelog?maxResults=100&startAt=0",
+  "maxResults": 100,
+  "startAt": 0,
+  "total": 8,
+  "isLast": true,
+  "values": [
+    {
+      "id": "20001",
+      "author": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=557058:abc-123",
+        "accountId": "557058:abc-123",
+        "avatarUrls": {
+          "48x48": "https://example.com/avatar.png",
+          "24x24": "https://example.com/avatar.png",
+          "16x16": "https://example.com/avatar.png",
+          "32x32": "https://example.com/avatar.png"
+        },
+        "displayName": "Example Author",
+        "active": true,
+        "timeZone": "UTC",
+        "accountType": "atlassian"
+      },
+      "created": "2026-06-30T14:49:07.314+0300",
+      "items": [
+        {
+          "field": "assignee",
+          "fieldtype": "jira",
+          "fieldId": "assignee",
+          "from": null,
+          "fromString": "redacted",
+          "to": null,
+          "toString": "redacted",
+          "tmpFromAccountId": null,
+          "tmpToAccountId": null
+        }
+      ]
+    },
+    {
+      "id": "20002",
+      "author": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=557058:abc-123",
+        "accountId": "557058:abc-123",
+        "avatarUrls": {
+          "48x48": "https://example.com/avatar.png",
+          "24x24": "https://example.com/avatar.png",
+          "16x16": "https://example.com/avatar.png",
+          "32x32": "https://example.com/avatar.png"
+        },
+        "displayName": "Example Author",
+        "active": true,
+        "timeZone": "UTC",
+        "accountType": "atlassian"
+      },
+      "created": "2026-07-05T08:48:47.457+0300",
+      "items": [
+        {
+          "field": "status",
+          "fieldtype": "jira",
+          "fieldId": "status",
+          "from": "10880",
+          "fromString": "To Do",
+          "to": "10881",
+          "toString": "In Progress"
+        }
+      ]
+    },
+    {
+      "id": "20003",
+      "author": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=557058:abc-123",
+        "accountId": "557058:abc-123",
+        "avatarUrls": {
+          "48x48": "https://example.com/avatar.png",
+          "24x24": "https://example.com/avatar.png",
+          "16x16": "https://example.com/avatar.png",
+          "32x32": "https://example.com/avatar.png"
+        },
+        "displayName": "Example Author",
+        "active": true,
+        "timeZone": "UTC",
+        "accountType": "atlassian"
+      },
+      "created": "2026-07-26T12:51:47.222+0300",
+      "items": [
+        {
+          "field": "timespent",
+          "fieldtype": "jira",
+          "fieldId": "timespent",
+          "from": null,
+          "fromString": "redacted",
+          "to": null,
+          "toString": "redacted"
+        },
+        {
+          "field": "timeestimate",
+          "fieldtype": "jira",
+          "fieldId": "timeestimate",
+          "from": null,
+          "fromString": "redacted",
+          "to": null,
+          "toString": "redacted"
+        },
+        {
+          "field": "WorklogId",
+          "fieldtype": "jira",
+          "from": null,
+          "fromString": "redacted",
+          "to": null,
+          "toString": "redacted"
+        }
+      ]
+    },
+    {
+      "id": "20004",
+      "author": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=557058:abc-123",
+        "accountId": "557058:abc-123",
+        "avatarUrls": {
+          "48x48": "https://example.com/avatar.png",
+          "24x24": "https://example.com/avatar.png",
+          "16x16": "https://example.com/avatar.png",
+          "32x32": "https://example.com/avatar.png"
+        },
+        "displayName": "Example Author",
+        "active": true,
+        "timeZone": "UTC",
+        "accountType": "atlassian"
+      },
+      "created": "2026-07-26T13:19:17.826+0300",
+      "items": [
+        {
+          "field": "WorklogId",
+          "fieldtype": "jira",
+          "from": null,
+          "fromString": "redacted",
+          "to": null,
+          "toString": "redacted"
+        },
+        {
+          "field": "timeestimate",
+          "fieldtype": "jira",
+          "fieldId": "timeestimate",
+          "from": null,
+          "fromString": "redacted",
+          "to": null,
+          "toString": "redacted"
+        },
+        {
+          "field": "timespent",
+          "fieldtype": "jira",
+          "fieldId": "timespent",
+          "from": null,
+          "fromString": "redacted",
+          "to": null,
+          "toString": "redacted"
+        }
+      ]
+    },
+    {
+      "id": "20005",
+      "author": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=557058:abc-123",
+        "accountId": "557058:abc-123",
+        "avatarUrls": {
+          "48x48": "https://example.com/avatar.png",
+          "24x24": "https://example.com/avatar.png",
+          "16x16": "https://example.com/avatar.png",
+          "32x32": "https://example.com/avatar.png"
+        },
+        "displayName": "Example Author",
+        "active": true,
+        "timeZone": "UTC",
+        "accountType": "atlassian"
+      },
+      "created": "2026-07-26T13:39:58.038+0300",
+      "items": [
+        {
+          "field": "status",
+          "fieldtype": "jira",
+          "fieldId": "status",
+          "from": "10881",
+          "fromString": "In Progress",
+          "to": "11071",
+          "toString": "RELEASED FOR TESTING"
+        }
+      ]
+    },
+    {
+      "id": "20006",
+      "author": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=557058:abc-123",
+        "accountId": "557058:abc-123",
+        "avatarUrls": {
+          "48x48": "https://example.com/avatar.png",
+          "24x24": "https://example.com/avatar.png",
+          "16x16": "https://example.com/avatar.png",
+          "32x32": "https://example.com/avatar.png"
+        },
+        "displayName": "Example Author",
+        "active": true,
+        "timeZone": "UTC",
+        "accountType": "atlassian"
+      },
+      "created": "2026-07-26T13:40:09.756+0300",
+      "items": [
+        {
+          "field": "assignee",
+          "fieldtype": "jira",
+          "fieldId": "assignee",
+          "from": null,
+          "fromString": "redacted",
+          "to": null,
+          "toString": "redacted",
+          "tmpFromAccountId": null,
+          "tmpToAccountId": null
+        }
+      ]
+    },
+    {
+      "id": "20007",
+      "author": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=557058:abc-123",
+        "accountId": "557058:abc-123",
+        "avatarUrls": {
+          "48x48": "https://example.com/avatar.png",
+          "24x24": "https://example.com/avatar.png",
+          "16x16": "https://example.com/avatar.png",
+          "32x32": "https://example.com/avatar.png"
+        },
+        "displayName": "Example Author",
+        "active": true,
+        "timeZone": "UTC",
+        "accountType": "atlassian"
+      },
+      "created": "2026-07-27T10:17:49.959+0300",
+      "items": [
+        {
+          "field": "Sprint",
+          "fieldtype": "custom",
+          "fieldId": "customfield_10007",
+          "from": null,
+          "fromString": "redacted",
+          "to": null,
+          "toString": "redacted"
+        }
+      ]
+    },
+    {
+      "id": "20008",
+      "author": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=557058:abc-123",
+        "accountId": "557058:abc-123",
+        "avatarUrls": {
+          "48x48": "https://example.com/avatar.png",
+          "24x24": "https://example.com/avatar.png",
+          "16x16": "https://example.com/avatar.png",
+          "32x32": "https://example.com/avatar.png"
+        },
+        "displayName": "Example Author",
+        "active": true,
+        "timeZone": "UTC",
+        "accountType": "atlassian"
+      },
+      "created": "2026-08-13T16:31:06.042+0300",
+      "items": [
+        {
+          "field": "resolution",
+          "fieldtype": "jira",
+          "fieldId": "resolution",
+          "from": null,
+          "fromString": "redacted",
+          "to": null,
+          "toString": "redacted"
+        },
+        {
+          "field": "status",
+          "fieldtype": "jira",
+          "fieldId": "status",
+          "from": "11071",
+          "fromString": "RELEASED FOR TESTING",
+          "to": "10882",
+          "toString": "Done"
+        }
+      ]
+    }
+  ]
+}

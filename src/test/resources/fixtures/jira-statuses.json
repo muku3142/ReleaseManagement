@@ -1,0 +1,950 @@
+[
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10889",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Resolved",
+    "untranslatedName": "Resolved",
+    "id": "10889",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11688"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10902",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "DEFERRED",
+    "untranslatedName": "DEFERRED",
+    "id": "10902",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11688"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10901",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "REOPENED",
+    "untranslatedName": "REOPENED",
+    "id": "10901",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11688"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/1",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/statuses/open.png",
+    "name": "Created",
+    "untranslatedName": "Created",
+    "id": "1",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/3",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/statuses/inprogress.png",
+    "name": "Active",
+    "untranslatedName": "Active",
+    "id": "3",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/4",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/statuses/reopened.png",
+    "name": "Reopened",
+    "untranslatedName": "Reopened",
+    "id": "4",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/5",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/statuses/resolved.png",
+    "name": "Resolved",
+    "untranslatedName": "Resolved",
+    "id": "5",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/6",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/statuses/closed.png",
+    "name": "Closed",
+    "untranslatedName": "Closed",
+    "id": "6",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10000",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Waiting for Support",
+    "untranslatedName": "Waiting for Support",
+    "id": "10000",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/1",
+      "id": 1,
+      "key": "undefined",
+      "colorName": "medium-gray",
+      "name": "No Category"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10001",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Waiting for Customer",
+    "untranslatedName": "Waiting for Customer",
+    "id": "10001",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/1",
+      "id": 1,
+      "key": "undefined",
+      "colorName": "medium-gray",
+      "name": "No Category"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10200",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/statuses/closed.png",
+    "name": "Production",
+    "untranslatedName": "Production",
+    "id": "10200",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10201",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/statuses/open.png",
+    "name": "To Do",
+    "untranslatedName": "To Do",
+    "id": "10201",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10400",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Under Review",
+    "untranslatedName": "Under Review",
+    "id": "10400",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10501",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Awaiting implementation",
+    "untranslatedName": "Awaiting implementation",
+    "id": "10501",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/1",
+      "id": 1,
+      "key": "undefined",
+      "colorName": "medium-gray",
+      "name": "No Category"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10600",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "In Review",
+    "untranslatedName": "In Review",
+    "id": "10600",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10700",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+    "name": "Declined",
+    "untranslatedName": "Declined",
+    "id": "10700",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10810",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Pending",
+    "untranslatedName": "Pending",
+    "id": "10810",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10811",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Canceled",
+    "untranslatedName": "Canceled",
+    "id": "10811",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10812",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Escalated",
+    "untranslatedName": "Escalated",
+    "id": "10812",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10813",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Waiting for approval",
+    "untranslatedName": "Waiting for approval",
+    "id": "10813",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10814",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Awaiting CAB approval",
+    "untranslatedName": "Awaiting CAB approval",
+    "id": "10814",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10815",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Planning",
+    "untranslatedName": "Planning",
+    "id": "10815",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10816",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Implementing",
+    "untranslatedName": "Implementing",
+    "id": "10816",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10817",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Peer review / change manager approval",
+    "untranslatedName": "Peer review / change manager approval",
+    "id": "10817",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10818",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Open",
+    "untranslatedName": "Open",
+    "id": "10818",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/1",
+      "id": 1,
+      "key": "undefined",
+      "colorName": "medium-gray",
+      "name": "No Category"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10819",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Work in progress",
+    "untranslatedName": "Work in progress",
+    "id": "10819",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10820",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Completed",
+    "untranslatedName": "Completed",
+    "id": "10820",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10821",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/status_generic.gif",
+    "name": "Under investigation",
+    "untranslatedName": "Under investigation",
+    "id": "10821",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10827",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "To Do",
+    "untranslatedName": "To Do",
+    "id": "10827",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11665"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10828",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "In Progress",
+    "untranslatedName": "In Progress",
+    "id": "10828",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11665"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10829",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Under Testing",
+    "untranslatedName": "Under Testing",
+    "id": "10829",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11665"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10830",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Pending",
+    "untranslatedName": "Pending",
+    "id": "10830",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11665"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10831",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Developed",
+    "untranslatedName": "Developed",
+    "id": "10831",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11665"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10832",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Fixing Issues",
+    "untranslatedName": "Fixing Issues",
+    "id": "10832",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11665"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10833",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Retesting",
+    "untranslatedName": "Retesting",
+    "id": "10833",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11665"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10834",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Done",
+    "untranslatedName": "Done",
+    "id": "10834",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11665"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10845",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+    "name": "Progress",
+    "untranslatedName": "Progress",
+    "id": "10845",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10860",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+    "name": "Assign to Support",
+    "untranslatedName": "Assign to Support",
+    "id": "10860",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10873",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Done",
+    "untranslatedName": "Done",
+    "id": "10873",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10876",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "In Progress",
+    "untranslatedName": "In Progress",
+    "id": "10876",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10880",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "To Do",
+    "untranslatedName": "To Do",
+    "id": "10880",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11688"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10881",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "In Progress",
+    "untranslatedName": "In Progress",
+    "id": "10881",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11688"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10882",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Done",
+    "untranslatedName": "Done",
+    "id": "10882",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11688"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10883",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "To Do",
+    "untranslatedName": "To Do",
+    "id": "10883",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11690"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10884",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "In Progress",
+    "untranslatedName": "In Progress",
+    "id": "10884",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11690"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10885",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Done",
+    "untranslatedName": "Done",
+    "id": "10885",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11690"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/10969",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+    "name": "Released For Testing",
+    "untranslatedName": "Released For Testing",
+    "id": "10969",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/11002",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/images/icons/statuses/generic.png",
+    "name": "DEFERRED",
+    "untranslatedName": "DEFERRED",
+    "id": "11002",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/11035",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "To Do",
+    "untranslatedName": "To Do",
+    "id": "11035",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11767"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/11036",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "In Progress",
+    "untranslatedName": "In Progress",
+    "id": "11036",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11767"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/11037",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Done",
+    "untranslatedName": "Done",
+    "id": "11037",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+      "id": 3,
+      "key": "done",
+      "colorName": "green",
+      "name": "Done"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11767"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/11071",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "RELEASED FOR TESTING",
+    "untranslatedName": "RELEASED FOR TESTING",
+    "id": "11071",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11688"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/11072",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "RELEASED BY PRODUCT TEAM",
+    "untranslatedName": "RELEASED BY PRODUCT TEAM",
+    "id": "11072",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/4",
+      "id": 4,
+      "key": "indeterminate",
+      "colorName": "yellow",
+      "name": "In Progress"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11688"
+      }
+    }
+  },
+  {
+    "self": "https://example.atlassian.net/rest/api/3/status/11105",
+    "description": "",
+    "iconUrl": "https://example.atlassian.net/",
+    "name": "Resolved",
+    "untranslatedName": "Resolved",
+    "id": "11105",
+    "statusCategory": {
+      "self": "https://example.atlassian.net/rest/api/3/statuscategory/2",
+      "id": 2,
+      "key": "new",
+      "colorName": "blue-gray",
+      "name": "To Do"
+    },
+    "scope": {
+      "type": "PROJECT",
+      "project": {
+        "id": "11767"
+      }
+    }
+  }
+]

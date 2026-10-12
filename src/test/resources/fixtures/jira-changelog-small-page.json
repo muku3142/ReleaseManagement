@@ -1,0 +1,70 @@
+{
+  "self": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-1/changelog?maxResults=2&startAt=0",
+  "nextPage": "https://example.atlassian.net/rest/api/3/issue/EXAMPLE-1/changelog?maxResults=2&startAt=2",
+  "maxResults": 2,
+  "startAt": 0,
+  "total": 8,
+  "isLast": false,
+  "values": [
+    {
+      "id": "20001",
+      "author": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=557058:abc-123",
+        "accountId": "557058:abc-123",
+        "avatarUrls": {
+          "48x48": "https://example.com/avatar.png",
+          "24x24": "https://example.com/avatar.png",
+          "16x16": "https://example.com/avatar.png",
+          "32x32": "https://example.com/avatar.png"
+        },
+        "displayName": "Example Author",
+        "active": true,
+        "timeZone": "UTC",
+        "accountType": "atlassian"
+      },
+      "created": "2026-06-30T14:49:07.314+0300",
+      "items": [
+        {
+          "field": "assignee",
+          "fieldtype": "jira",
+          "fieldId": "assignee",
+          "from": null,
+          "fromString": "redacted",
+          "to": null,
+          "toString": "redacted",
+          "tmpFromAccountId": null,
+          "tmpToAccountId": null
+        }
+      ]
+    },
+    {
+      "id": "20002",
+      "author": {
+        "self": "https://example.atlassian.net/rest/api/3/user?accountId=557058:abc-123",
+        "accountId": "557058:abc-123",
+        "avatarUrls": {
+          "48x48": "https://example.com/avatar.png",
+          "24x24": "https://example.com/avatar.png",
+          "16x16": "https://example.com/avatar.png",
+          "32x32": "https://example.com/avatar.png"
+        },
+        "displayName": "Example Author",
+        "active": true,
+        "timeZone": "UTC",
+        "accountType": "atlassian"
+      },
+      "created": "2026-07-05T08:48:47.457+0300",
+      "items": [
+        {
+          "field": "status",
+          "fieldtype": "jira",
+          "fieldId": "status",
+          "from": "10880",
+          "fromString": "To Do",
+          "to": "10881",
+          "toString": "In Progress"
+        }
+      ]
+    }
+  ]
+}

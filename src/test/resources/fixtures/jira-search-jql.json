@@ -1,0 +1,28 @@
+{
+  "issues": [
+    {
+      "expand": "renderedFields,names,schema,operations,editmeta,changelog,versionedRepresentations",
+      "id": "10001",
+      "self": "https://example.atlassian.net/rest/api/3/issue/10001",
+      "key": "EXAMPLE-1",
+      "fields": {
+        "updated": "2026-08-13T16:31:06.042+0300",
+        "status": {
+          "self": "https://example.atlassian.net/rest/api/3/status/10882",
+          "description": "",
+          "iconUrl": "https://example.atlassian.net/",
+          "name": "Done",
+          "id": "10882",
+          "statusCategory": {
+            "self": "https://example.atlassian.net/rest/api/3/statuscategory/3",
+            "id": 3,
+            "key": "done",
+            "colorName": "green",
+            "name": "Done"
+          }
+        }
+      }
+    }
+  ],
+  "isLast": true
+}
