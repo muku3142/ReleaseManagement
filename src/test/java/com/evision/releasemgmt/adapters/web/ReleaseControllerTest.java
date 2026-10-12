@@ -3,11 +3,13 @@ package com.evision.releasemgmt.adapters.web;
 import com.evision.releasemgmt.adapters.security.CookieBearerTokenResolver;
 import com.evision.releasemgmt.adapters.security.ProblemDetailAuthenticationEntryPoint;
 import com.evision.releasemgmt.application.ActorResolutionService;
+import com.evision.releasemgmt.application.DashboardService;
 import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
+import com.evision.releasemgmt.domain.dashboard.TicketChurn;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
 import com.evision.releasemgmt.domain.enrichment.CodeLinks;
 import com.evision.releasemgmt.domain.enrichment.CommitsSource;
@@ -46,6 +48,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -75,6 +78,9 @@ class ReleaseControllerTest {
 
     @MockitoBean
     private ActorResolutionService actorResolution;
+
+    @MockitoBean
+    private DashboardService dashboard;
 
     private static RequestPostProcessor authenticated() {
         return jwt().jwt(b -> b.subject("557058:abc-123").claim("token_type", "access"));
@@ -468,6 +474,47 @@ class ReleaseControllerTest {
                 .andExpect(jsonPath("$.items[0].codeLinks.commits[0].authoredAt").exists())
                 .andExpect(jsonPath("$.items[0].codeLinks.pullRequests[0].id").value("7"))
                 .andExpect(jsonPath("$.items[0].codeLinks.branches[0]").value("feature/x"));
+    }
+
+    @Test
+    void getExposesPerTicketChurnFromTheSharedDashboardRules() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.get(id)).thenReturn(releaseWithLinkedItem(id));
+        when(dashboard.ticketChurn(id)).thenReturn(List.of(new TicketChurn("EXAMPLE-1", 3L, 1L, 2, true, true)));
+        stubActors();
+
+        mockMvc.perform(get("/api/releases/{id}", id).with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].churn.commitsToDone").value(3))
+                .andExpect(jsonPath("$.items[0].churn.postDoneCommits").value(1))
+                .andExpect(jsonPath("$.items[0].churn.reopens").value(2))
+                .andExpect(jsonPath("$.items[0].churn.keyTaggedOnly").value(true))
+                .andExpect(jsonPath("$.items[0].churn.outlier").value(true));
+        verify(dashboard, times(1)).ticketChurn(id);
+    }
+
+    @Test
+    void aTicketWithNoChurnEntryHasNullChurn() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.get(id)).thenReturn(releaseWithLinkedItem(id));
+        stubActors();
+
+        mockMvc.perform(get("/api/releases/{id}", id).with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].churn").value(nullValue()));
+    }
+
+    @Test
+    void unknownChurnFiguresStayNullRatherThanZero() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(service.get(id)).thenReturn(releaseWithLinkedItem(id));
+        when(dashboard.ticketChurn(id)).thenReturn(List.of(new TicketChurn("EXAMPLE-1", null, null, null, false, false)));
+        stubActors();
+
+        mockMvc.perform(get("/api/releases/{id}", id).with(authenticated()))
+                .andExpect(jsonPath("$.items[0].churn.commitsToDone").value(nullValue()))
+                .andExpect(jsonPath("$.items[0].churn.postDoneCommits").value(nullValue()))
+                .andExpect(jsonPath("$.items[0].churn.reopens").value(nullValue()));
     }
 
     @Test

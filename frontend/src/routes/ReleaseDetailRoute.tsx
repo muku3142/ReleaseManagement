@@ -21,6 +21,7 @@ import { AddTicketsToReleaseDialog } from '../components/AddTicketsToReleaseDial
 import { CodeLinksChip, CodeLinksDetail } from '../components/CodeLinks';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DocumentsSection } from '../components/DocumentsSection';
+import { ItemChurn } from '../components/ItemChurn';
 import { PromotionSection } from '../components/PromotionSection';
 
 // D-03-13: idempotent add, honest feedback - never phrased as a warning, because a duplicate
@@ -419,6 +420,9 @@ export function ReleaseDetailRoute() {
                     Code
                   </th>
                   <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
+                    Churn
+                  </th>
+                  <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
                     Resolution
                   </th>
                   <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
@@ -449,6 +453,9 @@ export function ReleaseDetailRoute() {
                           }
                           retryDisabled={busy}
                         />
+                      </td>
+                      <td className="px-4 py-2">
+                        <ItemChurn churn={item.churn} />
                       </td>
                       <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.resolution ?? '—'}</td>
                       <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.assignee ?? '—'}</td>
@@ -482,7 +489,7 @@ export function ReleaseDetailRoute() {
                     </tr>
                     {expandedKey === item.key && (
                       <tr>
-                        <td colSpan={isOpen ? 10 : 9} className="px-4 pb-4">
+                        <td colSpan={isOpen ? 11 : 10} className="px-4 pb-4">
                           <div className="max-h-80 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-4">
                             <h3 className="text-sm font-semibold text-gray-900">Description</h3>
                             <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">

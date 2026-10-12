@@ -3,6 +3,7 @@ package com.evision.releasemgmt.adapters.web;
 import com.evision.releasemgmt.adapters.web.dto.AddTicketsRequest;
 import com.evision.releasemgmt.adapters.web.dto.CodeLinksResponse;
 import com.evision.releasemgmt.adapters.web.dto.CreateReleaseRequest;
+import com.evision.releasemgmt.adapters.web.dto.ItemChurnResponse;
 import com.evision.releasemgmt.adapters.web.dto.ManualItemRequest;
 import com.evision.releasemgmt.adapters.web.dto.ManualItemResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseAddResultResponse;
@@ -11,8 +12,10 @@ import com.evision.releasemgmt.adapters.web.dto.ReleaseResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseSearchResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseSummaryResponse;
 import com.evision.releasemgmt.application.ActorResolutionService;
+import com.evision.releasemgmt.application.DashboardService;
 import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.application.ResolvedActors;
+import com.evision.releasemgmt.domain.dashboard.TicketChurn;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.Release;
@@ -33,7 +36,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Principal;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @RestController
@@ -42,10 +48,13 @@ public class ReleaseController {
 
     private final ReleaseService service;
     private final ActorResolutionService actorResolution;
+    private final DashboardService dashboard;
 
-    public ReleaseController(ReleaseService service, ActorResolutionService actorResolution) {
+    public ReleaseController(ReleaseService service, ActorResolutionService actorResolution,
+                             DashboardService dashboard) {
         this.service = service;
         this.actorResolution = actorResolution;
+        this.dashboard = dashboard;
     }
 
     @PostMapping
@@ -139,11 +148,15 @@ public class ReleaseController {
 
     private ReleaseResponse toResponse(Release release) {
         ResolvedActors actors = actorResolution.resolve(release.createdBy(), release.frozenBy());
+        // D-08-07: per-ticket figures come from the same query and rules as the dashboard matrix.
+        Map<String, TicketChurn> churn = dashboard.ticketChurn(release.id()).stream()
+                .collect(Collectors.toMap(TicketChurn::ticketKey, Function.identity()));
         return new ReleaseResponse(release.id(), release.name(), release.version(),
                 release.status().name(), release.jiraProjectKey(), release.createdAt(),
                 actors.display(release.createdBy()), release.frozenAt(),
                 actors.display(release.frozenBy()), release.lastRefreshedAt(),
-                release.items().stream().map(ReleaseController::toItemResponse).toList(),
+                release.items().stream()
+                        .map(item -> toItemResponse(item, churn.get(item.ticket().key()))).toList(),
                 release.manualItems().stream().map(ReleaseController::toManualItemResponse).toList());
     }
 
@@ -154,12 +167,14 @@ public class ReleaseController {
                 actors.display(summary.frozenBy()), summary.lastRefreshedAt(), summary.itemCount());
     }
 
-    private static ReleaseItemResponse toItemResponse(ReleaseItem item) {
+    private static ReleaseItemResponse toItemResponse(ReleaseItem item, TicketChurn churn) {
         return new ReleaseItemResponse(item.ticket().key(), item.ticket().summary(),
                 item.ticket().issueType(), item.ticket().status(), item.ticket().resolution(),
                 item.ticket().assignee(), item.ticket().reporter(), item.ticket().fixVersions(),
                 item.ticket().component(), item.ticket().description(), item.ticket().comments(),
-                item.ticket().commentTotal(), item.addedAt(), CodeLinksResponse.from(item.codeLinks()));
+                item.ticket().commentTotal(), item.addedAt(), CodeLinksResponse.from(item.codeLinks()),
+                churn == null ? null : new ItemChurnResponse(churn.commitsToDone(),
+                        churn.postDoneCommits(), churn.reopens(), churn.keyTaggedOnly(), churn.outlier()));
     }
 
     private static ManualItemResponse toManualItemResponse(ManualItem item) {
