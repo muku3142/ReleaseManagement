@@ -120,9 +120,11 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     @Transactional
     public Release removeItem(UUID releaseId, String ticketKey) {
         ReleaseEntity entity = lockOpen(releaseId);
-        itemJpa.deleteByReleaseIdAndTicketKey(releaseId, ticketKey);
-        stampItemsChanged(entity);
-        jpa.save(entity);
+        // Same rule as addItems (WR-01): removing an absent ticket is a no-op and must not mark paperwork stale.
+        if (itemJpa.deleteByReleaseIdAndTicketKey(releaseId, ticketKey) > 0) {
+            stampItemsChanged(entity);
+            jpa.save(entity);
+        }
         return load(releaseId);
     }
 
@@ -281,9 +283,12 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     @Transactional
     public Release removeManualItem(UUID releaseId, UUID manualItemId) {
         ReleaseEntity release = lockOpen(releaseId);
-        manualJpa.findByReleaseIdAndId(releaseId, manualItemId).ifPresent(manualJpa::delete);
-        stampItemsChanged(release);
-        jpa.save(release);
+        Optional<ReleaseManualItemEntity> item = manualJpa.findByReleaseIdAndId(releaseId, manualItemId);
+        if (item.isPresent()) {
+            manualJpa.delete(item.get());
+            stampItemsChanged(release);
+            jpa.save(release);
+        }
         return load(releaseId);
     }
 

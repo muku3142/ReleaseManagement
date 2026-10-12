@@ -190,6 +190,54 @@ class ReleasePersistenceIT {
     }
 
     @Test
+    void removeItemOfAbsentTicketDoesNotStampItemsChangedAt() {
+        Release release = Release.create("Noop Remove", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(item("CNV-1")));
+        Instant changedAtBefore = repository.findById(release.id()).orElseThrow().itemsChangedAt();
+
+        Release loaded = repository.removeItem(release.id(), "CNV-99");
+
+        assertThat(loaded.itemsChangedAt()).isEqualTo(changedAtBefore);
+    }
+
+    @Test
+    void removeItemOfPresentTicketStampsItemsChangedAt() {
+        Release release = Release.create("Real Remove", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(item("CNV-1")));
+        Instant changedAtBefore = repository.findById(release.id()).orElseThrow().itemsChangedAt();
+
+        Release loaded = repository.removeItem(release.id(), "CNV-1");
+
+        assertThat(loaded.items()).isEmpty();
+        assertThat(loaded.itemsChangedAt()).isNotNull().isAfterOrEqualTo(changedAtBefore);
+    }
+
+    @Test
+    void removeManualItemOfAbsentIdDoesNotStampItemsChangedAt() {
+        Release release = Release.create("Noop Manual", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of());
+        Instant changedAtBefore = repository.findById(release.id()).orElseThrow().itemsChangedAt();
+
+        Release loaded = repository.removeManualItem(release.id(), java.util.UUID.randomUUID());
+
+        assertThat(loaded.itemsChangedAt()).isEqualTo(changedAtBefore);
+    }
+
+    @Test
+    void removeManualItemOfPresentItemStampsItemsChangedAt() {
+        Release release = Release.create("Real Manual", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of());
+        ManualItem manual = ManualItem.create("Script", "desc", ManualItemCategory.OTHER, Instant.now());
+        repository.addManualItem(release.id(), manual);
+        Instant changedAtBefore = repository.findById(release.id()).orElseThrow().itemsChangedAt();
+
+        Release loaded = repository.removeManualItem(release.id(), manual.id());
+
+        assertThat(loaded.manualItems()).isEmpty();
+        assertThat(loaded.itemsChangedAt()).isNotNull().isAfterOrEqualTo(changedAtBefore);
+    }
+
+    @Test
     void removeItemDeletesOnlyThatTicket() {
         Release release = Release.create("Remove Item", "1.0", "CNV", "rm@acme.com", Instant.now());
         repository.create(release, List.of(item("CNV-1"), item("CNV-2")));
