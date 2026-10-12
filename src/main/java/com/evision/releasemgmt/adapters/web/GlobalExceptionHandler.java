@@ -2,6 +2,8 @@ package com.evision.releasemgmt.adapters.web;
 
 import com.evision.releasemgmt.adapters.security.SessionRefreshException;
 import com.evision.releasemgmt.application.JiraSiteConfigService.JiraSiteNotConfiguredException;
+import com.evision.releasemgmt.domain.ado.AdoAccessException;
+import com.evision.releasemgmt.domain.ado.AdoCredentialTokenRequiredException;
 import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
 import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
 import com.evision.releasemgmt.domain.document.ExportFailedException;
@@ -44,6 +46,31 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleJiraSiteNotConfigured(JiraSiteNotConfiguredException ex) {
         return problem(HttpStatus.CONFLICT, "Jira site not configured",
                 "No Jira Cloud site is configured yet.", "SITE_NOT_CONFIGURED");
+    }
+
+    @ExceptionHandler(AdoAccessException.class)
+    public ProblemDetail handleAdoAccess(AdoAccessException ex) {
+        // Never 401: the frontend treats 401 as the user's own Jira session failing.
+        return switch (ex.reason()) {
+            case UNAUTHORIZED -> problem(HttpStatus.UNPROCESSABLE_ENTITY, "Azure DevOps token rejected",
+                    "Azure DevOps rejected this token. Use a token scoped to one organization with Code (Read) access.",
+                    "ADO_UNAUTHORIZED");
+            case NOT_FOUND -> problem(HttpStatus.UNPROCESSABLE_ENTITY, "Azure DevOps organization not found",
+                    "No Azure DevOps organization with that name is reachable with this token.",
+                    "ADO_ORGANIZATION_NOT_FOUND");
+            case RATE_LIMITED -> problem(HttpStatus.SERVICE_UNAVAILABLE, "Azure DevOps rate limit reached",
+                    "Azure DevOps is rate-limiting requests. Wait a moment and try again.", "ADO_RATE_LIMITED");
+            case UNREACHABLE -> problem(HttpStatus.SERVICE_UNAVAILABLE, "Azure DevOps unreachable",
+                    "Azure DevOps could not be reached. Try again later.", "ADO_UNREACHABLE");
+            case ERROR, TOO_LARGE -> problem(HttpStatus.BAD_GATEWAY, "Azure DevOps returned an error",
+                    "Azure DevOps returned an unexpected error.", "ADO_ERROR");
+        };
+    }
+
+    @ExceptionHandler(AdoCredentialTokenRequiredException.class)
+    public ProblemDetail handleAdoTokenRequired(AdoCredentialTokenRequiredException ex) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "Token required",
+                "Enter the token: no Azure DevOps token is stored for this organization yet.", "ADO_TOKEN_REQUIRED");
     }
 
     @ExceptionHandler(JiraAuthenticationException.class)

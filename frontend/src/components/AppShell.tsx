@@ -1,5 +1,6 @@
 import { Link, Outlet } from '@tanstack/react-router';
 import { useSession, useLogout } from '../api/auth';
+import { AdoCredentialBanner } from './AdoCredentialBanner';
 import { CredentialAlert } from './CredentialAlert';
 
 export function AppShell() {
@@ -70,6 +71,7 @@ export function AppShell() {
         </nav>
       </header>
       <CredentialAlert />
+      <AdoCredentialBanner />
       <main className="p-6">
         <Outlet />
       </main>
