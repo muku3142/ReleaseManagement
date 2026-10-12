@@ -117,6 +117,22 @@ That falsely shows paperwork as STALE on the dashboard. Fix it here, the same wa
   `recorded_at`), and an effective **`VOIDED`** entry (correction-only) counts toward no metric, no
   current stage and no history count. Every Phase 8 query must exclude it.
 
+### Decided after research (2026-10-12)
+- **D-08-15: A release rolled back out of Production stays visible by default.** It counts as in flight
+  whenever its current stage is below Production, however old its first Production success is.
+- **D-08-16: "Shipped" follows the current Production flag.** First Production success is the earliest
+  effective SUCCESS on whichever stage is flagged Production now. Moving the flag changes historical ship
+  dates; recording flag history was rejected (it needs a schema change).
+- **D-08-17: Items with incomplete enrichment count as "no data" for commit-based churn.** This covers
+  `COMMIT_LIMIT` and partial ADO data. They are excluded from commits-to-done and post-Done commits, but
+  still count toward reopens.
+- **D-08-18: Outlier ticket = commits-to-done above the release's upper Tukey fence (Q3 + 1.5 x IQR, only
+  when at least 4 tickets have data), or 2 or more reopens.**
+- Research defaults accepted without a separate question: "last promotion failed" is the latest effective,
+  non-VOIDED entry across all stages, cleared by any later SUCCESS; total reopens include tickets that
+  have history but no commits. The dashboard max date span is 366 days and is a backend constant that
+  the UI must match (08-UI-SPEC).
+
 ### Claude's Discretion
 - **Read model:** a dedicated dashboard query/endpoint with set-based aggregate subqueries, not more
   columns on `ReleaseSummary`. Those columns would slow `/releases` and `DocumentReadinessService.all()`,
