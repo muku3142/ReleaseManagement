@@ -16,6 +16,18 @@ app:
     search:
       page-size: 100
       max-pages: 50
+    changelog:
+      max-pages: 20
+  ado:
+    base-url: https://dev.azure.com
+    connect-timeout: PT5S
+    read-timeout: PT10S
+    max-pages-per-pr: 5
+  enrichment:
+    max-concurrent: 6
+    deadline: PT45S
+    # Kept below app.template.render.max-collection-size (500) so a long commit list can never fail document generation (ADO-02).
+    max-commits-per-ticket: 400
   template:
     render:
       timeout: PT2S
