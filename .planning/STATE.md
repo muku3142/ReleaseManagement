@@ -241,6 +241,7 @@ None yet.
 |---|-------------|------|--------|-----------|
 | 260810-wc3 | Fix AdfFlattener heading and code-block newline defects | 2026-08-10 | 1396ffc | [260810-wc3-fix-adfflattener-heading-and-code-block-](./quick/260810-wc3-fix-adfflattener-heading-and-code-block-/) |
 | 261012-nqd | On-demand "Show linked commits" in the ticket browser (GET /api/tickets/{key}/code-links, read-only) | 2026-10-12 | c44f3e5 | [261012-nqd-ticket-browser-show-linked-commits](./quick/261012-nqd-ticket-browser-show-linked-commits/) |
+| fast | Ticket browser: click anywhere on a row to expand it (checkbox, controls and text selection excluded) | 2026-10-12 | 2518d44 | - |
 
 ## Deferred Items
 
