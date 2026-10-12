@@ -33,6 +33,38 @@ export type ReleaseSummary = {
   itemCount: number;
 };
 
+export type EnrichmentStatus = 'NOT_ATTEMPTED' | 'NO_LINK' | 'LINKED' | 'FAILED';
+
+export type PullRequestLink = {
+  id: string;
+  title: string;
+  status: string;
+  url: string;
+  sourceBranch: string;
+  targetBranch: string | null;
+  countsTowardCommits: boolean;
+};
+
+export type CommitLink = {
+  sha: string;
+  shortSha: string;
+  message: string;
+  author: string | null;
+  authoredAt: string;
+  url: string;
+};
+
+export type CodeLinks = {
+  status: EnrichmentStatus;
+  reason: string | null;
+  incomplete: boolean;
+  attemptedAt: string | null;
+  commitsSource: 'KEY_TAGGED' | 'ADO_COMPLETE' | null;
+  pullRequests: PullRequestLink[];
+  commits: CommitLink[];
+  branches: string[];
+};
+
 export type ReleaseItem = {
   key: string;
   summary: string;
@@ -47,6 +79,7 @@ export type ReleaseItem = {
   comments: string[];
   commentTotal: number;
   addedAt: string;
+  codeLinks: CodeLinks;
 };
 
 export type ManualItem = {
@@ -166,6 +199,17 @@ function useReleaseMutation<TVars>(request: (vars: TVars) => Promise<Release>) {
 export function useRefreshRelease() {
   return useReleaseMutation((releaseId: string) =>
     apiFetch<Release>(`/api/releases/${releaseId}/refresh`, { method: 'POST' }),
+  );
+}
+
+// Without ticketKey every Jira-backed ticket is re-checked; with it, only that ticket (per-ticket Retry).
+export function useRefreshCodeLinks() {
+  return useReleaseMutation((vars: { releaseId: string; ticketKey?: string }) =>
+    apiFetch<Release>(
+      `/api/releases/${vars.releaseId}/code-links/refresh` +
+        (vars.ticketKey ? `?ticketKey=${encodeURIComponent(vars.ticketKey)}` : ''),
+      { method: 'POST' },
+    ),
   );
 }
 

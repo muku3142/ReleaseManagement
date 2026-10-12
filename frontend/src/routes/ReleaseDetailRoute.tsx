@@ -8,6 +8,7 @@ import {
   useAddManualItem,
   useDeleteRelease,
   useFreezeRelease,
+  useRefreshCodeLinks,
   useRefreshRelease,
   useRelease,
   useRemoveManualItem,
@@ -17,6 +18,7 @@ import {
   type ReleaseAddResult,
 } from '../api/releases';
 import { AddTicketsToReleaseDialog } from '../components/AddTicketsToReleaseDialog';
+import { CodeLinksChip, CodeLinksDetail } from '../components/CodeLinks';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DocumentsSection } from '../components/DocumentsSection';
 
@@ -55,10 +57,11 @@ export function ReleaseDetailRoute() {
   const [addOutcome, setAddOutcome] = useState<ReleaseAddResult | null>(null);
 
   const refresh = useRefreshRelease();
+  const refreshCodeLinks = useRefreshCodeLinks();
   const freeze = useFreezeRelease();
   const remove = useDeleteRelease();
   const [confirming, setConfirming] = useState<'freeze' | 'delete' | null>(null);
-  const busy = refresh.isPending || freeze.isPending || remove.isPending;
+  const busy = refresh.isPending || refreshCodeLinks.isPending || freeze.isPending || remove.isPending;
 
   const removeTicket = useRemoveTicketItem();
   const addManualItem = useAddManualItem();
@@ -72,6 +75,7 @@ export function ReleaseDetailRoute() {
 
   const actionProblem =
     (refresh.isError && refresh.error instanceof ApiError && refresh.error.problem) ||
+    (refreshCodeLinks.isError && refreshCodeLinks.error instanceof ApiError && refreshCodeLinks.error.problem) ||
     (freeze.isError && freeze.error instanceof ApiError && freeze.error.problem) ||
     (remove.isError && remove.error instanceof ApiError && remove.error.problem) ||
     (removeTicket.isError && removeTicket.error instanceof ApiError && removeTicket.error.problem) ||
@@ -130,6 +134,9 @@ export function ReleaseDetailRoute() {
   const isFrozen = data.status === 'FROZEN';
   const isOpen = data.status === 'OPEN';
   const noItems = data.items.length === 0 && data.manualItems.length === 0;
+  const uncheckedCount = data.items.filter(
+    (i) => i.codeLinks.status === 'FAILED' || i.codeLinks.status === 'NOT_ATTEMPTED',
+  ).length;
 
   const saving = addManualItem.isPending || updateManualItem.isPending;
   const manualItemProblem =
@@ -229,6 +236,23 @@ export function ReleaseDetailRoute() {
             )}
             <button
               type="button"
+              onClick={() => refreshCodeLinks.mutate({ releaseId: data.id })}
+              disabled={busy}
+              className="rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 disabled:opacity-50"
+            >
+              Refresh code links
+            </button>
+            {refreshCodeLinks.isPending && (
+              <span className="flex items-center gap-2 text-sm text-gray-600">
+                <span
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"
+                  aria-hidden="true"
+                />
+                Refreshing code links…
+              </span>
+            )}
+            <button
+              type="button"
               onClick={() => setConfirming('freeze')}
               disabled={busy}
               className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
@@ -270,7 +294,26 @@ export function ReleaseDetailRoute() {
         // failure that left the dialog open would render actionProblem behind the backdrop.
         onConfirm={() => freeze.mutate(data.id, { onSettled: () => setConfirming(null) })}
         onCancel={() => setConfirming(null)}
-      />
+      >
+        {uncheckedCount > 0 && (
+          <>
+            <p className="mt-3 text-sm text-amber-800">
+              {uncheckedCount} ticket(s) have code links that failed or were never checked. Frozen releases keep
+              whatever code links they have.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setConfirming(null);
+                refreshCodeLinks.mutate({ releaseId: data.id });
+              }}
+              className="mt-2 rounded border border-gray-300 px-4 py-2 text-sm text-gray-700"
+            >
+              Refresh code links first
+            </button>
+          </>
+        )}
+      </ConfirmDialog>
 
       <ConfirmDialog
         open={confirming === 'delete'}
@@ -372,6 +415,9 @@ export function ReleaseDetailRoute() {
                     Status
                   </th>
                   <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
+                    Code
+                  </th>
+                  <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
                     Resolution
                   </th>
                   <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
@@ -392,6 +438,17 @@ export function ReleaseDetailRoute() {
                       <td className="min-w-[18rem] px-4 py-2 text-gray-700">{item.summary}</td>
                       <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.issueType}</td>
                       <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.status}</td>
+                      <td className="px-4 py-2">
+                        <CodeLinksChip
+                          links={item.codeLinks}
+                          onRetry={
+                            isOpen
+                              ? () => refreshCodeLinks.mutate({ releaseId: data.id, ticketKey: item.key })
+                              : undefined
+                          }
+                          retryDisabled={busy}
+                        />
+                      </td>
                       <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.resolution ?? '—'}</td>
                       <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.assignee ?? '—'}</td>
                       <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.reporter ?? '—'}</td>
@@ -424,7 +481,7 @@ export function ReleaseDetailRoute() {
                     </tr>
                     {expandedKey === item.key && (
                       <tr>
-                        <td colSpan={isOpen ? 9 : 8} className="px-4 pb-4">
+                        <td colSpan={isOpen ? 10 : 9} className="px-4 pb-4">
                           <div className="max-h-80 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-4">
                             <h3 className="text-sm font-semibold text-gray-900">Description</h3>
                             <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
@@ -451,6 +508,8 @@ export function ReleaseDetailRoute() {
                                 ))}
                               </ul>
                             )}
+
+                            <CodeLinksDetail links={item.codeLinks} />
                           </div>
                         </td>
                       </tr>
