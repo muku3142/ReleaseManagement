@@ -54,9 +54,7 @@ function Section(props: {
             <span className="block text-sm text-gray-700">{entry.description}</span>
             <span className="mt-1 flex flex-wrap gap-1">
               {entry.tags.map((tag) => (
-                <span key={tag} className={tag === 'Always empty until Phase 6'
-                  ? 'rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800'
-                  : 'rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700'}>{tag}</span>
+                <span key={tag} className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700">{tag}</span>
               ))}
             </span>
           </button>

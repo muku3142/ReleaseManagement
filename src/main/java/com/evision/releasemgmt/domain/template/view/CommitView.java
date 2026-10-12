@@ -1,6 +1,5 @@
 package com.evision.releasemgmt.domain.template.view;
 
-// D-04-18: defined now, always empty until Phase 6. Templates authored today can already write
-// {{^commits}}No linked code{{/commits}} and will not need rewriting when ADO enrichment lands.
+// D-04-18 defined this; Phase 6 fills it from stored code links, LINKED items only (D-06-07).
 public record CommitView(String id, String message, String author, String url) {
 }

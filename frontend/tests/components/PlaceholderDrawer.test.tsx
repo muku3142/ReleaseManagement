@@ -31,8 +31,8 @@ const ENTRIES: PlaceholderEntry[] = [
     scope: 'ITEM',
     token: 'commits',
     kind: 'SECTION',
-    description: 'Linked code detail. Always empty until Phase 6.',
-    tags: ['Body only', 'Ticket only', 'Always empty until Phase 6'],
+    description: 'Linked code detail.',
+    tags: ['Body only', 'Ticket only'],
   },
   { scope: 'GROUP', token: 'groupName', kind: 'VARIABLE', description: "The group's label.", tags: ['Body only'] },
 ];
@@ -108,12 +108,8 @@ describe('PlaceholderDrawer', () => {
     }
   });
 
-  it('tags the commits row amber and the key row\'s Ticket only tag neutral gray', async () => {
+  it('styles the key row\'s Ticket only tag neutral gray', async () => {
     await renderDrawer({});
-    const commitsRow = rowButton('commits');
-    const amberTag = [...commitsRow.querySelectorAll('span')].find((s) => s.textContent === 'Always empty until Phase 6');
-    expect(amberTag?.className).toContain('bg-amber-100');
-
     const keyRow = rowButton('key');
     const grayTag = [...keyRow.querySelectorAll('span')].find((s) => s.textContent === 'Ticket only');
     expect(grayTag?.className).toContain('bg-gray-100');
