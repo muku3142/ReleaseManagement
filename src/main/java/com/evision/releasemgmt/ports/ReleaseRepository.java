@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.ports;
 
+import com.evision.releasemgmt.domain.enrichment.CodeLinks;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
@@ -7,6 +8,7 @@ import com.evision.releasemgmt.domain.release.ReleaseSummary;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -34,6 +36,14 @@ public interface ReleaseRepository {
 
     /** D-03-07: replaces the stored snapshot of every supplied item and stamps last_refreshed_at. */
     Release replaceItemSnapshots(UUID releaseId, List<ReleaseItem> items, Instant refreshedAt);
+
+    /**
+     * D-06-01: writes each item's code links and history under the release row lock. Stamps items_changed_at only when
+     * what documents render changed (D-06-04); unknown ticket keys are ignored because the item may have been removed meanwhile.
+     *
+     * @throws com.evision.releasemgmt.domain.release.ReleaseFrozenException when the release froze before the write
+     */
+    Release saveEnrichment(UUID releaseId, Map<String, CodeLinks> codeLinksByTicketKey);
 
     Release freeze(UUID releaseId, String actor, Instant at);
 

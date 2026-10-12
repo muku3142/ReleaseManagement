@@ -140,6 +140,93 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         return load(releaseId);
     }
 
+    // FAILED results already carry the previous rows (CodeLinks.failed, D-06-12), so one replace path serves every
+    // status. No HTTP happens here: callers fetch first and write once.
+    @Override
+    @Transactional
+    public Release saveEnrichment(UUID releaseId, Map<String, CodeLinks> codeLinksByTicketKey) {
+        ReleaseEntity release = lockOpen(releaseId);
+        Map<String, CodeLinks> before = ticketItems(releaseId).stream()
+                .collect(Collectors.toMap(ReleaseItem::ticketKey, ReleaseItem::codeLinks));
+        boolean documentsChanged = false;
+        for (ReleaseTicketItemEntity entity : itemJpa.findByReleaseIdOrderByTicketKeyAsc(releaseId)) {
+            CodeLinks after = codeLinksByTicketKey.get(entity.getTicketKey());
+            if (after == null) {
+                continue;
+            }
+            documentsChanged |= !before.get(entity.getTicketKey()).sameInDocumentsAs(after);
+            overwriteEnrichment(entity, after);
+        }
+        if (documentsChanged) {
+            stampItemsChanged(release);
+            jpa.save(release);
+        }
+        return load(releaseId);
+    }
+
+    private void overwriteEnrichment(ReleaseTicketItemEntity entity, CodeLinks links) {
+        StatusHistory history = links.history();
+        entity.setEnrichmentStatus(links.status());
+        entity.setEnrichmentReason(links.reason());
+        entity.setEnrichmentIncomplete(links.incomplete());
+        entity.setEnrichmentAttemptedAt(links.attemptedAt());
+        entity.setCommitsSource(links.commitsSource());
+        entity.setBranches(links.branches());
+        entity.setHistoryState(history.state());
+        entity.setHistorySyncedUpdatedAt(history.syncedUpdatedAt());
+        entity.setFirstDoneAt(history.firstDoneAt());
+        entity.setReopenCount(history.reopenCount());
+        itemJpa.save(entity);
+
+        UUID itemId = entity.getId();
+        pullRequestJpa.deleteByItemId(itemId);
+        commitJpa.deleteByItemId(itemId);
+        statusChangeJpa.deleteByItemId(itemId);
+        pullRequestJpa.saveAll(links.pullRequests().stream().map(p -> toEntity(itemId, p)).toList());
+        commitJpa.saveAll(links.commits().stream().map(c -> toEntity(itemId, c)).toList());
+        statusChangeJpa.saveAll(history.changes().stream().map(c -> toEntity(itemId, c)).toList());
+    }
+
+    private static ReleaseItemPullRequestEntity toEntity(UUID itemId, LinkedPullRequest pr) {
+        ReleaseItemPullRequestEntity entity = new ReleaseItemPullRequestEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setItemId(itemId);
+        entity.setRepositoryId(pr.repositoryId());
+        entity.setPrId(pr.id());
+        entity.setTitle(pr.title());
+        entity.setStatus(pr.status());
+        entity.setUrl(pr.url());
+        entity.setSourceBranch(pr.sourceBranch());
+        entity.setTargetBranch(pr.targetBranch());
+        entity.setCountsTowardCommits(pr.countsTowardCommits());
+        entity.setCommitsFetchedAt(pr.commitsFetchedAt());
+        return entity;
+    }
+
+    private static ReleaseItemCommitEntity toEntity(UUID itemId, LinkedCommit commit) {
+        ReleaseItemCommitEntity entity = new ReleaseItemCommitEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setItemId(itemId);
+        entity.setSha(commit.sha());
+        entity.setMessage(commit.message());
+        entity.setAuthorName(commit.author());
+        entity.setAuthoredAt(commit.authoredAt());
+        entity.setUrl(commit.url());
+        return entity;
+    }
+
+    private static ReleaseItemStatusChangeEntity toEntity(UUID itemId, StatusChange change) {
+        ReleaseItemStatusChangeEntity entity = new ReleaseItemStatusChangeEntity();
+        entity.setId(UUID.randomUUID());
+        entity.setItemId(itemId);
+        entity.setChangedAt(change.at());
+        entity.setFromStatusId(change.fromStatusId());
+        entity.setToStatusId(change.toStatusId());
+        entity.setFromCategory(change.fromCategory());
+        entity.setToCategory(change.toCategory());
+        return entity;
+    }
+
     @Override
     @Transactional
     public Release freeze(UUID releaseId, String actor, Instant at) {
