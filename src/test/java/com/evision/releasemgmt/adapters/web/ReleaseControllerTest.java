@@ -9,6 +9,7 @@ import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
+import com.evision.releasemgmt.domain.enrichment.CodeLinks;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.ManualItem;
@@ -203,8 +204,8 @@ class ReleaseControllerTest {
         UUID id = UUID.randomUUID();
         TicketDetail ticket = new TicketDetail("CNV-1", "Summary", "Bug", "Done", "Fixed",
                 "Dev Person", "Reporter Person", List.of("2026.1"), null, "Full description",
-                List.of("First comment", "Second comment"), 2);
-        ReleaseItem item = new ReleaseItem(ticket, Instant.parse("2026-08-04T09:30:00Z"));
+                List.of("First comment", "Second comment"), 2, null, null, null);
+        ReleaseItem item = new ReleaseItem(ticket, Instant.parse("2026-08-04T09:30:00Z"), CodeLinks.notAttempted());
         ManualItem manual = new ManualItem(UUID.randomUUID(), "Run migration", "Apply schema change",
                 ManualItemCategory.DATABASE_SCRIPT, Instant.parse("2026-08-04T09:31:00Z"));
         Release release = new Release(id, "Sprint 42", "2026.08", ReleaseStatus.OPEN, "CNV",

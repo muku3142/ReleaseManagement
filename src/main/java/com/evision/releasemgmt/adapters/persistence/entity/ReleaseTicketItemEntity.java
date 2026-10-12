@@ -1,9 +1,16 @@
 package com.evision.releasemgmt.adapters.persistence.entity;
 
 import com.evision.releasemgmt.adapters.persistence.converter.JsonStringListConverter;
+import com.evision.releasemgmt.domain.enrichment.CommitsSource;
+import com.evision.releasemgmt.domain.enrichment.EnrichmentReason;
+import com.evision.releasemgmt.domain.enrichment.EnrichmentStatus;
+import com.evision.releasemgmt.domain.enrichment.HistoryState;
+import com.evision.releasemgmt.domain.jira.StatusCategory;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
@@ -64,7 +71,156 @@ public class ReleaseTicketItemEntity {
     @Column(name = "added_at", nullable = false)
     private Instant addedAt;
 
+    @Column(name = "jira_issue_id")
+    private String jiraIssueId;
+
+    @Column(name = "jira_updated_at")
+    private Instant jiraUpdatedAt;
+
+    @Column(name = "jira_status_category")
+    @Enumerated(EnumType.STRING)
+    private StatusCategory jiraStatusCategory;
+
+    @Column(name = "enrichment_status", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private EnrichmentStatus enrichmentStatus = EnrichmentStatus.NOT_ATTEMPTED;
+
+    @Column(name = "enrichment_reason")
+    @Enumerated(EnumType.STRING)
+    private EnrichmentReason enrichmentReason;
+
+    @Column(name = "enrichment_incomplete", nullable = false)
+    private boolean enrichmentIncomplete;
+
+    @Column(name = "enrichment_attempted_at")
+    private Instant enrichmentAttemptedAt;
+
+    @Column(name = "commits_source")
+    @Enumerated(EnumType.STRING)
+    private CommitsSource commitsSource;
+
+    @Column(name = "branches", nullable = false)
+    @Convert(converter = JsonStringListConverter.class)
+    private List<String> branches = List.of();
+
+    @Column(name = "history_state", nullable = false)
+    @Enumerated(EnumType.STRING)
+    private HistoryState historyState = HistoryState.NOT_READ;
+
+    @Column(name = "history_synced_updated_at")
+    private Instant historySyncedUpdatedAt;
+
+    @Column(name = "first_done_at")
+    private Instant firstDoneAt;
+
+    @Column(name = "reopen_count")
+    private Integer reopenCount;
+
     public ReleaseTicketItemEntity() {
+    }
+
+    public String getJiraIssueId() {
+        return jiraIssueId;
+    }
+
+    public void setJiraIssueId(String jiraIssueId) {
+        this.jiraIssueId = jiraIssueId;
+    }
+
+    public Instant getJiraUpdatedAt() {
+        return jiraUpdatedAt;
+    }
+
+    public void setJiraUpdatedAt(Instant jiraUpdatedAt) {
+        this.jiraUpdatedAt = jiraUpdatedAt;
+    }
+
+    public StatusCategory getJiraStatusCategory() {
+        return jiraStatusCategory;
+    }
+
+    public void setJiraStatusCategory(StatusCategory jiraStatusCategory) {
+        this.jiraStatusCategory = jiraStatusCategory;
+    }
+
+    public EnrichmentStatus getEnrichmentStatus() {
+        return enrichmentStatus;
+    }
+
+    public void setEnrichmentStatus(EnrichmentStatus enrichmentStatus) {
+        this.enrichmentStatus = enrichmentStatus;
+    }
+
+    public EnrichmentReason getEnrichmentReason() {
+        return enrichmentReason;
+    }
+
+    public void setEnrichmentReason(EnrichmentReason enrichmentReason) {
+        this.enrichmentReason = enrichmentReason;
+    }
+
+    public boolean isEnrichmentIncomplete() {
+        return enrichmentIncomplete;
+    }
+
+    public void setEnrichmentIncomplete(boolean enrichmentIncomplete) {
+        this.enrichmentIncomplete = enrichmentIncomplete;
+    }
+
+    public Instant getEnrichmentAttemptedAt() {
+        return enrichmentAttemptedAt;
+    }
+
+    public void setEnrichmentAttemptedAt(Instant enrichmentAttemptedAt) {
+        this.enrichmentAttemptedAt = enrichmentAttemptedAt;
+    }
+
+    public CommitsSource getCommitsSource() {
+        return commitsSource;
+    }
+
+    public void setCommitsSource(CommitsSource commitsSource) {
+        this.commitsSource = commitsSource;
+    }
+
+    public List<String> getBranches() {
+        return branches;
+    }
+
+    public void setBranches(List<String> branches) {
+        this.branches = branches;
+    }
+
+    public HistoryState getHistoryState() {
+        return historyState;
+    }
+
+    public void setHistoryState(HistoryState historyState) {
+        this.historyState = historyState;
+    }
+
+    public Instant getHistorySyncedUpdatedAt() {
+        return historySyncedUpdatedAt;
+    }
+
+    public void setHistorySyncedUpdatedAt(Instant historySyncedUpdatedAt) {
+        this.historySyncedUpdatedAt = historySyncedUpdatedAt;
+    }
+
+    public Instant getFirstDoneAt() {
+        return firstDoneAt;
+    }
+
+    public void setFirstDoneAt(Instant firstDoneAt) {
+        this.firstDoneAt = firstDoneAt;
+    }
+
+    public Integer getReopenCount() {
+        return reopenCount;
+    }
+
+    public void setReopenCount(Integer reopenCount) {
+        this.reopenCount = reopenCount;
     }
 
     public UUID getId() {
