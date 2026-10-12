@@ -69,12 +69,12 @@ public final class PlaceholderCatalog {
                     "Loops over the ticket's comments. Empty for manual items.",
                     List.of("Body only", "Ticket only")),
             new PlaceholderEntry(PlaceholderScope.ITEM, "commits", PlaceholderKind.SECTION, PlaceholderScope.COMMIT,
-                    "Loops over the ticket's linked Azure DevOps commits.",
-                    List.of("Body only", "Ticket only", "Always empty until Phase 6")),
+                    "Loops over the ticket's linked Azure DevOps commits. Without an Azure DevOps token these are the commits whose message names the ticket key. Empty when the ticket has no linked code or its lookup failed.",
+                    List.of("Body only", "Ticket only")),
             new PlaceholderEntry(PlaceholderScope.ITEM, "pullRequests", PlaceholderKind.SECTION,
                     PlaceholderScope.PULL_REQUEST,
-                    "Loops over the ticket's linked Azure DevOps pull requests.",
-                    List.of("Body only", "Ticket only", "Always empty until Phase 6")),
+                    "Loops over the ticket's own Azure DevOps pull requests (from a branch named after the ticket). Empty when the ticket has no linked code or its lookup failed.",
+                    List.of("Body only", "Ticket only")),
 
             // GROUP
             new PlaceholderEntry(PlaceholderScope.GROUP, "groupName", PlaceholderKind.VARIABLE, null,
@@ -91,25 +91,25 @@ public final class PlaceholderCatalog {
 
             // COMMIT
             new PlaceholderEntry(PlaceholderScope.COMMIT, "id", PlaceholderKind.VARIABLE, null,
-                    "The commit's short identifier.", List.of("Body only", "Always empty until Phase 6")),
+                    "The commit's short identifier (first 7 characters).", List.of("Body only")),
             new PlaceholderEntry(PlaceholderScope.COMMIT, "message", PlaceholderKind.VARIABLE, null,
-                    "The commit message.", List.of("Body only", "Always empty until Phase 6")),
+                    "The first line of the commit message.", List.of("Body only")),
             new PlaceholderEntry(PlaceholderScope.COMMIT, "author", PlaceholderKind.VARIABLE, null,
-                    "The commit author's display name.", List.of("Body only", "Always empty until Phase 6")),
+                    "The commit author's display name.", List.of("Body only")),
             new PlaceholderEntry(PlaceholderScope.COMMIT, "url", PlaceholderKind.VARIABLE, null,
-                    "A link to the commit in Azure DevOps.", List.of("Body only", "Always empty until Phase 6")),
+                    "A link to the commit in Azure DevOps.", List.of("Body only")),
 
             // PULL_REQUEST
             new PlaceholderEntry(PlaceholderScope.PULL_REQUEST, "id", PlaceholderKind.VARIABLE, null,
-                    "The pull request's identifier.", List.of("Body only", "Always empty until Phase 6")),
+                    "The pull request's identifier.", List.of("Body only")),
             new PlaceholderEntry(PlaceholderScope.PULL_REQUEST, "title", PlaceholderKind.VARIABLE, null,
-                    "The pull request title.", List.of("Body only", "Always empty until Phase 6")),
+                    "The pull request title.", List.of("Body only")),
             new PlaceholderEntry(PlaceholderScope.PULL_REQUEST, "status", PlaceholderKind.VARIABLE, null,
-                    "The pull request status, such as completed or active.",
-                    List.of("Body only", "Always empty until Phase 6")),
+                    "The pull request status, such as OPEN or MERGED.",
+                    List.of("Body only")),
             new PlaceholderEntry(PlaceholderScope.PULL_REQUEST, "url", PlaceholderKind.VARIABLE, null,
                     "A link to the pull request in Azure DevOps.",
-                    List.of("Body only", "Always empty until Phase 6")));
+                    List.of("Body only")));
 
     private PlaceholderCatalog() {
     }

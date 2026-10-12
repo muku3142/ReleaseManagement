@@ -106,11 +106,9 @@ class PlaceholderCatalogTest {
     }
 
     @Test
-    void commitsAndPullRequestsAreTaggedAlwaysEmptyUntilPhaseSix() {
-        PlaceholderEntry commits = PlaceholderCatalog.find(PlaceholderScope.ITEM, "commits").orElseThrow();
-        PlaceholderEntry pullRequests = PlaceholderCatalog.find(PlaceholderScope.ITEM, "pullRequests").orElseThrow();
-        assertThat(commits.tags()).contains("Always empty until Phase 6");
-        assertThat(pullRequests.tags()).contains("Always empty until Phase 6");
+    void noEntryIsTaggedAlwaysEmptyUntilPhaseSix() {
+        assertThat(PlaceholderCatalog.ENTRIES)
+                .allSatisfy(entry -> assertThat(entry.tags()).doesNotContain("Always empty until Phase 6"));
     }
 
     private static Class<?> viewTypeFor(PlaceholderScope scope) {
