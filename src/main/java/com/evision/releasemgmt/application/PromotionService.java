@@ -24,6 +24,12 @@ public class PromotionService {
         return promotions.load(releaseId);
     }
 
+    public PromotionHistory correct(UUID releaseId, UUID promotionId, PromotionDraft draft, String reason, String actor) {
+        Instant now = clock.instant();
+        promotions.appendUnderLock(releaseId, history -> history.correct(promotionId, draft, reason, actor, now));
+        return promotions.load(releaseId);
+    }
+
     public PromotionHistory record(UUID releaseId, PromotionDraft draft, String actor) {
         Instant now = clock.instant();
         promotions.appendUnderLock(releaseId, history -> history.record(draft, actor, now));

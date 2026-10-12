@@ -79,6 +79,27 @@ class PromotionServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void correctAppendsACorrectionStampedWithTheClockAndReturnsTheReloadedHistory() {
+        Promotion original = new Promotion(UUID.randomUUID(), releaseId, dev.id(), PromotionOutcome.SUCCESS,
+                NOW.minusSeconds(600), NOW.minusSeconds(590), "acc-1", null, null, null);
+        PromotionHistory withEntry = new PromotionHistory(releaseId, true, NOW.minusSeconds(3600), List.of(dev),
+                List.of(original));
+        when(repository.load(releaseId)).thenReturn(withEntry);
+
+        PromotionHistory result = service.correct(releaseId, original.id(),
+                new PromotionDraft(dev.id(), PromotionOutcome.VOIDED, original.deployedAt(), null), "never happened", "acc-2");
+
+        ArgumentCaptor<Function<PromotionHistory, Promotion>> captor = ArgumentCaptor.forClass(Function.class);
+        verify(repository).appendUnderLock(eq(releaseId), captor.capture());
+        Promotion correction = captor.getValue().apply(withEntry);
+        assertThat(result).isSameAs(withEntry);
+        assertThat(correction.supersedesId()).isEqualTo(original.id());
+        assertThat(correction.recordedAt()).isEqualTo(NOW);
+        assertThat(correction.recordedBy()).isEqualTo("acc-2");
+    }
+
+    @Test
     void historyDelegatesToLoad() {
         when(repository.load(releaseId)).thenReturn(frozen);
 

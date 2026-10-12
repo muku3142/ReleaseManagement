@@ -10,6 +10,7 @@ import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.promotion.Promotion;
 import com.evision.releasemgmt.domain.promotion.PromotionDraft;
 import com.evision.releasemgmt.domain.promotion.PromotionHistory;
+import com.evision.releasemgmt.domain.promotion.PromotionNotFoundException;
 import com.evision.releasemgmt.domain.promotion.PromotionOutcome;
 import com.evision.releasemgmt.domain.promotion.PromotionRejectedException;
 import com.evision.releasemgmt.domain.promotion.PromotionRejection;
@@ -192,6 +193,65 @@ class PromotionControllerTest {
         postBody(body(dev.id().toString(), "SUCCESS", ""))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.reason").value("STAGE_NOT_FOUND"));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions postCorrection(UUID promotionId, String json) throws Exception {
+        return mockMvc.perform(post("/api/releases/{id}/promotions/{p}/corrections", releaseId, promotionId)
+                .with(csrf()).with(authenticated()).contentType(MediaType.APPLICATION_JSON).content(json));
+    }
+
+    private String correctionBody(String extra) {
+        return "{\"stageId\":\"" + dev.id() + "\",\"outcome\":\"VOIDED\"" + extra + "}";
+    }
+
+    @Test
+    void correctionPostsWithThePrincipalAsActor() throws Exception {
+        UUID promotionId = UUID.randomUUID();
+        when(service.correct(eq(releaseId), eq(promotionId), any(), any(), any())).thenReturn(history());
+        stubActors();
+
+        postCorrection(promotionId, correctionBody(
+                ",\"deployedAt\":\"2026-10-12T09:00:00Z\",\"reason\":\" typo \",\"recordedBy\":\"someone-else\""))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.stages[0].name").value("DEV"));
+
+        ArgumentCaptor<PromotionDraft> draft = ArgumentCaptor.forClass(PromotionDraft.class);
+        ArgumentCaptor<String> reason = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> actor = ArgumentCaptor.forClass(String.class);
+        verify(service).correct(eq(releaseId), eq(promotionId), draft.capture(), reason.capture(), actor.capture());
+        assertThat(actor.getValue()).isEqualTo(ACTOR);
+        assertThat(reason.getValue()).isEqualTo(" typo ");
+        assertThat(draft.getValue()).isEqualTo(new PromotionDraft(dev.id(), PromotionOutcome.VOIDED,
+                Instant.parse("2026-10-12T09:00:00Z"), null));
+    }
+
+    @Test
+    void correctionRequiresAReasonAndADeploymentTime() throws Exception {
+        UUID promotionId = UUID.randomUUID();
+        String when = ",\"deployedAt\":\"2026-10-12T09:00:00Z\"";
+
+        postCorrection(promotionId, correctionBody(when)).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
+        postCorrection(promotionId, correctionBody(when + ",\"reason\":\"   \"")).andExpect(status().isBadRequest());
+        postCorrection(promotionId, correctionBody(when + ",\"reason\":\"" + "x".repeat(2001) + "\""))
+                .andExpect(status().isBadRequest());
+        postCorrection(promotionId, correctionBody(",\"reason\":\"typo\"")).andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void correctionMapsNotFoundAndAlreadySupersededToStableReasonCodes() throws Exception {
+        UUID promotionId = UUID.randomUUID();
+        String json = correctionBody(",\"deployedAt\":\"2026-10-12T09:00:00Z\",\"reason\":\"typo\"");
+
+        when(service.correct(eq(releaseId), eq(promotionId), any(), any(), any()))
+                .thenThrow(new PromotionNotFoundException());
+        postCorrection(promotionId, json).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.reason").value("PROMOTION_NOT_FOUND"));
+
+        when(service.correct(eq(releaseId), eq(promotionId), any(), any(), any()))
+                .thenThrow(new PromotionRejectedException(PromotionRejection.PROMOTION_ALREADY_SUPERSEDED));
+        postCorrection(promotionId, json).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.reason").value("PROMOTION_ALREADY_SUPERSEDED"));
     }
 
     @Test

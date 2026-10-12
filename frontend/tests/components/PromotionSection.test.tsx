@@ -260,6 +260,134 @@ describe('PromotionSection', () => {
     expect(alert?.textContent).toContain('next stage of the ladder');
   });
 
+  describe('corrections', () => {
+    const CORRECTED: PromotionHistory = {
+      ...AT_TEST,
+      entries: [
+        entry('e3', { stageId: 's1', stageName: 'DEV', supersedesId: 'e1', correctionReason: 'wrong <b>env</b>' }),
+        entry('e2'),
+        entry('e1', { stageId: 's1', stageName: 'DEV', outcome: 'FAILED', effective: false, supersededById: 'e3' }),
+      ],
+    };
+
+    function items() {
+      return [...container.querySelectorAll('ul > li')];
+    }
+
+    function correctButton(li: Element): HTMLButtonElement | undefined {
+      return [...li.querySelectorAll('button')].find((b) => b.textContent === 'Correct');
+    }
+
+    async function openCorrection(index: number) {
+      await act(async () => correctButton(items()[index])!.click());
+      return container.querySelector('dialog') as HTMLDialogElement;
+    }
+
+    it('marks superseded entries muted and shows the correction reason as text, with Correct only on effective entries', async () => {
+      mockApi(CORRECTED);
+      await renderSection(true);
+
+      expect(items().map((li) => correctButton(li) !== undefined)).toEqual([true, true, false]);
+      expect(items()[2].textContent).toContain('Superseded');
+      expect(items()[2].className).toContain('text-gray-400');
+      expect(items()[0].textContent).toContain('Correction: wrong <b>env</b>');
+      expect(container.querySelector('li b')).toBeNull();
+    });
+
+    it('shows a voided entry as Voided with its reason', async () => {
+      mockApi({
+        ...AT_TEST,
+        entries: [entry('e4', { outcome: 'VOIDED', supersedesId: 'e2', correctionReason: 'never happened' }), entry('e2', { effective: false })],
+      });
+      await renderSection(true);
+
+      expect(items()[0].textContent).toContain('Voided');
+      expect(items()[0].textContent).toContain('Correction: never happened');
+    });
+
+    it('offers no Correct action on an open release', async () => {
+      mockApi(CORRECTED);
+      await renderSection(false);
+      expect(items().some((li) => correctButton(li) !== undefined)).toBe(false);
+    });
+
+    it('opens prefilled, offers Voided, and needs a reason before it can be saved', async () => {
+      mockApi(CORRECTED);
+      await renderSection(true);
+      const dialog = await openCorrection(1);
+
+      expect(dialog.open).toBe(true);
+      expect(dialog.querySelector('h2')?.textContent).toBe('Correct entry');
+      expect(dialog.querySelector<HTMLSelectElement>('#promotionStage')!.value).toBe('s2');
+      expect(dialog.querySelector<HTMLSelectElement>('#promotionOutcome')!.value).toBe('SUCCESS');
+      expect([...dialog.querySelectorAll('#promotionOutcome option')].map((o) => o.textContent)).toContain('Voided');
+      expect(dialog.textContent).toContain('Reason for correction');
+      expect(byText(dialog, 'Save correction').disabled).toBe(true);
+
+      await change(dialog.querySelector<HTMLTextAreaElement>('#promotionReason')!, '   ');
+      expect(byText(dialog, 'Save correction').disabled).toBe(true);
+      await change(dialog.querySelector<HTMLTextAreaElement>('#promotionReason')!, 'typo');
+      expect(byText(dialog, 'Save correction').disabled).toBe(false);
+    });
+
+    it('posts the original deployedAt verbatim when untouched and closes on success', async () => {
+      const after: PromotionHistory = { ...CORRECTED, entries: [entry('e5', { supersedesId: 'e2', correctionReason: 'typo' }), ...CORRECTED.entries.map((e) => (e.id === 'e2' ? { ...e, effective: false } : e))] };
+      mockApi(CORRECTED, () => json(201, after));
+      await renderSection(true);
+      const dialog = await openCorrection(1);
+
+      await change(dialog.querySelector<HTMLSelectElement>('#promotionOutcome')!, 'VOIDED');
+      await change(dialog.querySelector<HTMLTextAreaElement>('#promotionReason')!, '  typo  ');
+      await act(async () => byText(dialog, 'Save correction').click());
+      await flush();
+
+      expect(posts).toEqual([{ stageId: 's2', outcome: 'VOIDED', deployedAt: '2026-10-10T09:00:00Z', reason: 'typo' }]);
+      expect(dialog.open).toBe(false);
+      expect(items().map((li) => li.textContent?.includes('Superseded'))).toContain(true);
+    });
+
+    it('sends an edited deployed time as an instant', async () => {
+      mockApi(CORRECTED);
+      await renderSection(true);
+      const dialog = await openCorrection(1);
+
+      await change(dialog.querySelector<HTMLInputElement>('#promotionDeployedAt')!, '2026-10-11T08:15:30');
+      await change(dialog.querySelector<HTMLTextAreaElement>('#promotionReason')!, 'wrong time');
+      await act(async () => byText(dialog, 'Save correction').click());
+      await flush();
+
+      expect(posts).toEqual([
+        { stageId: 's2', outcome: 'SUCCESS', deployedAt: new Date('2026-10-11T08:15:30').toISOString(), reason: 'wrong time' },
+      ]);
+    });
+
+    it('shows the mapped message when the entry was already corrected', async () => {
+      mockApi(CORRECTED, () => json(409, { status: 409, reason: 'PROMOTION_ALREADY_SUPERSEDED' }));
+      await renderSection(true);
+      const dialog = await openCorrection(1);
+
+      await change(dialog.querySelector<HTMLTextAreaElement>('#promotionReason')!, 'typo');
+      await act(async () => byText(dialog, 'Save correction').click());
+      await flush();
+
+      expect(dialog.open).toBe(true);
+      expect(dialog.querySelector('[role="alert"]')?.getAttribute('data-reason')).toBe('PROMOTION_ALREADY_SUPERSEDED');
+    });
+
+    it('keeps the entry\'s own retired stage selectable while other retired stages stay disabled', async () => {
+      mockApi({
+        ...CORRECTED,
+        stages: [DEV, stage('s2', 'TEST', 2, { retired: true }), stage('s3', 'UAT', 3, { retired: true }), PROD],
+      });
+      await renderSection(true);
+      const dialog = await openCorrection(1);
+
+      const option = (label: string) => [...dialog.querySelectorAll('option')].find((o) => o.textContent === label);
+      expect(option('TEST (retired)')?.disabled).toBe(false);
+      expect(option('UAT (retired)')?.disabled).toBe(true);
+    });
+  });
+
   it('links to the document revision history', async () => {
     mockApi(AT_TEST);
     await renderSection(true);

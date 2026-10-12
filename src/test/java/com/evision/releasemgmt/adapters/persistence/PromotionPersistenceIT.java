@@ -3,6 +3,7 @@ package com.evision.releasemgmt.adapters.persistence;
 import com.evision.releasemgmt.application.PromotionService;
 import com.evision.releasemgmt.domain.promotion.PromotionDraft;
 import com.evision.releasemgmt.domain.promotion.PromotionHistory;
+import com.evision.releasemgmt.domain.promotion.PromotionNotFoundException;
 import com.evision.releasemgmt.domain.promotion.PromotionOutcome;
 import com.evision.releasemgmt.domain.promotion.PromotionRejectedException;
 import com.evision.releasemgmt.domain.promotion.PromotionRejection;
@@ -90,6 +91,38 @@ class PromotionPersistenceIT {
         assertThat(history.entries()).hasSize(1);
         assertThat(history.entries().getFirst().recordedBy()).isEqualTo("acc-1");
         assertThat(history.currentStage()).map(Stage::name).contains("DEV");
+    }
+
+    @Test
+    void voidingAnEntrySupersedesItAndItCannotBeCorrectedAgain() {
+        UUID releaseId = release("R5", true);
+        UUID original = service.record(releaseId, draft("DEV", PromotionOutcome.SUCCESS), "acc-1")
+                .entries().getFirst().id();
+        Instant deployedAt = Instant.now().minus(10, ChronoUnit.MINUTES);
+        PromotionDraft voided = new PromotionDraft(stageId("DEV"), PromotionOutcome.VOIDED, deployedAt, null);
+
+        PromotionHistory history = service.correct(releaseId, original, voided, "wrong environment", "acc-2");
+
+        assertThat(history.entries()).hasSize(2);
+        assertThat(history.entries().stream().filter(e -> e.id().equals(original)).findFirst().orElseThrow())
+                .matches(e -> !history.isEffective(e));
+        assertThat(history.currentStage()).isEmpty();
+        assertThatThrownBy(() -> service.correct(releaseId, original, voided, "again", "acc-2"))
+                .isInstanceOfSatisfying(PromotionRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(PromotionRejection.PROMOTION_ALREADY_SUPERSEDED));
+    }
+
+    @Test
+    void anEntryOfAnotherReleaseCannotBeCorrectedThroughThisOne() {
+        UUID mine = release("R6", true);
+        UUID other = release("R7", true);
+        UUID foreign = service.record(other, draft("DEV", PromotionOutcome.SUCCESS), "acc-1").entries().getFirst().id();
+        PromotionDraft voided = new PromotionDraft(stageId("DEV"), PromotionOutcome.VOIDED,
+                Instant.now().minus(10, ChronoUnit.MINUTES), null);
+
+        assertThatThrownBy(() -> service.correct(mine, foreign, voided, "idor", "acc-2"))
+                .isInstanceOf(PromotionNotFoundException.class);
+        assertThat(promotionCount()).isEqualTo(1);
     }
 
     @Test
