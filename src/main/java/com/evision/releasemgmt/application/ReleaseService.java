@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.application;
 
+import com.evision.releasemgmt.domain.enrichment.CodeLinks;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.jira.TicketSearchCriteria;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
@@ -46,7 +47,7 @@ public class ReleaseService {
         Instant now = Instant.now();
         List<String> requested = distinct(ticketKeys);
         List<ReleaseItem> items = fetchTickets(requested).stream()
-                .map(ticket -> new ReleaseItem(ticket, now))
+                .map(ticket -> new ReleaseItem(ticket, now, CodeLinks.notAttempted()))
                 .toList();
         Release release = Release.create(name.trim(), version.trim(), blankToNull(jiraProjectKey),
                 actor, now);
@@ -84,7 +85,7 @@ public class ReleaseService {
         List<TicketDetail> fetched = fetchTickets(toFetch);
         List<ReleaseItem> items = fetched.stream()
                 .filter(ticket -> !present.contains(ticket.key()))
-                .map(ticket -> new ReleaseItem(ticket, now))
+                .map(ticket -> new ReleaseItem(ticket, now, CodeLinks.notAttempted()))
                 .toList();
         Release updated = items.isEmpty() ? release : repository.addItems(releaseId, items);
         return new AddTicketsResult(updated, items.size(),
@@ -102,7 +103,7 @@ public class ReleaseService {
         List<String> keys = repository.findTicketKeys(releaseId);
         Instant now = Instant.now();
         List<ReleaseItem> refreshed = fetchTickets(keys).stream()
-                .map(ticket -> new ReleaseItem(ticket, now))
+                .map(ticket -> new ReleaseItem(ticket, now, CodeLinks.notAttempted()))
                 .toList();
         if (refreshed.size() != keys.size()) {
             // replaceItemSnapshots only overwrites the items Jira returned but stamps the whole

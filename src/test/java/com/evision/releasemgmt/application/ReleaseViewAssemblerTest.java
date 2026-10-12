@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.application;
 
+import com.evision.releasemgmt.domain.enrichment.CodeLinks;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemCategory;
@@ -194,7 +195,7 @@ class ReleaseViewAssemblerTest {
 
     private static Release releaseWith(List<TicketDetail> tickets, List<ManualItem> manualItems) {
         Instant now = Instant.now();
-        List<ReleaseItem> items = tickets.stream().map(ticket -> new ReleaseItem(ticket, now)).toList();
+        List<ReleaseItem> items = tickets.stream().map(ticket -> new ReleaseItem(ticket, now, CodeLinks.notAttempted())).toList();
         return new Release(UUID.randomUUID(), "R", "1.0", ReleaseStatus.OPEN, "PRJ",
                 now, "actor", null, null, null, null, items, manualItems);
     }

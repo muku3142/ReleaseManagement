@@ -1,5 +1,9 @@
 package com.evision.releasemgmt.adapters.persistence;
 
+import com.evision.releasemgmt.domain.enrichment.CodeLinks;
+import com.evision.releasemgmt.domain.enrichment.EnrichmentStatus;
+import com.evision.releasemgmt.domain.enrichment.HistoryState;
+import com.evision.releasemgmt.domain.jira.StatusCategory;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemCategory;
@@ -58,7 +62,7 @@ class ReleasePersistenceIT {
     private static ReleaseItem itemWithComponent(String key, String component) {
         return new ReleaseItem(new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed",
                 "Dev Person", "Reporter Person", List.of("2026.08"), component,
-                "Ship it", List.of("Looks good", "He said \"ship it\""), 2, null, null, null), Instant.now());
+                "Ship it", List.of("Looks good", "He said \"ship it\""), 2, null, null, null), Instant.now(), CodeLinks.notAttempted());
     }
 
     @Test
@@ -206,7 +210,7 @@ class ReleasePersistenceIT {
 
         ReleaseItem updated = new ReleaseItem(new TicketDetail("CNV-1", "Summary CNV-1", "Bug", "In Progress",
                 "Fixed", "Dev Person", "Reporter Person", List.of("2026.08"), null, "Ship it",
-                List.of("Looks good", "He said \"ship it\""), 2, null, null, null), Instant.now());
+                List.of("Looks good", "He said \"ship it\""), 2, null, null, null), Instant.now(), CodeLinks.notAttempted());
         Instant refreshedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         repository.replaceItemSnapshots(release.id(), List.of(updated), refreshedAt);
@@ -216,6 +220,44 @@ class ReleasePersistenceIT {
         assertThat(storedItem.ticket().status()).isEqualTo("In Progress");
         assertThat(storedItem.addedAt()).isEqualTo(addedAt);
         assertThat(loaded.lastRefreshedAt()).isEqualTo(refreshedAt);
+    }
+
+    private static ReleaseItem itemWithJiraIdentity(String key, String issueId, Instant updatedAt,
+                                                    StatusCategory category) {
+        return new ReleaseItem(new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed",
+                "Dev Person", "Reporter Person", List.of("2026.08"), null, "Ship it", List.of(), 0,
+                issueId, updatedAt, category), Instant.now(), CodeLinks.notAttempted());
+    }
+
+    @Test
+    void aNewItemReadsBackAsNotAttemptedWithItsJiraIdentity() {
+        Release release = Release.create("Identity Test", "1.0", "CNV", "rm@acme.com", Instant.now());
+        Instant updatedAt = Instant.parse("2026-08-13T13:31:06.042Z");
+        repository.create(release, List.of(itemWithJiraIdentity("CNV-1", "10001", updatedAt, StatusCategory.DONE)));
+
+        ReleaseItem stored = repository.findById(release.id()).orElseThrow().items().get(0);
+
+        assertThat(stored.ticket().jiraIssueId()).isEqualTo("10001");
+        assertThat(stored.ticket().updatedAt()).isEqualTo(updatedAt);
+        assertThat(stored.ticket().statusCategory()).isEqualTo(StatusCategory.DONE);
+        assertThat(stored.codeLinks()).isEqualTo(CodeLinks.notAttempted());
+        assertThat(stored.codeLinks().status()).isEqualTo(EnrichmentStatus.NOT_ATTEMPTED);
+        assertThat(stored.codeLinks().history().state()).isEqualTo(HistoryState.NOT_READ);
+    }
+
+    @Test
+    void replaceItemSnapshotsUpdatesTheJiraIdentityFields() {
+        Release release = Release.create("Identity Refresh", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(itemWithJiraIdentity("CNV-1", "10001",
+                Instant.parse("2026-08-13T13:31:06Z"), StatusCategory.IN_PROGRESS)));
+        Instant newUpdatedAt = Instant.parse("2026-08-14T08:00:00Z");
+
+        repository.replaceItemSnapshots(release.id(), List.of(itemWithJiraIdentity("CNV-1", "10001", newUpdatedAt,
+                StatusCategory.DONE)), Instant.now());
+
+        TicketDetail stored = repository.findById(release.id()).orElseThrow().items().get(0).ticket();
+        assertThat(stored.updatedAt()).isEqualTo(newUpdatedAt);
+        assertThat(stored.statusCategory()).isEqualTo(StatusCategory.DONE);
     }
 
     @Test

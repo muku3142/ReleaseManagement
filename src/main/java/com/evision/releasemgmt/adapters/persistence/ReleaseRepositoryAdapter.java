@@ -1,12 +1,23 @@
 package com.evision.releasemgmt.adapters.persistence;
 
 import com.evision.releasemgmt.adapters.persistence.entity.ReleaseEntity;
+import com.evision.releasemgmt.adapters.persistence.entity.ReleaseItemCommitEntity;
+import com.evision.releasemgmt.adapters.persistence.entity.ReleaseItemPullRequestEntity;
+import com.evision.releasemgmt.adapters.persistence.entity.ReleaseItemStatusChangeEntity;
 import com.evision.releasemgmt.adapters.persistence.entity.ReleaseManualItemEntity;
 import com.evision.releasemgmt.adapters.persistence.entity.ReleaseTicketItemEntity;
+import com.evision.releasemgmt.adapters.persistence.repository.ReleaseItemCommitJpaRepository;
+import com.evision.releasemgmt.adapters.persistence.repository.ReleaseItemPullRequestJpaRepository;
+import com.evision.releasemgmt.adapters.persistence.repository.ReleaseItemStatusChangeJpaRepository;
 import com.evision.releasemgmt.adapters.persistence.repository.ReleaseJpaRepository;
 import com.evision.releasemgmt.adapters.persistence.repository.ReleaseManualItemJpaRepository;
 import com.evision.releasemgmt.adapters.persistence.repository.ReleaseSummaryRow;
 import com.evision.releasemgmt.adapters.persistence.repository.ReleaseTicketItemJpaRepository;
+import com.evision.releasemgmt.domain.enrichment.CodeLinks;
+import com.evision.releasemgmt.domain.enrichment.LinkedCommit;
+import com.evision.releasemgmt.domain.enrichment.LinkedPullRequest;
+import com.evision.releasemgmt.domain.enrichment.StatusChange;
+import com.evision.releasemgmt.domain.enrichment.StatusHistory;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
@@ -24,9 +35,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 public class ReleaseRepositoryAdapter implements ReleaseRepository {
@@ -34,13 +47,22 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     private final ReleaseJpaRepository jpa;
     private final ReleaseTicketItemJpaRepository itemJpa;
     private final ReleaseManualItemJpaRepository manualJpa;
+    private final ReleaseItemPullRequestJpaRepository pullRequestJpa;
+    private final ReleaseItemCommitJpaRepository commitJpa;
+    private final ReleaseItemStatusChangeJpaRepository statusChangeJpa;
 
     public ReleaseRepositoryAdapter(ReleaseJpaRepository jpa,
                                      ReleaseTicketItemJpaRepository itemJpa,
-                                     ReleaseManualItemJpaRepository manualJpa) {
+                                     ReleaseManualItemJpaRepository manualJpa,
+                                     ReleaseItemPullRequestJpaRepository pullRequestJpa,
+                                     ReleaseItemCommitJpaRepository commitJpa,
+                                     ReleaseItemStatusChangeJpaRepository statusChangeJpa) {
         this.jpa = jpa;
         this.itemJpa = itemJpa;
         this.manualJpa = manualJpa;
+        this.pullRequestJpa = pullRequestJpa;
+        this.commitJpa = commitJpa;
+        this.statusChangeJpa = statusChangeJpa;
     }
 
     @Override
@@ -215,9 +237,23 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         itemJpa.saveAll(entities);
     }
 
+    // One query per child table for the whole release, grouped by item: never a query per item.
     private List<ReleaseItem> ticketItems(UUID releaseId) {
-        return itemJpa.findByReleaseIdOrderByTicketKeyAsc(releaseId).stream()
-                .map(ReleaseRepositoryAdapter::toDomain)
+        List<ReleaseTicketItemEntity> entities = itemJpa.findByReleaseIdOrderByTicketKeyAsc(releaseId);
+        if (entities.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = entities.stream().map(ReleaseTicketItemEntity::getId).toList();
+        Map<UUID, List<ReleaseItemPullRequestEntity>> prs = pullRequestJpa.findByItemIdIn(ids).stream()
+                .collect(Collectors.groupingBy(ReleaseItemPullRequestEntity::getItemId));
+        Map<UUID, List<ReleaseItemCommitEntity>> commits = commitJpa.findByItemIdInOrderByAuthoredAtAscShaAsc(ids)
+                .stream().collect(Collectors.groupingBy(ReleaseItemCommitEntity::getItemId));
+        Map<UUID, List<ReleaseItemStatusChangeEntity>> changes = statusChangeJpa
+                .findByItemIdInOrderByChangedAtAsc(ids).stream()
+                .collect(Collectors.groupingBy(ReleaseItemStatusChangeEntity::getItemId));
+        return entities.stream()
+                .map(e -> toDomain(e, toCodeLinks(e, prs.getOrDefault(e.getId(), List.of()),
+                        commits.getOrDefault(e.getId(), List.of()), changes.getOrDefault(e.getId(), List.of()))))
                 .toList();
     }
 
@@ -239,6 +275,9 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         entity.setDescription(ticket.description());
         entity.setComments(ticket.comments());
         entity.setCommentTotal(ticket.commentTotal());
+        entity.setJiraIssueId(ticket.jiraIssueId());
+        entity.setJiraUpdatedAt(ticket.updatedAt());
+        entity.setJiraStatusCategory(ticket.statusCategory());
     }
 
     private static ReleaseEntity toEntity(Release release) {
@@ -277,11 +316,35 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
                 e.getItemsChangedAt(), items, manualItems);
     }
 
-    private static ReleaseItem toDomain(ReleaseTicketItemEntity e) {
+    private static ReleaseItem toDomain(ReleaseTicketItemEntity e, CodeLinks codeLinks) {
         TicketDetail ticket = new TicketDetail(e.getTicketKey(), e.getSummary(), e.getIssueType(), e.getStatus(),
                 e.getResolution(), e.getAssignee(), e.getReporter(), e.getFixVersions(), e.getComponent(),
-                e.getDescription(), e.getComments(), e.getCommentTotal(), null, null, null);
-        return new ReleaseItem(ticket, e.getAddedAt());
+                e.getDescription(), e.getComments(), e.getCommentTotal(), e.getJiraIssueId(), e.getJiraUpdatedAt(),
+                e.getJiraStatusCategory());
+        return new ReleaseItem(ticket, e.getAddedAt(), codeLinks);
+    }
+
+    private static CodeLinks toCodeLinks(ReleaseTicketItemEntity e, List<ReleaseItemPullRequestEntity> prs,
+                                         List<ReleaseItemCommitEntity> commits,
+                                         List<ReleaseItemStatusChangeEntity> changes) {
+        List<LinkedPullRequest> pullRequests = prs.stream()
+                .map(p -> new LinkedPullRequest(p.getRepositoryId(), p.getPrId(), p.getTitle(), p.getStatus(),
+                        p.getUrl(), p.getSourceBranch(), p.getTargetBranch(), p.isCountsTowardCommits(),
+                        p.getCommitsFetchedAt()))
+                .toList();
+        List<LinkedCommit> linkedCommits = commits.stream()
+                .map(c -> new LinkedCommit(c.getSha(), c.getMessage(), c.getAuthorName(), c.getAuthoredAt(),
+                        c.getUrl()))
+                .toList();
+        List<StatusChange> statusChanges = changes.stream()
+                .map(c -> new StatusChange(c.getChangedAt(), c.getFromStatusId(), c.getToStatusId(),
+                        c.getFromCategory(), c.getToCategory()))
+                .toList();
+        StatusHistory history = new StatusHistory(e.getHistoryState(), e.getHistorySyncedUpdatedAt(),
+                e.getFirstDoneAt(), e.getReopenCount(), statusChanges);
+        return new CodeLinks(e.getEnrichmentStatus(), e.getEnrichmentReason(), e.isEnrichmentIncomplete(),
+                e.getEnrichmentAttemptedAt(), e.getCommitsSource(), pullRequests, linkedCommits, e.getBranches(),
+                history);
     }
 
     private static ManualItem toDomain(ReleaseManualItemEntity e) {
