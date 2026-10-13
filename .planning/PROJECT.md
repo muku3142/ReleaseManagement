@@ -144,4 +144,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-13 — milestone v1.1 Release Assistant started*
+*Last updated: 2026-10-13 — Phase 9 complete: rag-service foundation (collections, async indexing, search, status, OpenAPI) running on 8081*
