@@ -25,12 +25,13 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 7: Promotion Tracking & Audit Trail** - Promote releases through the fixed environment ladder with a complete, append-only history
 - [ ] **Phase 8: Release Insights Dashboard** - One screen answering what Jira structurally cannot: outstanding paperwork, ladder position, what went where and when, and how long releases actually take
 
-**Milestone v1.1: Release Assistant** (Phases 9-12, added 2026-10-13; v1 above is still open)
+**Milestone v1.1: Release Assistant** (Phases 9-13, added 2026-10-13; v1 above is still open)
 
-- [ ] **Phase 9: Embeddings & Knowledge Index** - pgvector-backed index of ticket text, manual items, latest documents and code links, kept current without ever blocking or breaking a v1 action
-- [ ] **Phase 10: Retrieval Q&A (No Tools)** - Ask a question over a streaming endpoint and get an answer grounded in retrieved chunks, with server-built citations, refusal and request bounds
-- [ ] **Phase 11: Tool Calling** - The model answers exact questions by calling read-only tools over existing services; architecture tests make "cannot change anything" structural
-- [ ] **Phase 12: Chat UI & Quality Gate** - Assistant screen, release-scoped entry, offline/busy/model-missing states, and the measured golden-set gate before v1.1 ships
+- [ ] **Phase 9: RAG Service Foundation & Index** - Standalone `rag-service/` module with API keys, collections, documents, async embedding queue, search, status, re-index and an OpenAPI contract
+- [ ] **Phase 10: RAG Chat & Citations** - Streamed (SSE) answers over collections with server-built citations, honest refusal, request bounds and metadata-only logging
+- [ ] **Phase 11: Tool-Call Protocol** - The service returns tool calls, the calling app runs them and returns results, and the service answers with them
+- [ ] **Phase 12: ReleaseManagement as First Client** - RAG client adapter, async push of release data, and read-only tools run by ReleaseManagement, enforced by architecture tests
+- [ ] **Phase 13: Assistant Screen & Quality Gate** - Assistant screen behind the existing login, release-scoped entry, how-I-answered panel, and the measured golden-set gate before v1.1 ships
 
 ## Phase Details
 
@@ -445,7 +446,7 @@ Production environment are defined. A `current_stage` column alone is insufficie
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5.3 → 6 → 7 → 8 → 9 → 10 → 11 → 12
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5.3 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -461,10 +462,11 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 6. Azure DevOps Enrichment | 9/10 | In Progress|  |
 | 7. Promotion Tracking & Audit Trail | 6/7 | In Progress|  |
 | 8. Release Insights Dashboard | 7/8 | In Progress|  |
-| 9. Embeddings & Knowledge Index | 0/TBD | Not started | - |
-| 10. Retrieval Q&A (No Tools) | 0/TBD | Not started | - |
-| 11. Tool Calling | 0/TBD | Not started | - |
-| 12. Chat UI & Quality Gate | 0/TBD | Not started | - |
+| 9. RAG Service Foundation & Index | 0/TBD | Not started | - |
+| 10. RAG Chat & Citations | 0/TBD | Not started | - |
+| 11. Tool-Call Protocol | 0/TBD | Not started | - |
+| 12. ReleaseManagement as First Client | 0/TBD | Not started | - |
+| 13. Assistant Screen & Quality Gate | 0/TBD | Not started | - |
 
 ### Phase 8: Release Insights Dashboard
 **Goal**: Release manager opens one screen and sees what Jira structurally cannot answer — which releases have outstanding paperwork, where each sits on the environment ladder, what went to each environment and when, and how long releases actually take
@@ -527,73 +529,90 @@ Plans:
 
 ## Milestone v1.1: Release Assistant
 
-**Goal:** Let the release manager ask questions in plain language and get answers grounded in this system's own data, with sources, from a self-hosted Ollama model. Read-only; no data leaves the machine.
-**Added:** 2026-10-13. Phase numbering continues from v1 (Phase 8). v1 is not closed: its four human checks (05.4-07, 06-10, 07-07, 08-08) remain open and v1.1 does not depend on them.
-**Research:** `.planning/research/v1.1/SUMMARY.md`
-**Order:** index first (user-approved 2026-10-13). The index retires the infrastructure risk (pgvector image, Ollama reachability, embedding model) before any chat behaviour is built on it. Requirement coverage did not require any change to this order.
-**AI-integration phases:** 10, 11 and 12 run `/gsd-ai-integration-phase` before planning.
+**Goal:** Let the release manager ask questions in plain language and get answers grounded in this system's own data, with sources, from a self-hosted Ollama model. Read-only; no data leaves the machine. Delivered as a standalone, domain-free RAG service (`rag-service/`) that other internal apps can reuse; ReleaseManagement is its first client.
+**Added:** 2026-10-13; re-planned the same day for the standalone-service architecture (PROJECT.md Key Decisions, "Exception (2026-10-13)"). Phase numbering continues from v1 (Phase 8). v1 is not closed: its four human checks (05.4-07, 06-10, 07-07, 08-08) remain open and v1.1 does not depend on them.
+**Research:** `.planning/research/v1.1/SUMMARY.md` (still valid for Ollama, pgvector, chunking, injection and golden-set findings)
+**Order:** service first. The service is built and measured through its own API (curl and OpenAPI) before ReleaseManagement integrates it, so infrastructure risk (pgvector image, Ollama reachability, embedding model) retires before any app code depends on it.
+**AI-integration phases:** 10, 11 and 13 run `/gsd-ai-integration-phase` before planning.
+**Stack (approved):** Java 25 / Spring Boot 4.1 MVC, Flyway + JdbcClient, RestClient to Ollama, SseEmitter on virtual threads, springdoc-openapi, per-app API keys, no AI framework. Ollama is the service's only outbound call; callers push documents and run their own tools.
 
-### Phase 9: Embeddings & Knowledge Index
-**Goal**: The system maintains a searchable-by-meaning index of the text the screens already show, entirely on the local machine, which stays current as data changes and never slows, fails or blocks an existing v1 feature
-**Depends on**: Nothing in v1.1 (builds on v1 data: tickets, manual items, document snapshots, code links)
-**Requirements**: IDX-01, IDX-02, IDX-03, IDX-04, IDX-05
+### Phase 9: RAG Service Foundation & Index
+**Goal**: Another internal app can use a running `rag-service` with its own API key to create collections, push documents and search them by meaning, entirely on the local machine, and indexing keeps working across model-server outages
+**Depends on**: Nothing in v1.1 (independent of v1 data; v1 is unaffected)
+**Requirements**: RAG-01, RAG-02, RAG-03, RAG-04, RAG-05, RAG-10
 **Success Criteria** (what must be TRUE):
-  1. Ticket text (summary, description, comments) of tickets in releases, manual items, the latest generated document of each type, and commit/PR text can be searched by meaning, and the embedding model runs locally so no release or Jira text leaves the machine
-  2. After a ticket is added, refreshed or removed, a manual item is edited, or a document is generated, the index reflects it without the originating action becoming slower or failing; a removed ticket or superseded document revision no longer appears in search results
-  3. With the local model server stopped, every v1 feature (sign-in, releases, documents, promotions, dashboard) behaves exactly as before, and the index catches up automatically once the server returns
-  4. An operator can trigger a full re-index (required when the embedding model changes); re-running the index with no data change is a no-op
-  5. Release manager can see when the index was last updated
+  1. `docker compose up` starts `rag-service` on port 8081 with its own `ragdb` database on the pgvector image, and the existing app and every `*PersistenceIT` still start and pass on that image
+  2. An app with its own API key can create a collection and push, replace and delete documents (text, title, URL, metadata) by its own ids; a request without a key, or with another app's key against someone else's collection, is rejected
+  3. A pushed document is returned by a meaning-based search with optional metadata filters, ranked, with its source references; re-pushing unchanged content does not re-embed it, and a deleted document never appears
+  4. With Ollama stopped, pushes are still accepted and show as pending; once Ollama returns they are indexed without any caller action
+  5. An app can trigger a collection re-index and see each collection's indexing status and last-indexed time; the published OpenAPI contract describes every endpoint
 
-**Research flags**: Verify the `pgvector/pgvector:0.8.7-pg18-trixie` image pulls, attaches the existing `pgdata` volume, and works in compose and in every `*PersistenceIT` Testcontainers; verify `CREATE EXTENSION vector` privilege for the migration role; verify the `/api/embed` request/response shape, `nomic-embed-text` dimension (768), context limit and `search_document:`/`search_query:` prefixes on the installed Ollama version; check embedding quality on real ticket text and whether chat and embedding models can both stay resident on the 4 GB GPU; verify the app container can reach host Ollama (`host.docker.internal`, Linux `extra_hosts`, `OLLAMA_HOST` bind); check whether restricted-visibility Jira comments are stored today (index only what the screens show).
-**Scope notes**: No ANN index (exact scan until a slow query is measured). `project_key` stored on each chunk. Latest document revision per type only. Event-driven indexer (single worker, embeds outside any DB transaction) plus a reconcile sweep. Ollama health is reported on `/api/assistant/status`, never in readiness or liveness. ArchUnit: new adapter packages added to the application-does-not-depend-on-adapters rule. `rm.assistant.enabled` switch.
+**Research flags**: Verify `pgvector/pgvector:0.8.7-pg18-trixie` pulls, attaches the existing `pgdata` volume, and works in both compose files and in Testcontainers; verify the privilege `CREATE EXTENSION vector` needs for the `ragdb` migration role and how `ragdb` is created on an existing volume; verify the `/api/embed` request/response shape, `nomic-embed-text` dimension (768), context limit and `search_document:`/`search_query:` prefixes on the installed Ollama version; check embedding quality on real ticket text and whether chat and embedding models can both stay resident on the 4 GB GPU; verify the service container can reach host Ollama (`host.docker.internal`, Linux `extra_hosts`, `OLLAMA_HOST` bind).
+**Scope notes**: Module skeleton with its own pom, Dockerfile and compose service. No ANN index (exact scan until a slow query is measured). Embedding model stored per chunk, so a model change means a re-index. Queue worker embeds outside any DB transaction. API keys stored hashed. No AI framework.
 **Plans**: TBD
 
-### Phase 10: Retrieval Q&A (No Tools)
-**Goal**: Release manager (through the API, before any UI exists) can ask a free-text question and receive a streamed answer grounded in retrieved index chunks, with server-built citations, an honest "I don't know", and hard bounds on every request
+### Phase 10: RAG Chat & Citations
+**Goal**: An app can ask a question over one or more collections and receive a streamed answer grounded in retrieved passages, with server-built citations, an honest "I don't know", and hard bounds on every request
 **Depends on**: Phase 9
-**Requirements**: ASST-02, ASST-04, SAFE-02, SAFE-03, SAFE-04
+**Requirements**: RAG-06, RAG-07, RAG-09, SAFE-01, SAFE-02, SAFE-03
 **Success Criteria** (what must be TRUE):
-  1. A question posted to the chat endpoint streams back an answer over SSE (status, token, citations, done, error events), verifiable with a curl smoke test
-  2. Every answer carries citations to the release, ticket, document revision or commit/PR it drew on, as links built by the server from chunk metadata, never produced by the model
-  3. A question the indexed data does not support is answered with an explicit "I don't know", and a request to change anything is declined
-  4. Text planted in a ticket, comment, commit message or document is treated as data and cannot redirect the assistant (checked by injection cases among the first golden questions); the residual prompt-injection risk is recorded as accepted
-  5. Each question is bounded: a second concurrent request from the same user is rejected, generation stops at a deadline, and a client disconnect cancels generation
-  6. No Jira or Azure DevOps call happens while a question is answered, and logs record metadata only (never question or answer text)
+  1. A question posted to the chat endpoint streams an answer over SSE (status, token, citations, done and error events), verifiable with a curl smoke test
+  2. Every answer carries citations built by the service from passage metadata, never from model text
+  3. A question the collections do not support is answered with an explicit "I don't know"
+  4. Text planted in a document is treated as data and cannot redirect the answer (checked by injection cases among the first golden questions); answers are plain text and the residual prompt-injection risk is recorded as accepted
+  5. Each request is bounded: a request over a client's concurrency limit is rejected, generation stops at the deadline, and a client disconnect cancels generation
+  6. The only outbound call is to Ollama, and logs record metadata only, never question or answer text
 
-**Research flags**: Verify `/api/chat` NDJSON streaming, explicit `num_ctx` (the default silently truncates), `keep_alive` and `think:false` on the installed Ollama version; SSE specifics (auth on async dispatch, `X-Accel-Buffering: no`, Vite proxy buffering, client abort cancelling generation); cold model load time and chat-versus-embedding serialisation on a single GPU. Start the golden fixture here (first 10 questions, including injection and not-in-the-data cases).
-**Scope notes**: Stateless; `history` is a request parameter. Pre-retrieval only (no tools). SAFE-02 here covers fencing and server-side citations; plain-text rendering is enforced in Phase 12. SAFE-04 is assigned here because this is the first phase with a question-time path; Phase 9's metadata-only logging policy is its groundwork.
+**Research flags**: Verify `/api/chat` NDJSON streaming, explicit `num_ctx` (the default silently truncates), `keep_alive` and `think:false` on the installed Ollama version; SSE specifics (async dispatch, `X-Accel-Buffering: no`, proxy buffering, client abort cancelling generation); cold model load time and chat-versus-embedding serialisation on a single GPU. Start the golden fixture here (first 10 questions, including injection and not-in-the-data cases).
+**Scope notes**: Stateless; conversation history is a request parameter. Pre-retrieval only (no tools). Prompt fencing of untrusted passage text. Chat model is a config property; `qwen3:4b` on the 4 GB dev GPU.
 **Plans**: TBD
-**AI-integration phase**: yes (run `/gsd-ai-integration-phase` before planning; first phase to use the chat model)
+**AI-integration phase**: yes (run /gsd-ai-integration-phase before planning)
 
-### Phase 11: Tool Calling
-**Goal**: Exact questions (stages, dates, counts, document readiness, deployment history, churn) are answered from the system's own data by the model calling read-only tools, and it is structurally impossible for the assistant to change anything
+### Phase 11: Tool-Call Protocol
+**Goal**: An app can give the service tool definitions and have exact questions answered from the app's own data without the service ever calling into the app: the service returns tool calls, the app runs them, and the service answers with the results
 **Depends on**: Phase 10
-**Requirements**: ASST-03, ASST-06, SAFE-01
+**Requirements**: RAG-08
 **Success Criteria** (what must be TRUE):
-  1. Asked "which stage is release X at", "what went to Production last month" or "which documents are stale", the assistant answers with the value the application itself reports, not a figure estimated from retrieved text
-  2. Every answer exposes how it was produced: which tools ran (with their arguments) and which sources were used
-  3. Architecture tests fail the build if any assistant tool or the knowledge-search port can mutate state, or if the assistant package depends on Jira, Azure DevOps, credential or index-writer classes; the tests are proven non-vacuous by a positive case
-  4. The tool loop is capped (rounds, calls, result size, deadline); a malformed tool call is retried once, then ends in an honest failure rather than a loop
+  1. A chat request carrying tool definitions streams `tool_call` events when the model needs data; the app posts tool results back and receives a final answer that uses them
+  2. The service makes no call to any app (verifiable: it has no outbound route except Ollama and holds no app credentials)
+  3. The tool loop is capped (rounds, calls, result size, deadline); a malformed tool call is retried once, then ends in an honest failure rather than a loop
+  4. Sources supplied with tool results appear in the answer's citations, built by the service
   5. The chat model is chosen by a measured bake-off on the golden tool questions (3 runs per candidate: pass rate, tokens per second, time to first token)
 
-**AI-integration phase**: yes (run `/gsd-ai-integration-phase` before planning)
-**Research flags**: Verify tool `arguments` arrive as an object and the `role:"tool"` message shape on the installed Ollama version; tool-calling quality of `qwen3:4b` versus `qwen3:8b`/`granite4.1:8b` is unmeasured (LOW-MEDIUM confidence); `OLLAMA_NUM_PARALLEL` and default `num_ctx` on the installed version; confirm the ArchUnit read-only rules are active and not vacuous.
-**Scope notes**: 8-12 coarse flat tools over existing application services in-process (list/get release, get ticket, promotion history, ladder, dashboard summary, recent deployments, ticket churn, document readiness, list/get document revisions, `search_knowledge`). From this phase tool results are authoritative for numbers, dates and status; tool arguments are validated server-side.
+**Research flags**: Verify tool `arguments` arrive as an object and the `role:"tool"` message shape on the installed Ollama version; tool-calling quality of `qwen3:4b` versus `qwen3:8b`/`granite4.1:8b` is unmeasured (LOW-MEDIUM confidence); `OLLAMA_NUM_PARALLEL` and default `num_ctx` on the installed version; decide how a paused tool round is resumed statelessly (continuation token versus resending the transcript).
+**Scope notes**: Tool arguments are validated against the caller's supplied schema. From this phase tool results are authoritative for numbers, dates and status. Tool-result size is capped.
+**Plans**: TBD
+**AI-integration phase**: yes (run /gsd-ai-integration-phase before planning)
+
+### Phase 12: ReleaseManagement as First Client
+**Goal**: ReleaseManagement keeps the RAG service's index current with its own data and runs read-only tools on the service's behalf, without ever slowing or breaking a v1 action
+**Depends on**: Phase 9, Phase 11
+**Requirements**: ASST-01, ASST-03, ASST-04
+**Success Criteria** (what must be TRUE):
+  1. After a ticket is added, refreshed or removed, a manual item is edited, or a document is generated, the change reaches the RAG service shortly afterwards; the originating action is no slower and does not fail
+  2. With the RAG service stopped, every v1 feature (sign-in, releases, documents, promotions, dashboard) behaves exactly as before, and a backfill sweep catches the index up once it returns
+  3. A removed ticket or superseded document revision no longer appears in search results; only the latest revision of each document type is indexed
+  4. Asked for a stage, date, count, readiness, deployment or churn figure, the integration runs ReleaseManagement's own read-only tools and the answer carries the value the application reports, not one estimated from text
+  5. Architecture tests fail the build if any assistant tool can mutate state or depends on Jira, Azure DevOps, credential or index-writer classes, and a positive case proves the rules are not vacuous
+
+**Research flags**: Check whether restricted-visibility Jira comments are stored today (index only what the screens show); decide the document id scheme and the `project_key` metadata stored for later filtering; confirm the after-commit event path does not run inside refresh or generate transactions; confirm the ArchUnit read-only rules are active and not vacuous.
+**Scope notes**: RAG client adapter behind a port; async push after commit for refresh/remove/edit/generate plus a backfill sweep. 8-12 coarse flat tools over existing application services in-process (list/get release, get ticket, promotion history, ladder, dashboard summary, recent deployments, ticket churn, document readiness, list/get document revisions). The tool loop runs in ReleaseManagement. `rm.assistant.enabled` switch. Shared scoping, like v1: the assistant must never claim to honour per-user Jira permissions.
 **Plans**: TBD
 
-### Phase 12: Chat UI & Quality Gate
-**Goal**: Release manager asks questions on an Assistant screen or from a release page, watches the answer stream in with its sources, and answer quality and model choice are proven by a fixed question set before v1.1 ships
-**Depends on**: Phase 11
-**Requirements**: ASST-01, ASST-05, ASST-07, ASST-08, ASST-09, SAFE-05
+### Phase 13: Assistant Screen & Quality Gate
+**Goal**: The release manager asks questions on an Assistant screen or from a release page, watches the answer stream in with its sources, and answer quality and model choice are proven by a fixed question set before v1.1 ships
+**Depends on**: Phase 12
+**Requirements**: ASST-02, ASST-05, ASST-06, ASST-07, ASST-08, SAFE-04
 **Success Criteria** (what must be TRUE):
-  1. Release manager can open the Assistant screen, ask a question in plain language and see the answer stream in as plain text (no HTML, images or auto-links), with citation chips linking to the cited release, ticket, document revision or commit
-  2. From a release page, "Ask about this release" opens the assistant with questions scoped to that release
-  3. An empty chat offers starter questions, and follow-up questions use the recent turns of the current session; closing the session discards history and nothing is saved on the server
-  4. The screen shows distinct, clear states when the model is offline, busy or missing, and shows when the index was last updated
-  5. On a fixed set of 30-50 representative questions (including injection and not-in-the-data cases, 3 runs each), answer quality is measured and the model choice is recorded, with numbers re-measured on the real production host, before v1.1 is declared shipped
+  1. The release manager, signed in as usual, opens the Assistant screen, asks a question and sees the answer stream in as plain text with citation chips linking to the cited release, ticket, document revision or commit; the browser never holds the service API key
+  2. From a release page, "Ask about this release" opens the assistant scoped to that release
+  3. A "how I answered" panel shows the tools that ran and the sources used for each answer
+  4. An empty chat offers starter questions, follow-ups use the current session's turns only, and nothing is saved on the server
+  5. The screen shows distinct offline, busy and model-missing states and when the index was last updated
+  6. On 30-50 representative questions (including injection and not-in-the-data cases, 3 runs each) run through the API, answer quality is measured and the model choice recorded, with numbers re-measured on the real production host, before v1.1 is declared shipped
 
-**AI-integration phase**: yes (run `/gsd-ai-integration-phase` before planning)
-**Research flags**: Production hardware and Ollama topology unknown (GPU/VRAM, host OS, host versus containerised Ollama); dev numbers on the 4 GB GPU are the worst case and must be re-measured on the target host. Fetch-stream consumption with `AbortController` and no proxy buffering. `react-markdown` only if plain text proves insufficient, never with `rehype-raw`. Exit gate also includes an injection threat-model entry and a log/security review.
-**Scope notes**: No saved conversations, feedback thumbs or admin re-index screen (v1.1 Out of Scope). SAFE-05 is assigned here because the full golden-set run is this phase's exit gate; the set itself grows from Phase 10.
+**Research flags**: Production hardware and Ollama topology unknown (GPU/VRAM, host OS, host versus containerised Ollama); dev numbers on the 4 GB GPU are the worst case and must be re-measured on the target host. Streaming proxy behind the existing cookie login (auth on async dispatch, no proxy buffering, abort propagation to the service). Fetch-stream consumption with `AbortController`. `react-markdown` only if plain text proves insufficient, never with `rehype-raw`. Exit gate also includes an injection threat-model entry and a log/security review.
+**Scope notes**: No saved conversations, feedback thumbs or admin re-index screen (v1.1 Out of Scope). SAFE-04 is assigned here because the full golden-set run is this phase's exit gate; the set itself grows from Phase 10.
 **Plans**: TBD
 **UI hint**: yes
+**AI-integration phase**: yes (run /gsd-ai-integration-phase before planning)
