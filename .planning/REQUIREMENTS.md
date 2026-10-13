@@ -95,6 +95,56 @@ Quality attributes that apply across every screen rather than mapping to a singl
 
 - [x] **UX-01**: RESOLVED 2026-08-10 — moved to v2. Originally: "The interface supports drag-and-drop wherever ordering or moving is the natural gesture — reordering deploy steps in a runbook, reordering template sections, and moving items into or between groupings on a release — with a keyboard-accessible equivalent for every drag interaction." No surface in v1 has a consumer for a stored order; see the Phase 5 note below
 
+## Milestone v1.1 Requirements — Release Assistant
+
+Defined 2026-10-13. A read-only assistant that answers plain-language questions from this system's own data, using a self-hosted Ollama model (no data egress). Research: `.planning/research/v1.1/SUMMARY.md`. Phase numbering continues at 9.
+
+### Knowledge Index
+
+- [ ] **IDX-01**: Ticket text (summary, description, comments) of tickets in releases, manual items, the latest generated document of each type, and code-link text (commit messages, PR titles) can be searched by meaning, using a self-hosted embedding model, with no data leaving the machine
+- [ ] **IDX-02**: The index stays current as tickets are added, refreshed or removed, manual items are edited and documents are generated — without slowing or failing those actions — and a removed ticket or superseded document never appears in answers
+- [ ] **IDX-03**: When the local model server is unavailable, every v1 feature keeps working and the index catches up automatically once it returns
+- [ ] **IDX-04**: An operator can trigger a full re-index, which is required when the embedding model changes
+- [ ] **IDX-05**: Release manager can see when the index was last updated
+
+### Assistant
+
+- [ ] **ASST-01**: Release manager can ask a question in plain language on an Assistant screen and see the answer stream in
+- [ ] **ASST-02**: Every answer cites its sources (release, ticket, document revision, commit or PR) as links the server builds, never the model
+- [ ] **ASST-03**: Exact facts — stages, dates, counts, document readiness, deployment history, churn — come from the system's own data through read-only tools, never estimated from retrieved text
+- [ ] **ASST-04**: The assistant says it does not know when the data does not support an answer, and declines requests to change anything
+- [ ] **ASST-05**: Release manager can open the assistant from a release page with questions scoped to that release
+- [ ] **ASST-06**: Release manager can see how an answer was produced — which tools ran and which sources were used
+- [ ] **ASST-07**: An empty chat offers starter questions
+- [ ] **ASST-08**: Follow-up questions use the recent turns of the current session; history is not saved on the server
+- [ ] **ASST-09**: The screen shows a clear state when the model is offline, busy or missing
+
+### Assistant Safety
+
+- [ ] **SAFE-01**: The assistant cannot change anything — its tools are read-only, enforced by architecture tests
+- [ ] **SAFE-02**: Text from tickets, comments, commits and documents is treated as data, never instructions; answers render as plain text with no HTML, images or auto-links; the residual prompt-injection risk is accepted and documented
+- [ ] **SAFE-03**: Every question is bounded — one request in flight per user, a cap on tool rounds, and a deadline
+- [ ] **SAFE-04**: No Jira or Azure DevOps call is made at question time, and logs record metadata only, never question or answer text
+- [ ] **SAFE-05**: Answer quality and the model choice are measured on a fixed set of 30-50 representative questions, including injection and not-in-the-data cases, before v1.1 ships
+
+### v1.1 decisions (2026-10-13)
+
+- **Scoping: shared, like v1.** Local data already has no per-user filter, so the assistant answers from everything the app holds. It must never claim to honour per-user Jira permissions. A `project_key` is stored on each index chunk so filtering can be added later without re-indexing.
+- **Production hardware: unknown.** Build and test on the 4 GB dev GPU (`qwen3:4b`); the model is a config property; re-measure on the real host before shipping.
+- **Postgres: the compose Postgres.** The image switches to pgvector and the extension is created by migration.
+- **Phase order: index first** (9 index, 10 retrieval Q&A, 11 tools, 12 chat UI).
+- **No saved conversations** in v1.1. **Index only what the screens show.** **Prompt-injection residual risk accepted.**
+
+### v1.1 Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Filtering answers by each user's Jira permissions | Decided shared like v1; `project_key` stored so it can be added later |
+| Saved conversations, feedback thumbs, admin re-index screen | Deferred — no stated need; a re-index endpoint covers ops |
+| Write or action tools | The assistant is advisory and read-only (SAFE-01) |
+| Cloud LLM fallback | No data egress |
+| Agent frameworks, free-text-to-SQL | Over-engineering; a bounded loop over existing services is enough |
+
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in the current roadmap.
@@ -216,6 +266,25 @@ Which phases cover which requirements. Populated during roadmap creation.
 | INSIGHT-02 | Phase 8 | Pending |
 | INSIGHT-03 | Phase 8 (data captured in Phase 6) | Pending |
 | UX-01 | Phase 5 (resolved) | Deferred to v2 |
+| IDX-01 | TBD (v1.1) | Pending |
+| IDX-02 | TBD (v1.1) | Pending |
+| IDX-03 | TBD (v1.1) | Pending |
+| IDX-04 | TBD (v1.1) | Pending |
+| IDX-05 | TBD (v1.1) | Pending |
+| ASST-01 | TBD (v1.1) | Pending |
+| ASST-02 | TBD (v1.1) | Pending |
+| ASST-03 | TBD (v1.1) | Pending |
+| ASST-04 | TBD (v1.1) | Pending |
+| ASST-05 | TBD (v1.1) | Pending |
+| ASST-06 | TBD (v1.1) | Pending |
+| ASST-07 | TBD (v1.1) | Pending |
+| ASST-08 | TBD (v1.1) | Pending |
+| ASST-09 | TBD (v1.1) | Pending |
+| SAFE-01 | TBD (v1.1) | Pending |
+| SAFE-02 | TBD (v1.1) | Pending |
+| SAFE-03 | TBD (v1.1) | Pending |
+| SAFE-04 | TBD (v1.1) | Pending |
+| SAFE-05 | TBD (v1.1) | Pending |
 
 **Coverage:**
 - v1 requirements: 47 total (AUTH 4 + JIRA 6 + REL 6 + TMPL 8 + DOC 9 + ADO 5 + DEPL 4 + AUDIT 4 + UX 1) — was 40; added 2026-07-31: TMPL-08/TMPL-09/DOC-08 (document chrome), REL-08 (manual release items), AUDIT-04 (cross-release deployment history), UX-01 (drag-and-drop). Plus DOC-09 (cross-release documentation readiness). Analytics (ANLY-01..06) was raised and then DROPPED the same day — Jira ships those reports; this tool must answer what Jira cannot.
@@ -329,5 +398,4 @@ tests). Three requirements had been marked Complete before the evidence supporte
 
 ---
 *Requirements defined: 2026-07-27*
-*Last updated: 2026-07-30 — corrected AUTH-01/02/04 from Complete to In Progress; live-Jira
-evidence (plan 01-08) not yet gathered*
+*Last updated: 2026-10-13 — milestone v1.1 Release Assistant requirements added (IDX, ASST, SAFE)*
