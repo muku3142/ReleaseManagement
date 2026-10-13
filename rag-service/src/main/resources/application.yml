@@ -1,0 +1,56 @@
+spring:
+  application:
+    name: rag-service
+  datasource:
+    url: ${RAG_DB_URL:jdbc:postgresql://localhost:5432/ragdb}
+    username: ${RAG_DB_USER:rag}
+    password: ${RAG_DB_PASSWORD:rag}
+  flyway:
+    enabled: true
+  threads:
+    virtual:
+      enabled: true
+server:
+  port: 8081
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+rag:
+  admin-key: ${RAG_ADMIN_KEY}
+  ollama:
+    base-url: ${RAG_OLLAMA_BASE_URL:http://host.docker.internal:11434}
+    connect-timeout: PT2S
+    read-timeout: PT60S
+    health-timeout: PT2S
+    batch-size: 32
+    document-prefix: "search_document: "
+    query-prefix: "search_query: "
+  embedding:
+    default-model: nomic-embed-text
+    allowed-models: nomic-embed-text
+  chunking:
+    max-chars: 1480   # header + passage; leaves room for the adapter's model prefix under the 1,500-char safe limit
+    overlap-chars: 150
+  limits:
+    max-text-bytes: 1048576
+    max-request-bytes: 2097152
+    max-title-chars: 300
+  search:
+    default-k: 10
+    max-k: 50
+  worker:
+    initial-delay: PT5S
+    poll-interval: PT2S
+    batch-size: 8
+    lease: PT10M
+    backoff-min: PT1S
+    backoff-max: PT5M

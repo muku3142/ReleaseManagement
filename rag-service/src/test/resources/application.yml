@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: rag-service
+  flyway:
+    enabled: true
+  threads:
+    virtual:
+      enabled: true
+server:
+  port: 8081
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+rag:
+  admin-key: test-admin-key-0123456789-abcdefghijklmnop
+  ollama:
+    base-url: http://localhost:1
+    connect-timeout: PT1S
+    read-timeout: PT2S
+    health-timeout: PT2S
+    batch-size: 32
+    document-prefix: "search_document: "
+    query-prefix: "search_query: "
+  embedding:
+    default-model: nomic-embed-text
+    allowed-models: nomic-embed-text
+  chunking:
+    max-chars: 1480
+    overlap-chars: 150
+  limits:
+    max-text-bytes: 1048576
+    max-request-bytes: 2097152
+    max-title-chars: 300
+  search:
+    default-k: 10
+    max-k: 50
+  worker:
+    initial-delay: PT1H
+    poll-interval: PT2S
+    batch-size: 8
+    lease: PT10M
+    backoff-min: PT1S
+    backoff-max: PT5M
