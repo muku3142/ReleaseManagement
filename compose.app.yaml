@@ -16,6 +16,9 @@ services:
       POSTGRES_DB: releasemgmt
       POSTGRES_USER: releasemgmt
       POSTGRES_PASSWORD: ${RM_DB_PASSWORD:-releasemgmt}
+    ports:
+      # Loopback only, so a desktop SQL client can connect without exposing the database on the network.
+      - "127.0.0.1:5432:5432"
     volumes:
       # postgres:18+ stores data in a major-version subdirectory, so the mount
       # goes at /var/lib/postgresql, NOT /var/lib/postgresql/data. Mounting the
