@@ -78,6 +78,12 @@ public class IndexWorker {
             try {
                 vectors = embeddings.embed(doc.embeddingModel(), EmbeddingPurpose.DOCUMENT, inputs);
             } catch (EmbeddingUnavailableException e) {
+                // Ollama is up, so this document or its model is the problem: keep the lease so it retries
+                // when the lease expires, and keep the rest of the shared queue moving
+                if (embeddings.isAvailable()) {
+                    log.warn("Embedding failed for document {} while Ollama is up; retrying in {}", doc.id(), lease);
+                    continue;
+                }
                 List<UUID> remaining = claimed.subList(i, claimed.size()).stream().map(ClaimedDocument::id).toList();
                 queue.release(remaining);
                 backOff();

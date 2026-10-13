@@ -2,6 +2,7 @@ package com.evision.ragservice.application;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
@@ -140,6 +141,24 @@ class IndexWorkerIT {
         assertThat(worker.runOnce()).isZero();
 
         assertThat(status("a")).isEqualTo("PENDING");
+    }
+
+    @Test
+    void documentSpecificErrorWhileOllamaIsUpDoesNotStallTheQueue() {
+        push("a", "A", "alpha");
+        push("b", "B", "beta");
+        wm.stubFor(get(urlEqualTo("/api/version")).willReturn(aResponse().withStatus(200)));
+        stubOk();
+        wm.stubFor(embedStub().withRequestBody(containing("alpha")).atPriority(1)
+                .willReturn(aResponse().withStatus(500)));
+
+        assertThat(worker.runOnce()).isEqualTo(1);
+
+        assertThat(status("a")).isEqualTo("PENDING");
+        assertThat(status("b")).isEqualTo("INDEXED");
+        assertThat(worker.currentBackoff()).isNull();
+        assertThat(jdbc.sql("SELECT lease_until > now() FROM document WHERE external_id = 'a'")
+                .query(Boolean.class).single()).isTrue();
     }
 
     @Test
