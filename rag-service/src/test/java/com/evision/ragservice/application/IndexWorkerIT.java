@@ -162,6 +162,40 @@ class IndexWorkerIT {
     }
 
     @Test
+    void unchunkableDocumentFailsAndTheBatchContinues() {
+        push("a", "A", "alpha");
+        push("b", "B", "beta");
+        jdbc.sql("UPDATE document SET title = repeat('t', 1400) WHERE external_id = 'a'").update();
+        stubOk();
+
+        assertThat(worker.runOnce()).isEqualTo(1);
+
+        assertThat(status("a")).isEqualTo("FAILED");
+        assertThat(jdbc.sql("SELECT status_reason FROM document WHERE external_id = 'a'").query(String.class).single())
+                .contains("title is too long");
+        assertThat(status("b")).isEqualTo("INDEXED");
+    }
+
+    @Test
+    void unexpectedErrorKeepsTheLeaseAndTheBatchContinues() {
+        push("a", "A", "alpha");
+        push("b", "B", "beta");
+        stubOk();
+        // pgvector rejects infinite components, so complete() throws a DataAccessException
+        String infinite = "{\"embeddings\":[[1e39" + ",0.5".repeat(767) + "]]}";
+        wm.stubFor(embedStub().withRequestBody(containing("alpha")).atPriority(1)
+                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/json")
+                        .withBody(infinite)));
+
+        assertThat(worker.runOnce()).isEqualTo(1);
+
+        assertThat(status("a")).isEqualTo("PENDING");
+        assertThat(status("b")).isEqualTo("INDEXED");
+        assertThat(jdbc.sql("SELECT lease_until > now() FROM document WHERE external_id = 'a'")
+                .query(Boolean.class).single()).isTrue();
+    }
+
+    @Test
     void tickMakesNoCallWhileBackingOff() {
         push("a", "A", "alpha");
         stubStatus(500, "{}");

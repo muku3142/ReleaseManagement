@@ -6,6 +6,7 @@ import com.evision.ragservice.domain.ClaimedDocument;
 import com.evision.ragservice.domain.EmbeddingPurpose;
 import com.evision.ragservice.domain.EmbeddingRejectedException;
 import com.evision.ragservice.domain.EmbeddingUnavailableException;
+import com.evision.ragservice.domain.InvalidContentException;
 import com.evision.ragservice.ports.EmbeddingPort;
 import com.evision.ragservice.ports.IndexQueue;
 import java.time.Duration;
@@ -67,45 +68,57 @@ public class IndexWorker {
         int failed = 0;
         for (int i = 0; i < claimed.size(); i++) {
             ClaimedDocument doc = claimed.get(i);
-            List<String> passages = chunker.chunk(doc.title(), doc.text());
-            if (passages.isEmpty()) {
-                queue.fail(doc.id(), doc.contentHash(), "Document has no indexable text");
-                failed++;
-                continue;
-            }
-            List<String> inputs = passages.stream().map(p -> Chunker.withHeader(doc.title(), p)).toList();
-            List<float[]> vectors;
             try {
-                vectors = embeddings.embed(doc.embeddingModel(), EmbeddingPurpose.DOCUMENT, inputs);
-            } catch (EmbeddingUnavailableException e) {
-                // Ollama is up, so this document or its model is the problem: keep the lease so it retries
-                // when the lease expires, and keep the rest of the shared queue moving
-                if (embeddings.isAvailable()) {
-                    log.warn("Embedding failed for document {} while Ollama is up; retrying in {}", doc.id(), lease);
+                List<String> passages = chunker.chunk(doc.title(), doc.text());
+                if (passages.isEmpty()) {
+                    queue.fail(doc.id(), doc.contentHash(), "Document has no indexable text");
+                    failed++;
                     continue;
                 }
-                List<UUID> remaining = claimed.subList(i, claimed.size()).stream().map(ClaimedDocument::id).toList();
-                queue.release(remaining);
-                backOff();
-                log.warn("Embedding unavailable; {} documents left pending; next attempt in {}",
-                        remaining.size(), backoff);
-                return indexed;
-            } catch (EmbeddingRejectedException e) {
-                queue.fail(doc.id(), doc.contentHash(), "Embedding model rejected the content");
-                log.info("Document {} failed: content rejected", doc.id());
-                failed++;
+                List<String> inputs = passages.stream().map(p -> Chunker.withHeader(doc.title(), p)).toList();
+                List<float[]> vectors;
+                try {
+                    vectors = embeddings.embed(doc.embeddingModel(), EmbeddingPurpose.DOCUMENT, inputs);
+                } catch (EmbeddingUnavailableException e) {
+                    // Ollama is up, so this document or its model is the problem: keep the lease so it retries
+                    // when the lease expires, and keep the rest of the shared queue moving
+                    if (embeddings.isAvailable()) {
+                        log.warn("Embedding failed for document {} while Ollama is up; retrying in {}",
+                                doc.id(), lease);
+                        continue;
+                    }
+                    List<UUID> remaining =
+                            claimed.subList(i, claimed.size()).stream().map(ClaimedDocument::id).toList();
+                    queue.release(remaining);
+                    backOff();
+                    log.warn("Embedding unavailable; {} documents left pending; next attempt in {}",
+                            remaining.size(), backoff);
+                    return indexed;
+                } catch (EmbeddingRejectedException e) {
+                    queue.fail(doc.id(), doc.contentHash(), "Embedding model rejected the content");
+                    log.info("Document {} failed: content rejected", doc.id());
+                    failed++;
+                    recover();
+                    continue;
+                }
                 recover();
-                continue;
-            }
-            recover();
-            List<ChunkEmbedding> chunks = new ArrayList<>(passages.size());
-            for (int c = 0; c < passages.size(); c++) {
-                chunks.add(new ChunkEmbedding(c, passages.get(c), vectors.get(c)));
-            }
-            if (queue.complete(doc.id(), doc.contentHash(), doc.embeddingModel(), chunks)) {
-                indexed++;
-            } else {
-                log.debug("Discarded stale embedding for document {}", doc.id());
+                List<ChunkEmbedding> chunks = new ArrayList<>(passages.size());
+                for (int c = 0; c < passages.size(); c++) {
+                    chunks.add(new ChunkEmbedding(c, passages.get(c), vectors.get(c)));
+                }
+                if (queue.complete(doc.id(), doc.contentHash(), doc.embeddingModel(), chunks)) {
+                    indexed++;
+                } else {
+                    log.debug("Discarded stale embedding for document {}", doc.id());
+                }
+            } catch (InvalidContentException e) {
+                queue.fail(doc.id(), doc.contentHash(), e.getMessage());
+                log.info("Document {} failed: invalid content", doc.id());
+                failed++;
+            } catch (RuntimeException e) {
+                // Keep the lease so the document retries later instead of blocking the rest of the batch
+                log.error("Indexing document {} failed with {}; retrying in {}",
+                        doc.id(), e.getClass().getSimpleName(), lease);
             }
         }
         if (!claimed.isEmpty()) {
