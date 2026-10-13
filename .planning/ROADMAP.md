@@ -463,7 +463,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 6. Azure DevOps Enrichment | 9/10 | In Progress|  |
 | 7. Promotion Tracking & Audit Trail | 6/7 | In Progress|  |
 | 8. Release Insights Dashboard | 7/8 | In Progress|  |
-| 9. RAG Service Foundation & Index | 7/11 | In Progress |  |
+| 9. RAG Service Foundation & Index | 9/11 | In Progress |  |
 | 10. RAG Chat & Citations | 0/TBD | Not started | - |
 | 11. Tool-Call Protocol | 0/TBD | Not started | - |
 | 12. ReleaseManagement as First Client | 0/TBD | Not started | - |
@@ -567,8 +567,8 @@ Plans:
 - [x] 09-07-PLAN.md — API key filter, admin client endpoints, collection endpoints (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
-- [ ] 09-08-PLAN.md — Document endpoints and background index worker (wave 4)
-- [ ] 09-09-PLAN.md — Search and status endpoints, readiness during Ollama outage (wave 4)
+- [x] 09-08-PLAN.md — Document endpoints and background index worker (wave 4)
+- [x] 09-09-PLAN.md — Search and status endpoints, readiness during Ollama outage (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 - [ ] 09-10-PLAN.md — OpenAPI contract, privilege IT, Dockerfile and compose service (wave 5)
