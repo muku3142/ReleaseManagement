@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-10-13T07:36:53.629Z"
 last_activity: 2026-10-13
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -24,9 +24,9 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 9 (Embeddings & Knowledge Index) — not started; roadmap for v1.1 defined (Phases 9-12)
 Plan: —
-Status: Defining requirements
+Status: Ready to plan Phase 9
 Last activity: 2026-10-13 — Milestone v1.1 started
 
 **v1 (Phases 1-8) is still open — not archived, phase directories kept on purpose.** Code for every v1 phase is

@@ -266,25 +266,25 @@ Which phases cover which requirements. Populated during roadmap creation.
 | INSIGHT-02 | Phase 8 | Pending |
 | INSIGHT-03 | Phase 8 (data captured in Phase 6) | Pending |
 | UX-01 | Phase 5 (resolved) | Deferred to v2 |
-| IDX-01 | TBD (v1.1) | Pending |
-| IDX-02 | TBD (v1.1) | Pending |
-| IDX-03 | TBD (v1.1) | Pending |
-| IDX-04 | TBD (v1.1) | Pending |
-| IDX-05 | TBD (v1.1) | Pending |
-| ASST-01 | TBD (v1.1) | Pending |
-| ASST-02 | TBD (v1.1) | Pending |
-| ASST-03 | TBD (v1.1) | Pending |
-| ASST-04 | TBD (v1.1) | Pending |
-| ASST-05 | TBD (v1.1) | Pending |
-| ASST-06 | TBD (v1.1) | Pending |
-| ASST-07 | TBD (v1.1) | Pending |
-| ASST-08 | TBD (v1.1) | Pending |
-| ASST-09 | TBD (v1.1) | Pending |
-| SAFE-01 | TBD (v1.1) | Pending |
-| SAFE-02 | TBD (v1.1) | Pending |
-| SAFE-03 | TBD (v1.1) | Pending |
-| SAFE-04 | TBD (v1.1) | Pending |
-| SAFE-05 | TBD (v1.1) | Pending |
+| IDX-01 | Phase 9 | Pending |
+| IDX-02 | Phase 9 | Pending |
+| IDX-03 | Phase 9 | Pending |
+| IDX-04 | Phase 9 | Pending |
+| IDX-05 | Phase 9 | Pending |
+| ASST-01 | Phase 12 | Pending |
+| ASST-02 | Phase 10 | Pending |
+| ASST-03 | Phase 11 | Pending |
+| ASST-04 | Phase 10 | Pending |
+| ASST-05 | Phase 12 | Pending |
+| ASST-06 | Phase 11 | Pending |
+| ASST-07 | Phase 12 | Pending |
+| ASST-08 | Phase 12 | Pending |
+| ASST-09 | Phase 12 | Pending |
+| SAFE-01 | Phase 11 | Pending |
+| SAFE-02 | Phase 10 | Pending |
+| SAFE-03 | Phase 10 | Pending |
+| SAFE-04 | Phase 10 | Pending |
+| SAFE-05 | Phase 12 | Pending |
 
 **Coverage:**
 - v1 requirements: 47 total (AUTH 4 + JIRA 6 + REL 6 + TMPL 8 + DOC 9 + ADO 5 + DEPL 4 + AUDIT 4 + UX 1) — was 40; added 2026-07-31: TMPL-08/TMPL-09/DOC-08 (document chrome), REL-08 (manual release items), AUDIT-04 (cross-release deployment history), UX-01 (drag-and-drop). Plus DOC-09 (cross-release documentation readiness). Analytics (ANLY-01..06) was raised and then DROPPED the same day — Jira ships those reports; this tool must answer what Jira cannot.
