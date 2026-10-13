@@ -85,6 +85,19 @@ class MetadataRulesTest {
     }
 
     @Test
+    void parseFilterAppliesTheMetadataKeyAndLengthLimits() {
+        Map<String, Object> tooMany = new HashMap<>();
+        IntStream.rangeClosed(0, MetadataRules.MAX_KEYS).forEach(i -> tooMany.put("k" + i, "v"));
+        String tooLong = "x".repeat(MetadataRules.MAX_STRING_VALUE_LENGTH + 1);
+
+        assertThatThrownBy(() -> MetadataRules.parseFilter(tooMany)).isInstanceOf(InvalidContentException.class);
+        assertThatThrownBy(() -> MetadataRules.parseFilter(Map.of("a", tooLong)))
+                .isInstanceOf(InvalidContentException.class);
+        assertThatThrownBy(() -> MetadataRules.parseFilter(Map.of("a", List.of("ok", tooLong))))
+                .isInstanceOf(InvalidContentException.class);
+    }
+
+    @Test
     void messagesNameTheKeyButNeverTheValue() {
         assertThatThrownBy(() -> MetadataRules.validateMetadata(Map.of("secret_field", "SENSITIVE\u0000VALUE")))
                 .satisfies(e -> assertThat(e.getMessage()).contains("secret_field").doesNotContain("SENSITIVE"));

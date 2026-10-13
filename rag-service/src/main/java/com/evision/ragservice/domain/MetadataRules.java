@@ -21,16 +21,10 @@ public final class MetadataRules {
         if (metadata == null) {
             return;
         }
-        if (metadata.size() > MAX_KEYS) {
-            throw new InvalidContentException("metadata must not have more than " + MAX_KEYS + " keys");
-        }
+        requireKeyCount("metadata", metadata);
         metadata.forEach((key, value) -> {
             requireValidKey("metadata", key);
             requireScalar("metadata value for key '" + key + "'", value);
-            if (value instanceof String s && s.length() > MAX_STRING_VALUE_LENGTH) {
-                throw new InvalidContentException(
-                        "metadata value for key '" + key + "' must not exceed " + MAX_STRING_VALUE_LENGTH + " characters");
-            }
         });
     }
 
@@ -38,6 +32,7 @@ public final class MetadataRules {
         if (filter == null || filter.isEmpty()) {
             return MetadataFilter.none();
         }
+        requireKeyCount("filter", filter);
         List<MetadataFilter.Clause> clauses = new ArrayList<>();
         filter.forEach((key, value) -> {
             requireValidKey("filter", key);
@@ -70,6 +65,12 @@ public final class MetadataRules {
         return List.of(value);
     }
 
+    private static void requireKeyCount(String owner, Map<String, Object> map) {
+        if (map.size() > MAX_KEYS) {
+            throw new InvalidContentException(owner + " must not have more than " + MAX_KEYS + " keys");
+        }
+    }
+
     private static void requireValidKey(String owner, String key) {
         if (key == null || !KEY.matcher(key).matches()) {
             throw new InvalidContentException(
@@ -82,6 +83,9 @@ public final class MetadataRules {
             throw new InvalidContentException(field + " must be a string or a number");
         }
         if (value instanceof String s) {
+            if (s.length() > MAX_STRING_VALUE_LENGTH) {
+                throw new InvalidContentException(field + " must not exceed " + MAX_STRING_VALUE_LENGTH + " characters");
+            }
             rejectNul(field, s);
         }
     }
