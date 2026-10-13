@@ -101,11 +101,11 @@ Defined 2026-10-13. A read-only assistant that answers plain-language questions 
 
 ### RAG Service — Index
 
-- [ ] **RAG-01**: An internal app with its own API key can create collections and push, replace or delete documents (text, title, URL, metadata) by its own ids, and sees only its own collections
-- [ ] **RAG-02**: Pushed documents become searchable by meaning through a self-hosted embedding model; unchanged content is not re-embedded and deleted content never appears
-- [ ] **RAG-03**: Ingestion is asynchronous and survives model-server outages — pushes are accepted while Ollama is down and indexed when it returns
-- [ ] **RAG-04**: An app can re-index a collection and see each collection's indexing status and last-indexed time
-- [ ] **RAG-05**: An app can search a collection with optional metadata filters and get ranked passages with their source references
+- [x] **RAG-01**: An internal app with its own API key can create collections and push, replace or delete documents (text, title, URL, metadata) by its own ids, and sees only its own collections
+- [x] **RAG-02**: Pushed documents become searchable by meaning through a self-hosted embedding model; unchanged content is not re-embedded and deleted content never appears
+- [x] **RAG-03**: Ingestion is asynchronous and survives model-server outages — pushes are accepted while Ollama is down and indexed when it returns
+- [x] **RAG-04**: An app can re-index a collection and see each collection's indexing status and last-indexed time
+- [x] **RAG-05**: An app can search a collection with optional metadata filters and get ranked passages with their source references
 
 ### RAG Service — Chat
 
@@ -113,7 +113,7 @@ Defined 2026-10-13. A read-only assistant that answers plain-language questions 
 - [ ] **RAG-07**: Answers cite sources built by the service from passage metadata and tool-result sources, never from model text
 - [ ] **RAG-08**: An app can supply tool definitions; the service returns tool calls, the app runs them and returns results, and the service answers with them — the service never calls into apps
 - [ ] **RAG-09**: The service says it does not know when the sources do not support an answer
-- [ ] **RAG-10**: The service API is published as an OpenAPI contract any internal app can integrate against
+- [x] **RAG-10**: The service API is published as an OpenAPI contract any internal app can integrate against
 - [ ] **RAG-11**: An app can send text with an instruction and receive the transformed text streamed back, with no retrieval involved (generic summarize/clean/rewrite)
 
 ### RAG Service — Safety
@@ -277,16 +277,16 @@ Which phases cover which requirements. Populated during roadmap creation.
 | INSIGHT-02 | Phase 8 | Pending |
 | INSIGHT-03 | Phase 8 (data captured in Phase 6) | Pending |
 | UX-01 | Phase 5 (resolved) | Deferred to v2 |
-| RAG-01 | Phase 9 | Pending |
-| RAG-02 | Phase 9 | Pending |
-| RAG-03 | Phase 9 | Pending |
-| RAG-04 | Phase 9 | Pending |
-| RAG-05 | Phase 9 | Pending |
+| RAG-01 | Phase 9 | Complete |
+| RAG-02 | Phase 9 | Complete |
+| RAG-03 | Phase 9 | Complete |
+| RAG-04 | Phase 9 | Complete |
+| RAG-05 | Phase 9 | Complete |
 | RAG-06 | Phase 10 | Pending |
 | RAG-07 | Phase 10 | Pending |
 | RAG-08 | Phase 11 | Pending |
 | RAG-09 | Phase 10 | Pending |
-| RAG-10 | Phase 9 | Pending |
+| RAG-10 | Phase 9 | Complete |
 | SAFE-01 | Phase 10 | Pending |
 | SAFE-02 | Phase 10 | Pending |
 | SAFE-03 | Phase 10 | Pending |
