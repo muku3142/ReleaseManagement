@@ -4,12 +4,12 @@ plan: 11
 subsystem: rag-service
 tags: [rollout, live-stack, pgvector, ollama, verification]
 requirements: [RAG-01, RAG-02, RAG-03, RAG-04, RAG-05, RAG-10]
-status: awaiting-human-verification
+status: complete
 ---
 
 # Phase 9 Plan 11: Live rollout and end-to-end verification Summary
 
-Task 1 (live rollout plus end-to-end and outage drills against the real host Ollama) passed on every step with no code changes. Task 2 (human verification) is pending.
+Task 1 (live rollout plus end-to-end and outage drills against the real host Ollama) passed on every step with no code changes. Task 2 (human verification) was approved by the user on 2026-10-13.
 
 ## Task 1 evidence
 
@@ -57,12 +57,14 @@ Printed `OK`.
 
 None. No code changes and no fix commits. Minor note: the docs one-off command works unchanged in an interactive terminal. Add `-T` for non-TTY use. Not changed.
 
-## Task 2: awaiting human verification
+## Task 2: human verification
 
-Blocking `checkpoint:human-verify`. Not approved by the executor. The user's observations on steps 1-3 and their answers on choices (a) and (b) are to be recorded here.
+Approved by the user on 2026-10-13. The user replied with the resume signal "approved" only. No per-step observations were supplied, so the outcomes below are **asserted, not observed**:
 
-- Step 1: v1 app unaffected, at `http://localhost:8080`: not run
-- Step 2: swagger-ui at `http://localhost:8081/swagger-ui/index.html`: not run
-- Step 3: Task 1 results above: not run
-- (a) `RAG_ADMIN_KEY` required by compose up: not answered
-- (b) One-way isolation: not answered
+- Step 1, v1 app unaffected at `http://localhost:8080`: approved, no observation given. Automated evidence: `/actuator/health` returned 200 and the flyway history count was unchanged (Task 1, steps 4 and 6).
+- Step 2, swagger-ui at `http://localhost:8081/swagger-ui/index.html`: approved, no observation given. Automated evidence: `/v3/api-docs` returned 200 and contains the search path (7j).
+- Step 3, Task 1 results reviewed: approved.
+- (a) `RAG_ADMIN_KEY` required by compose up: accepted.
+- (b) One-way isolation (`rag` cannot read `releasemgmt`; the superuser can read `ragdb`): accepted.
+
+Residual: nobody has walked through a v1 release or document flow by hand on the pgvector image. That flow is covered only by the 946-test main suite (09-01) and the health check.
