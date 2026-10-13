@@ -18,6 +18,8 @@ Given a set of Jira tickets, produce accurate and consistent release documentati
 - Free-text questions answered by vector search (pgvector in the existing Postgres) over ticket text, generated documents and code links
 - Index kept current when tickets are refreshed and documents generated; no Jira/ADO call at question time
 
+**Architecture (approved 2026-10-13):** a standalone, reusable RAG service in `rag-service/`; ReleaseManagement is its first client — see Key Decisions.
+
 **Key context:** self-hosted Ollama only, so no release or Jira data leaves the machine (decided 2026-10-13). The assistant is read-only. Ticket text, comments and commit messages are untrusted and can carry prompt injection. v1 (Phases 1-8) is code-complete with four human checks still open; v1.1 starts without clearing v1's phase directories and continues phase numbering at 9.
 
 ## Requirements
@@ -106,6 +108,7 @@ Given a set of Jira tickets, produce accurate and consistent release documentati
 | Templates see a dedicated flattened view-model, never domain or JPA entities | Two reasons that reinforce each other: it removes the reflection/method-call surface that makes template injection possible, and it stops user templates from binding to internal field names — otherwise no domain refactor is ever safe again, with no compiler to catch the breakage | — Pending |
 | Generated documents stored as immutable snapshots with template version pinned | An audit trail is worthless if a template edit retroactively changes what a three-month-old document says. Regeneration produces a new revision instead of mutating history | — Pending |
 | Modular monolith — no microservices, event sourcing, CQRS or message broker | Single-role internal tool. Hexagonal package boundaries give the isolation that actually matters (keeping Jira concepts out of the domain) without distributed-system cost | — Pending |
+| **Exception (2026-10-13): a standalone, domain-free RAG service** in `rag-service/` (own pom, Dockerfile, compose service, `ragdb` database) | The user wants retrieval-augmented Q&A reusable by other internal apps in any language. Callers push documents (`PUT/DELETE /v1/collections/{c}/documents/{id}`) and **run their own tools** — the service returns tool calls and never calls into apps or holds their credentials. Per-app API keys; Ollama is the only outbound call. Stack: Java 25 / Boot 4.1 MVC, pgvector 0.8.7, Flyway + JdbcClient, RestClient to Ollama, SseEmitter, springdoc-openapi; no AI framework. ReleaseManagement is the first client. Off-the-shelf RAG servers (AnythingLLM, Dify, RAGFlow) rejected: second stack, own user model, tool model doesn't fit. | — Approved |
 | Authenticate by reusing the user's own Jira credentials | Removes an entire user-store and password-reset surface, and makes the tool's read access exactly equal to the user's own Jira permissions rather than a broader service account | — Pending |
 
 ## Open Questions
