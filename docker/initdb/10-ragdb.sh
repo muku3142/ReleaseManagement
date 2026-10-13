@@ -2,7 +2,8 @@
 set -euo pipefail
 : "${RAG_DB_PASSWORD:?}"
 psql -v ON_ERROR_STOP=1 -v rag_pw="$RAG_DB_PASSWORD" --username "$POSTGRES_USER" --dbname postgres <<'EOSQL'
-SELECT 'CREATE ROLE rag LOGIN PASSWORD ' || quote_literal(:'rag_pw') WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'rag') \gexec
+SELECT 'CREATE ROLE rag LOGIN' WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'rag') \gexec
+ALTER ROLE rag PASSWORD :'rag_pw';
 SELECT 'CREATE DATABASE ragdb OWNER rag' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'ragdb') \gexec
 REVOKE CONNECT ON DATABASE ragdb FROM PUBLIC;
 EOSQL

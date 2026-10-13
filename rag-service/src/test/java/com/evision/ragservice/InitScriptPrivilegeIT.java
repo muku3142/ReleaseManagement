@@ -69,12 +69,29 @@ class InitScriptPrivilegeIT {
                 .hasMessageContaining("permission denied");
     }
 
-    @Test
-    void scriptIsIdempotent() throws Exception {
+    private static void runScript(String ragPassword) throws Exception {
         var result = postgres.execInContainer("bash", "-c",
-                "RAG_DB_PASSWORD=" + RAG_PASSWORD
+                "RAG_DB_PASSWORD=" + ragPassword
                         + " POSTGRES_USER=releasemgmt POSTGRES_DB=releasemgmt"
                         + " bash /docker-entrypoint-initdb.d/10-ragdb.sh");
         assertThat(result.getExitCode()).as(result.getStderr()).isZero();
+    }
+
+    @Test
+    void scriptIsIdempotent() throws Exception {
+        runScript(RAG_PASSWORD);
+    }
+
+    @Test
+    void rerunAppliesAChangedPassword() throws Exception {
+        try {
+            runScript("rag-it-rotated");
+
+            DriverManager.getConnection(url("ragdb"), "rag", "rag-it-rotated").close();
+            assertThatThrownBy(() -> DriverManager.getConnection(url("ragdb"), "rag", RAG_PASSWORD))
+                    .isInstanceOf(SQLException.class);
+        } finally {
+            runScript(RAG_PASSWORD);
+        }
     }
 }
