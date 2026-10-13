@@ -325,11 +325,12 @@ at `rag-service/openapi.json`. **`RAG_ADMIN_KEY` is required** (at least 32 char
 ### First-time setup on an existing volume
 
 Postgres init scripts run only on an empty data directory, so an existing `pgdata` volume
-needs the one-off (idempotent, safe to re-run):
+needs the one-off (idempotent, safe to re-run). The postgres container already has
+`RAG_DB_PASSWORD` from `.env`, so do not pass it with `-e`; your shell does not have it:
 
 ```bash
 docker compose -f compose.app.yaml up -d postgres
-docker compose -f compose.app.yaml exec -e RAG_DB_PASSWORD="$RAG_DB_PASSWORD" postgres bash /docker-entrypoint-initdb.d/10-ragdb.sh
+docker compose -f compose.app.yaml exec postgres bash /docker-entrypoint-initdb.d/10-ragdb.sh
 docker compose -f compose.app.yaml up --build -d rag-service
 ```
 
