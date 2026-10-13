@@ -463,7 +463,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 6. Azure DevOps Enrichment | 9/10 | In Progress|  |
 | 7. Promotion Tracking & Audit Trail | 6/7 | In Progress|  |
 | 8. Release Insights Dashboard | 7/8 | In Progress|  |
-| 9. RAG Service Foundation & Index | 0/TBD | Not started | - |
+| 9. RAG Service Foundation & Index | 0/11 | Planned    |  |
 | 10. RAG Chat & Citations | 0/TBD | Not started | - |
 | 11. Tool-Call Protocol | 0/TBD | Not started | - |
 | 12. ReleaseManagement as First Client | 0/TBD | Not started | - |
@@ -551,7 +551,30 @@ Plans:
 
 **Research flags**: Verify `pgvector/pgvector:0.8.7-pg18-trixie` pulls, attaches the existing `pgdata` volume, and works in both compose files and in Testcontainers; verify the privilege `CREATE EXTENSION vector` needs for the `ragdb` migration role and how `ragdb` is created on an existing volume; verify the `/api/embed` request/response shape, `nomic-embed-text` dimension (768), context limit and `search_document:`/`search_query:` prefixes on the installed Ollama version; check embedding quality on real ticket text and whether chat and embedding models can both stay resident on the 4 GB GPU; verify the service container can reach host Ollama (`host.docker.internal`, Linux `extra_hosts`, `OLLAMA_HOST` bind).
 **Scope notes**: Module skeleton with its own pom, Dockerfile and compose service. No ANN index (exact scan until a slow query is measured). Embedding model stored per chunk, so a model change means a re-index. Queue worker embeds outside any DB transaction. API keys stored hashed. No AI framework.
-**Plans**: TBD
+**Plans**: 11 plans
+
+**Wave 1**
+- [ ] 09-01-PLAN.md — pgvector image in both compose files, superuser ragdb init script, main ITs on the new image (wave 1)
+- [ ] 09-02-PLAN.md — `rag-service/` module skeleton, config, Flyway V1, domain records and ports (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+- [ ] 09-03-PLAN.md — Chunker, content hash, API keys, metadata rules (wave 2)
+- [ ] 09-04-PLAN.md — Ollama embedding adapter and health indicator (wave 2)
+- [ ] 09-05-PLAN.md — Client, collection and document stores (wave 2)
+- [ ] 09-06-PLAN.md — Index queue and vector search adapters (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+- [ ] 09-07-PLAN.md — API key filter, admin client endpoints, collection endpoints (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+- [ ] 09-08-PLAN.md — Document endpoints and background index worker (wave 4)
+- [ ] 09-09-PLAN.md — Search and status endpoints, readiness during Ollama outage (wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+- [ ] 09-10-PLAN.md — OpenAPI contract, privilege IT, Dockerfile and compose service (wave 5)
+
+**Wave 6** *(blocked on Wave 5 completion)*
+- [ ] 09-11-PLAN.md — Live rollout and end-to-end verification with outage drill, human checkpoint (wave 6)
 
 ### Phase 10: RAG Chat & Citations
 **Goal**: An app can ask a question over one or more collections and receive a streamed answer grounded in retrieved passages, with server-built citations, an honest "I don't know", and hard bounds on every request
