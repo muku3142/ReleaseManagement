@@ -6,7 +6,7 @@ status: planning
 last_updated: "2026-10-13T07:36:53.629Z"
 last_activity: 2026-10-13 -- Phase 09 context gathered (D-09-01..17)
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0

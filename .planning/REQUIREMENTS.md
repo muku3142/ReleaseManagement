@@ -114,6 +114,7 @@ Defined 2026-10-13. A read-only assistant that answers plain-language questions 
 - [ ] **RAG-08**: An app can supply tool definitions; the service returns tool calls, the app runs them and returns results, and the service answers with them — the service never calls into apps
 - [ ] **RAG-09**: The service says it does not know when the sources do not support an answer
 - [ ] **RAG-10**: The service API is published as an OpenAPI contract any internal app can integrate against
+- [ ] **RAG-11**: An app can send text with an instruction and receive the transformed text streamed back, with no retrieval involved (generic summarize/clean/rewrite)
 
 ### RAG Service — Safety
 
@@ -132,6 +133,8 @@ Defined 2026-10-13. A read-only assistant that answers plain-language questions 
 - [ ] **ASST-06**: A "how I answered" panel shows the tools and sources behind each answer
 - [ ] **ASST-07**: An empty chat offers starter questions, and follow-ups use the current session's turns only
 - [ ] **ASST-08**: The screen shows clear offline, busy and model-missing states, plus when the index was last updated
+- [ ] **ASST-09**: The release manager can send any generated document (release notes, runbook, approval) to the model to clean it up, summarize it, or apply a custom instruction, and sees the result stream in beside the original for comparison
+- [ ] **ASST-10**: The release manager can edit the AI result and save it as a new revision marked AI-assisted, with the instruction recorded; the original revision is never changed
 
 ### v1.1 decisions (2026-10-13)
 
@@ -296,6 +299,9 @@ Which phases cover which requirements. Populated during roadmap creation.
 | ASST-06 | Phase 13 | Pending |
 | ASST-07 | Phase 13 | Pending |
 | ASST-08 | Phase 13 | Pending |
+| RAG-11 | Phase 10 | Pending |
+| ASST-09 | Phase 14 | Pending |
+| ASST-10 | Phase 14 | Pending |
 
 **Coverage:**
 - v1 requirements: 47 total (AUTH 4 + JIRA 6 + REL 6 + TMPL 8 + DOC 9 + ADO 5 + DEPL 4 + AUDIT 4 + UX 1) — was 40; added 2026-07-31: TMPL-08/TMPL-09/DOC-08 (document chrome), REL-08 (manual release items), AUDIT-04 (cross-release deployment history), UX-01 (drag-and-drop). Plus DOC-09 (cross-release documentation readiness). Analytics (ANLY-01..06) was raised and then DROPPED the same day — Jira ships those reports; this tool must answer what Jira cannot.

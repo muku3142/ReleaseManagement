@@ -32,6 +32,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [ ] **Phase 11: Tool-Call Protocol** - The service returns tool calls, the calling app runs them and returns results, and the service answers with them
 - [ ] **Phase 12: ReleaseManagement as First Client** - RAG client adapter, async push of release data, and read-only tools run by ReleaseManagement, enforced by architecture tests
 - [ ] **Phase 13: Assistant Screen & Quality Gate** - Assistant screen behind the existing login, release-scoped entry, how-I-answered panel, and the measured golden-set gate before v1.1 ships
+- [ ] **Phase 14: AI Document Assist** - Send any generated document to the model to clean up, summarize or apply a custom instruction; review side by side and save as an AI-assisted revision
 
 ## Phase Details
 
@@ -446,7 +447,7 @@ Production environment are defined. A `current_stage` column alone is insufficie
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5.3 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13
+Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5.3 → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13 → 14
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -467,6 +468,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 11. Tool-Call Protocol | 0/TBD | Not started | - |
 | 12. ReleaseManagement as First Client | 0/TBD | Not started | - |
 | 13. Assistant Screen & Quality Gate | 0/TBD | Not started | - |
+| 14. AI Document Assist | 0/TBD | Not started | - |
 
 ### Phase 8: Release Insights Dashboard
 **Goal**: Release manager opens one screen and sees what Jira structurally cannot answer — which releases have outstanding paperwork, where each sits on the environment ladder, what went to each environment and when, and how long releases actually take
@@ -554,7 +556,7 @@ Plans:
 ### Phase 10: RAG Chat & Citations
 **Goal**: An app can ask a question over one or more collections and receive a streamed answer grounded in retrieved passages, with server-built citations, an honest "I don't know", and hard bounds on every request
 **Depends on**: Phase 9
-**Requirements**: RAG-06, RAG-07, RAG-09, SAFE-01, SAFE-02, SAFE-03
+**Requirements**: RAG-06, RAG-07, RAG-09, RAG-11, SAFE-01, SAFE-02, SAFE-03
 **Success Criteria** (what must be TRUE):
   1. A question posted to the chat endpoint streams an answer over SSE (status, token, citations, done and error events), verifiable with a curl smoke test
   2. Every answer carries citations built by the service from passage metadata, never from model text
@@ -613,6 +615,21 @@ Plans:
 
 **Research flags**: Production hardware and Ollama topology unknown (GPU/VRAM, host OS, host versus containerised Ollama); dev numbers on the 4 GB GPU are the worst case and must be re-measured on the target host. Streaming proxy behind the existing cookie login (auth on async dispatch, no proxy buffering, abort propagation to the service). Fetch-stream consumption with `AbortController`. `react-markdown` only if plain text proves insufficient, never with `rehype-raw`. Exit gate also includes an injection threat-model entry and a log/security review.
 **Scope notes**: No saved conversations, feedback thumbs or admin re-index screen (v1.1 Out of Scope). SAFE-04 is assigned here because the full golden-set run is this phase's exit gate; the set itself grows from Phase 10.
+**Plans**: TBD
+**UI hint**: yes
+**AI-integration phase**: yes (run /gsd-ai-integration-phase before planning)
+
+### Phase 14: AI Document Assist
+**Goal**: The release manager can have the local model clean up, summarize or rewrite any generated document, review the result beside the original, and keep it as a clearly marked new revision without ever altering the original
+**Depends on**: Phase 10 (RAG-11 transform endpoint), Phase 12 (ReleaseManagement's RAG client)
+**Requirements**: ASST-09, ASST-10
+**Success Criteria** (what must be TRUE):
+  1. From a generated release note, runbook or approval document the release manager can choose Clean up, Summarize or a custom instruction, and the result streams in beside the original
+  2. The result can be edited and saved as a new revision labelled AI-assisted, recording the instruction used; the original revision and its history are unchanged
+  3. Discarding the result stores nothing, and the service being offline shows a clear message without affecting document generation
+  4. Clean-up keeps every ticket and fact of the original (checked against a small fixed set of documents), and runbook/approval output carries a visible warning to verify steps before use
+**Research flags**: Prompt design per mode on the local model; long documents versus `num_ctx` (chunked transform or a size limit); how AI-assisted revisions appear in the existing revision history, exports and readiness; whether an AI-assisted revision counts as current for DOC-09 staleness.
+**Scope notes**: Uses the generic RAG-11 transform endpoint built in Phase 10; no retrieval. The original snapshot is immutable (Key Decision: documents stored as immutable snapshots).
 **Plans**: TBD
 **UI hint**: yes
 **AI-integration phase**: yes (run /gsd-ai-integration-phase before planning)
