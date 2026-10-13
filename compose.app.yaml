@@ -11,11 +11,12 @@
 
 services:
   postgres:
-    image: postgres:18
+    image: pgvector/pgvector:0.8.7-pg18-trixie
     environment:
       POSTGRES_DB: releasemgmt
       POSTGRES_USER: releasemgmt
       POSTGRES_PASSWORD: ${RM_DB_PASSWORD:-releasemgmt}
+      RAG_DB_PASSWORD: ${RAG_DB_PASSWORD:-rag}
     ports:
       # Loopback only, so a desktop SQL client can connect without exposing the database on the network.
       - "127.0.0.1:5432:5432"
@@ -24,6 +25,8 @@ services:
       # goes at /var/lib/postgresql, NOT /var/lib/postgresql/data. Mounting the
       # old path makes the image refuse to start. See docker-library/postgres#1259.
       - pgdata:/var/lib/postgresql
+      # Init scripts run only on an empty data directory; see docs/docker.md for the one-off on an existing volume.
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       # `app` waits on this, so the JVM never starts against a database that is
       # still initialising.

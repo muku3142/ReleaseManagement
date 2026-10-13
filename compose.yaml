@@ -1,10 +1,16 @@
 services:
   postgres:
-    image: postgres:18
+    image: pgvector/pgvector:0.8.7-pg18-trixie
     environment:
       POSTGRES_DB: releasemgmt
       POSTGRES_USER: releasemgmt
       POSTGRES_PASSWORD: releasemgmt
+      RAG_DB_PASSWORD: rag
     restart: always
     ports:
       - "5432:5432"
+    volumes:
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    labels:
+      # Boot's docker-compose integration matches by image name and does not recognise pgvector/pgvector.
+      org.springframework.boot.service-connection: postgres
