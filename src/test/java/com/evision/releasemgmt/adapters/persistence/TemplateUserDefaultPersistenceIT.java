@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.persistence;
 
+import com.evision.releasemgmt.PgVectorImage;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import com.evision.releasemgmt.domain.template.TemplateNotFoundException;
@@ -29,7 +30,7 @@ class TemplateUserDefaultPersistenceIT {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(PgVectorImage.IMAGE);
 
     @Autowired
     private TemplateRepository repository;

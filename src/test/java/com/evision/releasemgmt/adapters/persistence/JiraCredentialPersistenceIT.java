@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.persistence;
 
+import com.evision.releasemgmt.PgVectorImage;
 import com.evision.releasemgmt.adapters.persistence.crypto.EncryptedTokenConverter;
 import com.evision.releasemgmt.domain.auth.JiraCredential;
 import com.evision.releasemgmt.ports.ActorDirectory;
@@ -28,7 +29,7 @@ class JiraCredentialPersistenceIT {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(PgVectorImage.IMAGE);
 
     @Autowired
     private JiraCredentialRepository repository;

@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.web;
 
+import com.evision.releasemgmt.PgVectorImage;
 import com.evision.releasemgmt.adapters.web.dto.DocumentRevisionResponse;
 import com.evision.releasemgmt.adapters.web.dto.TemplateSummaryResponse;
 import com.evision.releasemgmt.application.DocumentGenerationService;
@@ -46,7 +47,7 @@ class TemplateDefaultResolutionIT {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(PgVectorImage.IMAGE);
 
     @Autowired
     private DocumentGenerationService generationService;

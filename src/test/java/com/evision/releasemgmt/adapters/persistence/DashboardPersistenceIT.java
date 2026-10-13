@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.persistence;
 
+import com.evision.releasemgmt.PgVectorImage;
 import com.evision.releasemgmt.application.PromotionService;
 import com.evision.releasemgmt.domain.dashboard.ChurnItem;
 import com.evision.releasemgmt.domain.dashboard.DashboardLedger;
@@ -45,7 +46,7 @@ class DashboardPersistenceIT {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(PgVectorImage.IMAGE);
 
     private static final Instant FROM = Instant.now().minus(2, ChronoUnit.DAYS);
     private static final Instant TO = Instant.now().plus(1, ChronoUnit.DAYS);

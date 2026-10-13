@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.web;
 
+import com.evision.releasemgmt.PgVectorImage;
 import com.evision.releasemgmt.adapters.security.AuthCookieWriter;
 import com.evision.releasemgmt.adapters.security.JwtTokenService;
 import com.evision.releasemgmt.application.JiraAccessContextService;
@@ -53,7 +54,7 @@ class AuthControllerIT {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(PgVectorImage.IMAGE);
 
     @Autowired
     private MockMvc mockMvc;
