@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,8 +16,12 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.server.PathContainer;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.ServletRequestPathUtils;
+import org.springframework.web.util.pattern.PathPattern;
+import org.springframework.web.util.pattern.PathPatternParser;
 import tools.jackson.databind.ObjectMapper;
 
 @Component
@@ -25,8 +30,10 @@ public class ApiKeyFilter extends OncePerRequestFilter {
     public static final String CLIENT_ID_ATTRIBUTE = "rag.clientId";
 
     private static final int MIN_ADMIN_KEY_LENGTH = 32;
-    private static final String API_PREFIX = "/v1/";
-    private static final String ADMIN_PREFIX = "/v1/admin/";
+    private static final PathPattern ADMIN = PathPatternParser.defaultInstance.parse("/v1/admin/**");
+    private static final List<PathPattern> PUBLIC = List.of(
+            "/actuator/**", "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").stream()
+            .map(PathPatternParser.defaultInstance::parse).toList();
     private static final String BEARER = "bearer ";
 
     private final ClientService clients;
@@ -43,9 +50,11 @@ public class ApiKeyFilter extends OncePerRequestFilter {
         this.adminKeyBytes = adminKey.getBytes(StandardCharsets.UTF_8);
     }
 
+    // Fail closed, and match the decoded path segments MVC routes on, never the raw URI
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !request.getRequestURI().startsWith(API_PREFIX);
+        PathContainer path = lookupPath(request);
+        return PUBLIC.stream().anyMatch(pattern -> pattern.matches(path));
     }
 
     @Override
@@ -56,7 +65,7 @@ public class ApiKeyFilter extends OncePerRequestFilter {
             reject(response);
             return;
         }
-        if (request.getRequestURI().startsWith(ADMIN_PREFIX)) {
+        if (ADMIN.matches(lookupPath(request))) {
             if (!MessageDigest.isEqual(token.getBytes(StandardCharsets.UTF_8), adminKeyBytes)) {
                 reject(response);
                 return;
@@ -70,6 +79,10 @@ public class ApiKeyFilter extends OncePerRequestFilter {
             request.setAttribute(CLIENT_ID_ATTRIBUTE, clientId.get());
         }
         chain.doFilter(request, response);
+    }
+
+    private static PathContainer lookupPath(HttpServletRequest request) {
+        return ServletRequestPathUtils.parseAndCache(request).pathWithinApplication();
     }
 
     private static String bearerToken(HttpServletRequest request) {
