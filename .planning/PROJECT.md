@@ -8,6 +8,18 @@ A web application that lets a release manager assemble a release from Jira ticke
 
 Given a set of Jira tickets, produce accurate and consistent release documentation plus a tracked deployment record — without anyone doing manual release bookkeeping in Jira.
 
+## Current Milestone: v1.1 Release Assistant
+
+**Goal:** Let the release manager ask questions in plain language and get answers grounded in this system's own data, with sources, from a model that runs locally.
+
+**Target features:**
+- Chat screen: ask a question, get an answer that cites its sources (release, ticket, document revision, commit)
+- Structured questions answered by the model calling the existing read-only endpoints as tools
+- Free-text questions answered by vector search (pgvector in the existing Postgres) over ticket text, generated documents and code links
+- Index kept current when tickets are refreshed and documents generated; no Jira/ADO call at question time
+
+**Key context:** self-hosted Ollama only, so no release or Jira data leaves the machine (decided 2026-10-13). The assistant is read-only. Ticket text, comments and commit messages are untrusted and can carry prompt injection. v1 (Phases 1-8) is code-complete with four human checks still open; v1.1 starts without clearing v1's phase directories and continues phase numbering at 9.
+
 ## Requirements
 
 ### Validated
@@ -28,6 +40,7 @@ Given a set of Jira tickets, produce accurate and consistent release documentati
 - [ ] Release manager can promote a release through a fixed environment ladder and see where it currently sits
 - [ ] System retains release and deployment history as an audit trail
 - [ ] Ticket-source integration sits behind a provider abstraction so a second provider can be added without reworking core
+- [ ] (v1.1) Release manager can ask questions in plain language and get sourced answers from a locally hosted model, over release and promotion data, ticket text, generated documents and code links
 
 ### Out of Scope
 
@@ -128,4 +141,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-27 after initialization*
+*Last updated: 2026-10-13 — milestone v1.1 Release Assistant started*

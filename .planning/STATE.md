@@ -1,137 +1,41 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: executing
-stopped_at: Human checks pending: 06-10, 07-07, 08-08 (all regressions green)
-last_updated: "2026-10-12T16:09:47.198Z"
-last_activity: 2026-10-12 -- Phase 08 code complete (7/8); 08-08 regression green (backend 946, frontend 336); app rebuilt; 06-10, 07-07, 08-08 human checks pending
+milestone: v1.1
+milestone_name: Release Assistant
+status: planning
+last_updated: "2026-10-13T07:36:53.629Z"
+last_activity: 2026-10-13
 progress:
-  total_phases: 12
-  completed_phases: 7
-  total_plans: 89
-  completed_plans: 84
-  percent: 94
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-07-27)
+See: .planning/PROJECT.md (updated 2026-10-13)
 
 **Core value:** Given a set of Jira tickets, produce accurate and consistent release documentation plus a tracked deployment record — without anyone doing manual release bookkeeping in Jira.
-**Current focus:** Phase 05.3 complete. Phase 05.4 (template selection at generation time) is
-inserted and unplanned — next up.
+**Current focus:** Milestone v1.1 Release Assistant — defining requirements. v1 is code-complete with four human checks open (below).
 
 ## Current Position
 
-Phase: 05.4 (template-selection-at-generation-time) — PLANNED (0/7)
-Plan: 6 of 7 — executing wave 5
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-10-13 — Milestone v1.1 started
 
-Current baselines: **backend 597 tests, frontend 210 tests**, `tsc -b` clean, full `mvn clean test`
-BUILD SUCCESS.
-
-**One thing needs a human before its phase can close:**
-
-1. **05.2's live-Jira verification** — every automated test stubs `JiraTicketPort` or mocks
-   `useTicketSearch`, so nothing proves the release scope survives a real HTTP round trip. Recorded in
-   `05.2-VERIFICATION.md` frontmatter as `human_needed`, not silently passed.
-
-- **05.1 Per-Template Logo Sizing — COMPLETE, 4/4 plans, closed 2026-08-12.** The plan 05.1-04
-  human-verify gate was closed **on the user's assertion** that they had run it and everything passed;
-  the six per-step observations the plan required were requested twice and not supplied, so
-  cross-format visual parity is **asserted, not observed**. The evidence that does exist is
-  dimensional: `GenerateThenExportSeamTest` at 15mm, proven to fail against the pre-fix adapters. The
-  re-runnable six-step procedure is still in `05.1-04-PLAN.md`'s `<how-to-verify>` block if that gap
-  is ever worth closing. Detail in `05.1-04-SUMMARY.md`. `ChromeFields` carries
-  `logoRenderHeightMm` (mm, default 30, bounds 5..120) through V6 and the full stack; both exporters
-  clamp proportionally and downward-only; the cross-format seam test uses **15mm, not the 30mm
-  default**, because at 30mm the pre-fix PDF's hard-coded `max-height: 3cm` coincidentally produces the
-  right answer and a default-height assertion would pass against broken code. Reverting the fix failed
-  4 of 4 seam tests (observed `expected: 540000L but was: 2857500L`).
-
-- **05.2 Release Ticket Selection — COMPLETE, 3/3 plans, verified 2026-08-12.** Backend 561→571,
-  frontend 185→210. The release scope is threaded as a **separate argument** to
-  `TicketSearchService.search(criteria, releaseId)` rather than as a field on `TicketSearchCriteria`, so
-  `toJql()` is structurally incapable of leaking release membership into a Jira query. `TicketBrowser`
-  is now the single browse surface — exactly one file in the app declares the results `<table>` — used
-  by both `/tickets` and the new `AddTicketsToReleaseDialog`. A frozen release renders no add affordance
-  at all (the button sits inside `{isOpen && ...}`), so refusal happens before the work rather than as a
-  409 after tickets are chosen.
-
-- **05.3 Actor Identity Display — COMPLETE, 3/3 plans, closed 2026-08-13.** Wave 1 (plan 01) built the
-  projection-only `ActorDirectory` port, `findEmailsByAccountIdIn` JPQL projection, and the batching
-  `ActorResolutionService`/`ResolvedActors` pair — proven end-to-end against a real Postgres row this
-  key cannot decrypt (`findByAccountId` throws, `ActorDirectory` still resolves the email). Wave 2
-  (plan 02) wired it into `DocumentController`, `JiraSiteConfigController`, `ReleaseController` and
-  `TemplateController` — all eight actor fields across six response DTOs now carry the resolved email,
-  with `ReleaseController.list()` and `DocumentController.revisions()` each issuing exactly one batched
-  lookup regardless of row count. Backend 579→590 (11 new controller-slice tests). Wave 3 (plan 03)
-  crossed the seam: `ActorDisplaySeamIT` drives the real `ReleaseController`/`DocumentController` beans
-  against a Postgres row whose ciphertext the active key cannot decrypt, with a mutation check
-  confirming the tests fail if the adapter is reverted to entity hydration; two new ArchUnit rules
-  (`theWebAdapterCannotReachTheTokenBearingCredentialPort`, `actorResolutionResolvesThroughActorDirectoryOnly`)
-  lock the display path out of `JiraCredentialRepository`, each proven non-vacuous by hand. Backend
-  590→597 (5 seam + 2 arch tests). The plan's human checkpoint (Task 3, pre-existing records display
-  correctly) was **approved verbatim ("approved")** — no per-step observations were volunteered or
-  recorded; see `05.3-03-SUMMARY.md`'s "Checkpoint Evidence" section for the explicit distinction from
-  05.1's "asserted, not observed" gate. The load-bearing fact, confirmed by pattern mapping rather than
-  inferred: decryption fires because `JiraCredentialEntity.token` carries
-  `@Convert(converter = EncryptedTokenConverter.class)`, so the risk attaches to the entity **type** —
-  any query returning that type can throw on a superseded key, and only a scalar projection avoids it.
-
-**Phase 05 (document-generation) is complete** — 13/13 plans, verified 2026-08-11.
-Both verification gaps were closed by gap-closure plans and the phase's human
-checkpoint was approved against a real PDF and DOCX export:
-
-- 05-12 built the document viewer route the phase designed but never registered
-  (`/releases/$releaseId/documents/$documentType`), extracted the shared
-  `RenderedDocument` module so one markdown-it instance and one set of chrome
-  markup serve both the authoring preview and the viewer, and upgraded every
-  View affordance from a dead `<a href>` to a typed `<Link>`.
-
-- 05-13 fixed generation storing flexmark HTML in a field named `markdown`,
-  which made every exported PDF and DOCX render its own source as escaped tag
-  text. `RenderResult.html()` — one accessor returning two different content
-  types, which is what made the defect look correct at every call site — is now
-  `output()`. `GenerateThenExportSeamTest` crosses generate → export with no
-  hand-written fixture on either side; reverting the fix fails 4 of its 4 tests.
-
-- Correction to `05-VERIFICATION.md`: its gap-2 text claimed chrome and both
-  export ports were also broken. They were not. Re-validation before planning
-  showed chrome already used `resolveText` (Mustache only, no flexmark) and both
-  ports already documented Markdown. Generation was the single disagreement.
-
-**Phase 05.1 was inserted after Phase 05 on 2026-08-11**, from a defect found
-while answering a question about controlling logo size: the cover logo is sized
-in three independent places and only two cap it. `DocxExportAdapter.java:204-205`
-multiplies native pixels by `EMU_PER_PIXEL` with no clamp, so a 512×512 logo is
-5.3 in tall in DOCX versus ~1.2 in in the PDF and 80 px in the browser. Uploads
-are accepted up to 2000×2000, making the DOCX worst case ~20.8 in on an 11.7-in
-A4 page. Chosen direction: a per-template `ChromeFields` setting stored on the
-snapshot, so an existing document keeps the size it was generated with.
-
-**Phase 2 is NOT formally complete.** Outstanding before it can be closed:
-
-- 02-04 dev-status capture (needs a human with a live token). Phase 6 cannot be
-  scoped until this resolves — that dependency is unchanged.
-
-- JIRA-02..07 are still `Pending` in REQUIREMENTS.md. Deliberately not ticked:
-  JIRA-03 (paging to exhaustion) is proven by WireMock only, never against a
-  >100-ticket real result set, and the evidence-notes discipline from Phase 1
-  says not to tick on a passing suite alone.
-
-Post-plan changes landed after their plans were marked complete (all recorded in
-the relevant summaries): JIRA-07 status filter, fix version made optional then
-replaced entirely by **sprint** (brings Jira's Agile API into scope, reversing
-part of a PROJECT.md exclusion), the system-field-wins fix for shadowed field
-names, table widening, and frontend tests moved to `frontend/tests/`.
-
-Status: Phase 05.4 EXECUTING (6/7) — 05.4-07 awaiting human verify. Phases 6, 7, 8 discussed; 02-04 capture in progress (unblocks Phase 6).
-Last activity: 2026-10-07 -- Phase 05.4 planned (7 plans); per-user default template added (D-05.4-03..06)
-
-Progress: [█████████░] 86%
+**v1 (Phases 1-8) is still open — not archived, phase directories kept on purpose.** Code for every v1 phase is
+merged (backend 946, frontend 340 tests green). Four blocking human checks remain, each with no SUMMARY yet:
+- 05.4-07 — template selection hand check
+- 06-10 — live Jira/ADO tenant check of code links and the ADO credential
+- 07-07 — promotion ladder / corrections / VOIDED walk-through
+- 08-08 — release insights dashboard walk-through
+Close v1 with `/gsd-complete-milestone` once all four are approved.
 
 ## Performance Metrics
 
