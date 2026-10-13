@@ -108,6 +108,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                                                                    HttpHeaders headers,
                                                                    HttpStatusCode status,
                                                                    WebRequest request) {
+        // RequestSizeLimitFilter's bounded stream fails mid-parse, so Jackson wraps it
+        if (ex.getMostSpecificCause() instanceof PayloadTooLargeException tooLarge) {
+            return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).body(handlePayloadTooLarge(tooLarge));
+        }
         ProblemDetail pd = problem(HttpStatus.BAD_REQUEST, "Malformed request",
                 "Request body is not valid JSON for this endpoint", "MALFORMED_REQUEST");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);

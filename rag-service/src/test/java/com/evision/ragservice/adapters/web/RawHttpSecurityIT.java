@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.evision.ragservice.PgVectorImage;
 import com.jayway.jsonpath.JsonPath;
+import java.io.ByteArrayInputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +38,9 @@ class RawHttpSecurityIT {
 
     @Value("${rag.admin-key}")
     private String adminKey;
+
+    @Value("${rag.limits.max-request-bytes}")
+    private long maxRequestBytes;
 
     @Autowired
     private JdbcClient jdbc;
@@ -93,6 +98,29 @@ class RawHttpSecurityIT {
         HttpRequest list = request("/v1/%61dmin/clients").header("Authorization", "Bearer " + adminKey).GET().build();
 
         assertThat(send(list).statusCode()).isEqualTo(200);
+    }
+
+    private HttpResponse<String> createClientChunked(String name) throws Exception {
+        byte[] body = ("{\"name\":\"" + name + "\"}").getBytes(StandardCharsets.UTF_8);
+        // ofInputStream has no known length, so the JDK client sends Transfer-Encoding: chunked
+        HttpRequest create = request("/v1/admin/clients").header("Content-Type", "application/json")
+                .header("Authorization", "Bearer " + adminKey)
+                .POST(HttpRequest.BodyPublishers.ofInputStream(() -> new ByteArrayInputStream(body))).build();
+        return send(create);
+    }
+
+    @Test
+    void chunkedBodyOverTheLimitIsRejected() throws Exception {
+        HttpResponse<String> response = createClientChunked("a".repeat((int) maxRequestBytes + 1024));
+
+        assertThat(response.statusCode()).isEqualTo(413);
+        assertThat(JsonPath.<String>read(response.body(), "$.reason")).isEqualTo("PAYLOAD_TOO_LARGE");
+        assertThat(jdbc.sql("SELECT count(*) FROM client_app").query(Long.class).single()).isZero();
+    }
+
+    @Test
+    void chunkedBodyUnderTheLimitIsAccepted() throws Exception {
+        assertThat(createClientChunked("alpha").statusCode()).isEqualTo(201);
     }
 
     @Test
