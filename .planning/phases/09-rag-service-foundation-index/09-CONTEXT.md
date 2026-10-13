@@ -158,6 +158,7 @@ v1 behaviour must not change.
 - Server-side extraction of HTML, PDF or DOCX (D-09-06).
 - An HNSW index: only after a measured slow query.
 - Key expiry policies (D-09-04).
+- Amazon Bedrock instead of Ollama: a new `EmbeddingPort` adapter, a Flyway migration off `vector(768)` (Bedrock embedding models output 256/512/1024/1536, not 768) and a full re-index. Reverses the local-only decision. The `EmbeddingPurpose` seam keeps callers unchanged.
 </deferred>
 
 ---
