@@ -39,9 +39,10 @@ The two also differ in data durability. `compose.yaml` declares no volume — it
 anonymous and disposable, which is what you want for a dev database you reset freely.
 `compose.app.yaml` uses a named `pgdata` volume so data survives `down`/`up`.
 
-> Both stacks publish port **5432** and share the compose project name `releasemanagement`.
-> Run one at a time — `docker compose down` before bringing up the other, or you get a port
-> clash.
+> `compose.app.yaml` publishes Postgres on `127.0.0.1:5432` only; `compose.yaml` publishes
+> `5432`. Both share the compose project name `releasemanagement` and the 5432 host port, so
+> run one at a time — `docker compose down` before bringing up the other, or you get a port
+> clash. Both use `pgvector/pgvector:0.8.7-pg18-trixie`.
 
 ---
 
@@ -310,6 +311,55 @@ dependency layers.
 Before pushing anywhere real, read [Not production-ready as-is](#not-production-ready-as-is)
 — in particular that this stack runs with `SPRING_PROFILES_ACTIVE=local`, which disables the
 `Secure` cookie flag.
+
+---
+
+## rag-service
+
+A separate retrieval service (collections, documents, semantic search) on port **8081**. It
+starts with the stack, depends only on Postgres, and does not affect the `app` service.
+Swagger UI: `http://localhost:8081/swagger-ui/index.html`; contract at `/v3/api-docs`, committed
+at `rag-service/openapi.json`. **`RAG_ADMIN_KEY` is required** (at least 32 characters) by
+`docker compose -f compose.app.yaml up`; see `.env.example`.
+
+### First-time setup on an existing volume
+
+Postgres init scripts run only on an empty data directory, so an existing `pgdata` volume
+needs the one-off (idempotent, safe to re-run):
+
+```bash
+docker compose -f compose.app.yaml up -d postgres
+docker compose -f compose.app.yaml exec -e RAG_DB_PASSWORD="$RAG_DB_PASSWORD" postgres bash /docker-entrypoint-initdb.d/10-ragdb.sh
+docker compose -f compose.app.yaml up --build -d rag-service
+```
+
+A fresh volume runs `10-ragdb.sh` automatically.
+
+### Registering a client
+
+```bash
+curl -s -X POST localhost:8081/v1/admin/clients -H "Authorization: Bearer $RAG_ADMIN_KEY" -H 'Content-Type: application/json' -d '{"name":"my-app"}'
+```
+
+The client key is shown once. Rotate with `POST /v1/admin/clients/{id}/rotate`, revoke with
+`POST /v1/admin/clients/{id}/revoke`.
+
+### Isolation
+
+One-way: the `rag` role cannot connect to `releasemgmt`, but `releasemgmt` is the Postgres
+superuser and can read `ragdb`. Moving `ragdb` to its own server is the real separation
+(deferred).
+
+### Ollama
+
+Embeddings come from the host's Ollama at `RAG_OLLAMA_BASE_URL` (default
+`http://host.docker.internal:11434`); there is no Ollama container. Run
+`ollama pull nomic-embed-text` first. On Docker Desktop `host.docker.internal` reaches an Ollama
+bound to loopback. On native Linux, Ollama must listen on the Docker bridge (`OLLAMA_HOST=0.0.0.0`
+or the bridge IP) and be firewalled, because Ollama has no authentication. With Ollama down,
+pushes are accepted and stay PENDING (check `GET /v1/status`); indexing resumes on its own.
+
+The container healthcheck uses `/actuator/health/readiness`, which excludes Ollama.
 
 ---
 
