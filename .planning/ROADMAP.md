@@ -464,7 +464,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 7. Promotion Tracking & Audit Trail | 6/7 | In Progress|  |
 | 8. Release Insights Dashboard | 7/8 | In Progress|  |
 | 9. RAG Service Foundation & Index | 11/11 | Complete | 2026-10-13 |
-| 10. RAG Chat & Citations | 0/TBD | Not started | - |
+| 10. RAG Chat & Citations | 0/9 | Planned    |  |
 | 11. Tool-Call Protocol | 0/TBD | Not started | - |
 | 12. ReleaseManagement as First Client | 0/TBD | Not started | - |
 | 13. Assistant Screen & Quality Gate | 0/TBD | Not started | - |
@@ -590,7 +590,28 @@ Plans:
 
 **Research flags**: Verify `/api/chat` NDJSON streaming, explicit `num_ctx` (the default silently truncates), `keep_alive` and `think:false` on the installed Ollama version; SSE specifics (async dispatch, `X-Accel-Buffering: no`, proxy buffering, client abort cancelling generation); cold model load time and chat-versus-embedding serialisation on a single GPU. Start the golden fixture here (first 10 questions, including injection and not-in-the-data cases).
 **Scope notes**: Stateless; conversation history is a request parameter. Pre-retrieval only (no tools). Prompt fencing of untrusted passage text. Chat model is a config property; `qwen3:4b` on the 4 GB dev GPU.
-**Plans**: TBD
+**Plans**: 9 across 6 waves
+
+**Wave 1**
+  - [ ] 10-01: domain types, ChatPort/EventSink, Cancellation, GenerationGate + indexing pause, GenerationTimers, error reasons, rag.chat config — SAFE-01, RAG-06
+
+**Wave 2** *(blocked on Wave 1 completion)*
+  - [ ] 10-02: Ollama chat adapter (NDJSON stream, readiness, cancellation, deadline-derived stream client) — RAG-06, SAFE-01, SAFE-03
+  - [ ] 10-03: multi-collection retrieval, SearchHit.collectionId, CollectionService.requireAll — RAG-06
+  - [ ] 10-04: TokenEstimator, fenced/budgeted PromptBuilder, CitationBuilder, RefusalGuard — RAG-07, RAG-09, SAFE-02
+
+**Wave 3** *(blocked on Wave 2 completion)*
+  - [ ] 10-05: ChatService and TransformService (prepare/run, gate refusal, deadline, metadata log) — RAG-06, RAG-07, RAG-09, RAG-11, SAFE-01, SAFE-03
+
+**Wave 4** *(blocked on Wave 3 completion)*
+  - [ ] 10-06: /v1/chat and /v1/transform SSE controller, SseSink, DTOs, API ITs, openapi.json — RAG-06, RAG-11, SAFE-01
+
+**Wave 5** *(blocked on Wave 4 completion)*
+  - [ ] 10-07: real-server SSE ITs (abort, deadline, 429, indexing resume), log-hygiene canary IT, ArchUnit outbound rule, docs and accepted risks — SAFE-01, SAFE-02, SAFE-03, RAG-06
+  - [ ] 10-08: golden fixture (G01-G10, T01-T03), opt-in golden profile and live harness, curl SSE smoke script — RAG-06, RAG-07, RAG-09, RAG-11, SAFE-02
+
+**Wave 6** *(blocked on Wave 5 completion — NOT autonomous, pulls qwen3:4b and needs the user)*
+  - [ ] 10-09: pull qwen3:4b, measure M1-M7, live golden run, tune, compose rollout, smoke and log checks, user review — all phase requirements
 **AI-integration phase**: yes (run /gsd-ai-integration-phase before planning)
 
 ### Phase 11: Tool-Call Protocol
