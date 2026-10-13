@@ -27,7 +27,7 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 
 Phase: 10 (RAG Chat & Citations) — context gathered
 Plan: Not started
-Status: Phase 10 context gathered (D-10-01..12) — next /gsd-ai-integration-phase 10, then /gsd-plan-phase 10
+Status: Phase 10 context + AI-SPEC ready — next /gsd-plan-phase 10
 Last activity: 2026-10-13 — Phase 09 complete
 
 **v1 (Phases 1-8) is still open — not archived, phase directories kept on purpose.** Code for every v1 phase is
