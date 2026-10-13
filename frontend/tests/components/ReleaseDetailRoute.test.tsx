@@ -426,6 +426,33 @@ describe('ReleaseDetailRoute', () => {
       expect(container.textContent).toContain('No data');
     });
 
+    function arrow(): HTMLButtonElement {
+      return container.querySelector<HTMLButtonElement>('button[aria-label$="ticket details"]')!;
+    }
+
+    function cellWithText(text: string): HTMLTableCellElement {
+      return [...container.querySelectorAll('td')].find((td) => td.textContent === text)!;
+    }
+
+    it('clicking anywhere on a ticket row toggles its details', async () => {
+      mockRelease({ ...RELEASE, items: [item('CNV-1', LINKED)] });
+      await renderRoute();
+
+      await act(async () => cellWithText('Summary CNV-1').click());
+      expect(arrow().getAttribute('aria-expanded')).toBe('true');
+
+      await act(async () => cellWithText('Summary CNV-1').click());
+      expect(arrow().getAttribute('aria-expanded')).toBe('false');
+    });
+
+    it('clicking Retry inside a row does not toggle its details', async () => {
+      mockRelease({ ...RELEASE, items: [item('CNV-1', FAILED)] });
+      await renderRoute();
+
+      await act(async () => byText('Retry').click());
+      expect(arrow().getAttribute('aria-expanded')).toBe('false');
+    });
+
     it('retries a failed ticket with its key', async () => {
       const calls = mockRelease({ ...RELEASE, items: [item('CNV-1', FAILED)] });
       await renderRoute();

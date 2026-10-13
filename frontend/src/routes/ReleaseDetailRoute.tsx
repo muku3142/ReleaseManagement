@@ -438,7 +438,16 @@ export function ReleaseDetailRoute() {
               <tbody>
                 {data.items.map((item) => (
                   <Fragment key={item.key}>
-                    <tr className="border-b border-gray-100 hover:bg-gray-50">
+                    {/* Same row-click behaviour as TicketBrowser: the arrow stays for keyboard users, and
+                        controls inside the row (chip, Retry, Remove) and text selection don't toggle. */}
+                    <tr
+                      className="cursor-pointer border-b border-gray-100 hover:bg-gray-50"
+                      onClick={(event) => {
+                        if ((event.target as HTMLElement).closest('button, a, input, label')) return;
+                        if (window.getSelection()?.toString()) return;
+                        setExpandedKey(expandedKey === item.key ? null : item.key);
+                      }}
+                    >
                       <td className="whitespace-nowrap px-4 py-2 font-semibold text-gray-900">{item.key}</td>
                       <td className="min-w-[18rem] px-4 py-2 text-gray-700">{item.summary}</td>
                       <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.issueType}</td>
