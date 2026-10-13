@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.persistence;
 
+import com.evision.releasemgmt.PgVectorImage;
 import com.evision.releasemgmt.adapters.persistence.repository.JiraSiteConfigJpaRepository;
 import com.evision.releasemgmt.application.JiraSiteConfigService;
 import com.evision.releasemgmt.ports.JiraSiteConfigRepository;
@@ -20,7 +21,7 @@ class JiraSiteConfigPersistenceIT {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(PgVectorImage.IMAGE);
 
     @Autowired
     private JiraSiteConfigRepository repository;

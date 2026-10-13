@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.persistence;
 
+import com.evision.releasemgmt.PgVectorImage;
 import com.evision.releasemgmt.application.EnvironmentLadderService;
 import com.evision.releasemgmt.application.PromotionService;
 import com.evision.releasemgmt.domain.promotion.LadderEditRejectedException;
@@ -44,7 +45,7 @@ class EnvironmentLadderPersistenceIT {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(PgVectorImage.IMAGE);
 
     @Autowired
     private EnvironmentLadderService ladder;

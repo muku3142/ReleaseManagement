@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.persistence;
 
+import com.evision.releasemgmt.PgVectorImage;
 import com.evision.releasemgmt.domain.ado.AdoCredential;
 import com.evision.releasemgmt.ports.AdoCredentialRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +27,7 @@ class AdoCredentialPersistenceIT {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(PgVectorImage.IMAGE);
 
     @Autowired
     private AdoCredentialRepository repository;

@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.web;
 
+import com.evision.releasemgmt.PgVectorImage;
 import com.evision.releasemgmt.adapters.web.dto.DocumentRevisionListResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseSearchResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseSummaryResponse;
@@ -39,7 +40,7 @@ class ActorDisplaySeamIT {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:18");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>(PgVectorImage.IMAGE);
 
     @Autowired
     private ReleaseController releaseController;
