@@ -463,7 +463,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 6. Azure DevOps Enrichment | 9/10 | In Progress|  |
 | 7. Promotion Tracking & Audit Trail | 6/7 | In Progress|  |
 | 8. Release Insights Dashboard | 7/8 | In Progress|  |
-| 9. RAG Service Foundation & Index | 0/11 | Planned    |  |
+| 9. RAG Service Foundation & Index | 2/11 | In Progress |  |
 | 10. RAG Chat & Citations | 0/TBD | Not started | - |
 | 11. Tool-Call Protocol | 0/TBD | Not started | - |
 | 12. ReleaseManagement as First Client | 0/TBD | Not started | - |
@@ -554,8 +554,8 @@ Plans:
 **Plans**: 11 plans
 
 **Wave 1**
-- [ ] 09-01-PLAN.md — pgvector image in both compose files, superuser ragdb init script, main ITs on the new image (wave 1)
-- [ ] 09-02-PLAN.md — `rag-service/` module skeleton, config, Flyway V1, domain records and ports (wave 1)
+- [x] 09-01-PLAN.md — pgvector image in both compose files, superuser ragdb init script, main ITs on the new image (wave 1)
+- [x] 09-02-PLAN.md — `rag-service/` module skeleton, config, Flyway V1, domain records and ports (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 - [ ] 09-03-PLAN.md — Chunker, content hash, API keys, metadata rules (wave 2)
