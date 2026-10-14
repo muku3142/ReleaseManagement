@@ -54,6 +54,10 @@ public class CollectionService {
         return collections.find(clientId, name).orElseThrow(() -> new CollectionNotFoundException(name));
     }
 
+    public List<DocumentCollection> requireAll(UUID clientId, List<String> names) {
+        return names.stream().distinct().map(name -> require(clientId, name)).toList();
+    }
+
     public List<CollectionStatus> list(UUID clientId) {
         return collections.listStatus(clientId);
     }

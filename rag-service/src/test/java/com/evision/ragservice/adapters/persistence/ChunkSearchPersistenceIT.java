@@ -90,7 +90,7 @@ class ChunkSearchPersistenceIT {
     }
 
     private List<SearchHit> run(MetadataFilter filter, float[] query, int k) {
-        return search.search(collectionId, MODEL, query, filter, k);
+        return search.search(List.of(collectionId), MODEL, query, filter, k);
     }
 
     private static MetadataFilter filter(Clause... clauses) {
@@ -186,6 +186,44 @@ class ChunkSearchPersistenceIT {
 
         assertThat(hits).isEmpty();
         assertThat(run(MetadataFilter.none(), unit(0), 10)).hasSize(1);
+    }
+
+    private UUID foreignCollection() {
+        UUID otherClient = UUID.randomUUID();
+        jdbc.sql("insert into client_app (id, name, key_hash) values (:id, 'other-client', decode('00ee', 'hex'))")
+                .param("id", otherClient).update();
+        UUID id = UUID.randomUUID();
+        jdbc.sql("insert into collection (id, client_id, name, embedding_model) values (:id, :client, 'theirs', :model)")
+                .param("id", id).param("client", otherClient).param("model", MODEL).update();
+        return id;
+    }
+
+    @Test
+    void searchesSeveralCollectionsOrderedByScoreAndNeverLeaksAnotherClient() {
+        UUID second = newCollection("more-docs");
+        UUID foreign = foreignCollection();
+        seed(collectionId, "first", "{}", mix(), MODEL);
+        seed(second, "second", "{}", unit(0), MODEL);
+        seed(foreign, "TENANT-CANARY", "{}", unit(0), MODEL);
+
+        List<SearchHit> hits = search.search(List.of(collectionId, second), MODEL, unit(0), MetadataFilter.none(), 10);
+
+        assertThat(hits).extracting(SearchHit::collectionId).containsExactly(second, collectionId);
+        assertThat(hits).extracting(SearchHit::score).isSortedAccordingTo(java.util.Comparator.reverseOrder());
+        assertThat(hits).extracting(SearchHit::text).noneMatch(t -> t.contains("TENANT-CANARY"));
+    }
+
+    @Test
+    void metadataFilterAppliesAcrossAllCollections() {
+        UUID second = newCollection("more-docs");
+        seed(collectionId, "r1", "{\"release_id\":\"R1\"}", unit(0), MODEL);
+        seed(second, "r2", "{\"release_id\":\"R2\"}", unit(0), MODEL);
+        seed(second, "r1b", "{\"release_id\":\"R1\"}", unit(0), MODEL);
+
+        List<SearchHit> hits = search.search(List.of(collectionId, second), MODEL, unit(0),
+                filter(new Clause("release_id", List.of("R1"))), 10);
+
+        assertThat(hits).extracting(SearchHit::documentId).containsExactlyInAnyOrder("r1", "r1b");
     }
 
     @Test
