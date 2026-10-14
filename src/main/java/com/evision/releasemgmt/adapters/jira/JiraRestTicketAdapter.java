@@ -17,7 +17,9 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.node.MissingNode;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
@@ -160,9 +162,14 @@ public class JiraRestTicketAdapter implements JiraTicketPort {
             default -> null;
         };
 
+        String storyPointsId = fieldIds.get(TicketField.STORY_POINTS);
+        boolean storyPointsRead = storyPointsId != null;
+        JsonNode points = storyPointsRead ? fields.path(storyPointsId) : MissingNode.getInstance();
+        BigDecimal storyPoints = points.isNumber() ? points.decimalValue() : null;
+
         return new TicketDetail(key, summary, issueType, status, resolution, assignee, reporter,
                 fixVersions, component, description, comments, commentTotal,
-                jiraIssueId, updatedAt(fields), statusCategory);
+                jiraIssueId, updatedAt(fields), statusCategory, storyPoints, storyPointsRead);
     }
 
     // A malformed timestamp must not fail the whole search; null makes the history read retry later.

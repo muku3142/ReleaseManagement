@@ -370,6 +370,8 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         entity.setJiraIssueId(ticket.jiraIssueId());
         entity.setJiraUpdatedAt(ticket.updatedAt());
         entity.setJiraStatusCategory(ticket.statusCategory());
+        entity.setStoryPoints(ticket.storyPoints());
+        entity.setStoryPointsRead(ticket.storyPointsRead());
     }
 
     private static ReleaseEntity toEntity(Release release) {
@@ -412,7 +414,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         TicketDetail ticket = new TicketDetail(e.getTicketKey(), e.getSummary(), e.getIssueType(), e.getStatus(),
                 e.getResolution(), e.getAssignee(), e.getReporter(), e.getFixVersions(), e.getComponent(),
                 e.getDescription(), e.getComments(), e.getCommentTotal(), e.getJiraIssueId(), e.getJiraUpdatedAt(),
-                e.getJiraStatusCategory());
+                e.getJiraStatusCategory(), e.getStoryPoints(), e.isStoryPointsRead());
         return new ReleaseItem(ticket, e.getAddedAt(), codeLinks);
     }
 

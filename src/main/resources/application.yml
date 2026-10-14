@@ -36,6 +36,8 @@ app:
     search:
       page-size: 100
       max-pages: 50
+    story-points:
+      field-id: ${RM_JIRA_STORY_POINTS_FIELD_ID:}
     changelog:
       max-pages: 20
   ado:

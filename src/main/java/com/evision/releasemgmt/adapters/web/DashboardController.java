@@ -8,6 +8,7 @@ import com.evision.releasemgmt.application.DashboardService;
 import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.domain.dashboard.DeploymentRow;
 import com.evision.releasemgmt.domain.dashboard.ReleaseChurn;
+import com.evision.releasemgmt.domain.dashboard.ReleaseStoryPoints;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.ErrorResponseException;
@@ -104,12 +105,14 @@ public class DashboardController {
     private static DashboardResponse.ReleaseRow toRow(DashboardService.ReleaseMetrics m) {
         var r = m.release();
         ReleaseChurn c = m.churn();
+        ReleaseStoryPoints sp = m.storyPoints();
         return new DashboardResponse.ReleaseRow(r.id(), r.name(), r.version(), r.status().name(), r.createdAt(),
                 r.frozenAt(), m.currentStageId(), m.shippedAt(), m.lastFailedStageId(),
                 m.createdToFrozenSeconds(), m.frozenToProductionSeconds(),
                 new DashboardResponse.Composition(c.tickets(), r.manualCount(), c.linked(), c.noLink(), c.failed(),
                         c.noData()),
                 new DashboardResponse.Churn(c.medianCommitsToDone(), c.commitNoData(), c.reopens(), c.reopenNoData(),
-                        c.postDoneShare(), c.outliers(), c.keyTagged()));
+                        c.postDoneShare(), c.outliers(), c.keyTagged()),
+                new DashboardResponse.StoryPoints(sp.total(), sp.estimated(), sp.unestimated(), sp.unread()));
     }
 }

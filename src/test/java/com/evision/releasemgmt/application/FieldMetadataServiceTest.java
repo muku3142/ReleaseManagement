@@ -11,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -18,6 +19,7 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -30,6 +32,8 @@ class FieldMetadataServiceTest {
 
     @Mock
     private JiraFieldMetadataPort fieldMetadataPort;
+
+    private static final Set<TicketField> RESOLVABLE = EnumSet.complementOf(EnumSet.of(TicketField.STORY_POINTS));
 
     private FieldMetadataService service;
 
@@ -47,7 +51,7 @@ class FieldMetadataServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new FieldMetadataService(accessContextService, fieldMetadataPort);
+        service = new FieldMetadataService(accessContextService, fieldMetadataPort, "");
     }
 
     private JiraAccessContext stubAccess() {
@@ -61,7 +65,7 @@ class FieldMetadataServiceTest {
         stubAccess();
         when(fieldMetadataPort.fetchAllFields(any())).thenReturn(SYSTEM_FIELDS);
 
-        Map<TicketField, String> resolved = service.resolve(Set.of(TicketField.values()));
+        Map<TicketField, String> resolved = service.resolve(RESOLVABLE);
 
         assertThat(resolved.get(TicketField.SUMMARY)).isEqualTo("summary");
         assertThat(resolved.get(TicketField.ISSUE_TYPE)).isEqualTo("issuetype");
@@ -124,7 +128,7 @@ class FieldMetadataServiceTest {
                 new JiraField("customfield_10002", "Story Points", true));
         when(fieldMetadataPort.fetchAllFields(any())).thenReturn(withCollision);
 
-        Map<TicketField, String> resolved = service.resolve(Set.of(TicketField.values()));
+        Map<TicketField, String> resolved = service.resolve(RESOLVABLE);
 
         assertThat(resolved).hasSize(10);
     }
@@ -162,7 +166,7 @@ class FieldMetadataServiceTest {
                 new JiraField("components", "Components", false));
         when(fieldMetadataPort.fetchAllFields(any())).thenReturn(tenantFields);
 
-        Map<TicketField, String> resolved = service.resolve(Set.of(TicketField.values()));
+        Map<TicketField, String> resolved = service.resolve(RESOLVABLE);
 
         assertThat(resolved).hasSize(10);
         assertThat(resolved).containsEntry(TicketField.RESOLUTION, "resolution");
@@ -183,6 +187,44 @@ class FieldMetadataServiceTest {
     }
 
     @Test
+    void storyPointsResolvesTheSingleCustomField() {
+        stubAccess();
+        when(fieldMetadataPort.fetchAllFields(any()))
+                .thenReturn(List.of(new JiraField("customfield_10016", "Story Points", true)));
+
+        assertThat(service.storyPointsFieldId()).contains("customfield_10016");
+    }
+
+    @Test
+    void storyPointsIsEmptyWithoutThrowingWhenTwoCustomFieldsShareTheName() {
+        stubAccess();
+        when(fieldMetadataPort.fetchAllFields(any())).thenReturn(List.of(
+                new JiraField("customfield_10001", "Story Points", true),
+                new JiraField("customfield_10002", "Story Points", true)));
+
+        assertThat(service.storyPointsFieldId()).isEmpty();
+    }
+
+    @Test
+    void storyPointsMissFetchesMetadataOnceAndNeverRefreshes() {
+        stubAccess();
+        when(fieldMetadataPort.fetchAllFields(any())).thenReturn(SYSTEM_FIELDS);
+
+        assertThat(service.storyPointsFieldId()).isEmpty();
+        assertThat(service.storyPointsFieldId()).isEmpty();
+
+        verify(fieldMetadataPort, times(1)).fetchAllFields(any());
+    }
+
+    @Test
+    void storyPointsOverrideIsUsedVerbatimWithoutFetchingMetadata() {
+        FieldMetadataService pinned = new FieldMetadataService(accessContextService, fieldMetadataPort, " customfield_99999 ");
+
+        assertThat(pinned.storyPointsFieldId()).contains("customfield_99999");
+        verify(fieldMetadataPort, never()).fetchAllFields(any());
+    }
+
+    @Test
     void reportsEveryUnresolvableFieldNotJustTheFirst() {
         stubAccess();
         // Only three of the nine names exist. The thrown failure must not stop at the first.
@@ -192,7 +234,7 @@ class FieldMetadataServiceTest {
                 new JiraField("status", "Status", false));
         when(fieldMetadataPort.fetchAllFields(any())).thenReturn(sparse);
 
-        assertThatThrownBy(() -> service.resolve(Set.of(TicketField.values())))
+        assertThatThrownBy(() -> service.resolve(RESOLVABLE))
                 .isInstanceOf(JiraTicketReadException.class);
         // One refresh attempt per missing name, then a single throw — not ten separate calls.
         verify(fieldMetadataPort, times(8)).fetchAllFields(any());

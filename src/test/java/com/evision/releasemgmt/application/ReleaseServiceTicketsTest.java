@@ -59,7 +59,7 @@ class ReleaseServiceTicketsTest {
     private static TicketDetail ticket(String key) {
         return new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed", "Dev Person",
                 "Reporter Person", List.of("2026.1"), null, "Full description " + key,
-                List.of("Comment 1", "Comment 2"), 2, null, null, null);
+                List.of("Comment 1", "Comment 2"), 2, null, null, null, null, false);
     }
 
     private static Release release(UUID id, ReleaseStatus status) {
@@ -278,7 +278,7 @@ class ReleaseServiceTicketsTest {
         when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
         TicketDetail changed = new TicketDetail("CNV-1", "Summary CNV-1", "Bug", "In Progress", "Fixed",
                 "Dev Person", "Reporter Person", List.of("2026.1"), null, "Full description CNV-1",
-                List.of("Comment 1", "Comment 2"), 2, null, null, null);
+                List.of("Comment 1", "Comment 2"), 2, null, null, null, null, false);
         when(ticketSearchService.search(any())).thenReturn(List.of(changed));
 
         service.refresh(id);

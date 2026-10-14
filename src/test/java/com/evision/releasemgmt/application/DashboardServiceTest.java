@@ -245,7 +245,7 @@ class DashboardServiceTest {
 
     private static ChurnItem item(UUID releaseId, String key) {
         return new ChurnItem(releaseId, key, EnrichmentStatus.LINKED, false, CommitsSource.ADO_COMPLETE,
-                HistoryState.AVAILABLE, NOW, 0, 3, 1, 4);
+                HistoryState.AVAILABLE, NOW, 0, 3, 1, 4, null, false);
     }
 
     private static List<DeploymentRow> rows(int count) {

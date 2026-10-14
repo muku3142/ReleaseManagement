@@ -99,6 +99,55 @@ class JiraRestTicketAdapterTest {
         return "{\"issues\":[" + issueJson(issueKey) + "]" + tokenField + "}";
     }
 
+    private TicketDetail searchWithStoryPoints(WireMockRuntimeInfo wm, String pointsJson, boolean idResolved) {
+        String issue = "{\"key\":\"CNV-1\",\"fields\":{\"summary\":\"s\",\"issuetype\":{\"name\":\"Bug\"},"
+                + "\"status\":{\"name\":\"Open\"},\"fixVersions\":[],\"components\":[],\"comment\":{\"comments\":[],\"total\":0}"
+                + (pointsJson == null ? "" : ",\"customfield_10016\":" + pointsJson) + "}}";
+        stubFor(post(urlEqualTo(SEARCH_URL)).willReturn(okJson("{\"issues\":[" + issue + "]}")));
+        Map<TicketField, String> ids = fieldIds();
+        if (idResolved) {
+            ids.put(TicketField.STORY_POINTS, "customfield_10016");
+        }
+        return adapter(50).searchAll(context(wm), "project = CNV", ids).get(0);
+    }
+
+    @Test
+    void readsIntegerAndFractionalStoryPoints(WireMockRuntimeInfo wm) {
+        TicketDetail whole = searchWithStoryPoints(wm, "5", true);
+        assertThat(whole.storyPoints()).isEqualByComparingTo("5");
+        assertThat(whole.storyPointsRead()).isTrue();
+
+        TicketDetail half = searchWithStoryPoints(wm, "0.5", true);
+        assertThat(half.storyPoints()).isEqualByComparingTo("0.5");
+    }
+
+    @Test
+    void nullOrAbsentStoryPointsAreReadButUnestimated(WireMockRuntimeInfo wm) {
+        TicketDetail explicitNull = searchWithStoryPoints(wm, "null", true);
+        assertThat(explicitNull.storyPoints()).isNull();
+        assertThat(explicitNull.storyPointsRead()).isTrue();
+
+        TicketDetail absent = searchWithStoryPoints(wm, null, true);
+        assertThat(absent.storyPoints()).isNull();
+        assertThat(absent.storyPointsRead()).isTrue();
+    }
+
+    @Test
+    void nonNumericStoryPointsAreTreatedAsNoEstimate(WireMockRuntimeInfo wm) {
+        TicketDetail text = searchWithStoryPoints(wm, "\"lots\"", true);
+
+        assertThat(text.storyPoints()).isNull();
+        assertThat(text.storyPointsRead()).isTrue();
+    }
+
+    @Test
+    void storyPointsAreNotReadWhenTheFieldIdIsUnresolved(WireMockRuntimeInfo wm) {
+        TicketDetail ticket = searchWithStoryPoints(wm, "5", false);
+
+        assertThat(ticket.storyPoints()).isNull();
+        assertThat(ticket.storyPointsRead()).isFalse();
+    }
+
     @Test
     void pagesToExhaustion(WireMockRuntimeInfo wm) {
         stubFor(post(urlEqualTo(SEARCH_URL)).inScenario("paging")

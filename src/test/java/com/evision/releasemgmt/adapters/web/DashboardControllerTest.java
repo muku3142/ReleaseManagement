@@ -10,6 +10,7 @@ import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.dashboard.DashboardRelease;
 import com.evision.releasemgmt.domain.dashboard.DeploymentRow;
 import com.evision.releasemgmt.domain.dashboard.ReleaseChurn;
+import com.evision.releasemgmt.domain.dashboard.ReleaseStoryPoints;
 import com.evision.releasemgmt.domain.promotion.PromotionOutcome;
 import com.evision.releasemgmt.domain.promotion.Stage;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
@@ -23,6 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -81,7 +83,8 @@ class DashboardControllerTest {
         perStage.put(dev.id(), 1L);
         DashboardService.Summary summary = new DashboardService.Summary(1, 3, 86400.0, 1, null, 0, perStage, 0);
         DashboardService.ReleaseMetrics metrics = new DashboardService.ReleaseMetrics(release, dev.id(), null, prod.id(),
-                86400L, null, ReleaseChurn.of(List.of()));
+                86400L, null, ReleaseChurn.of(List.of()),
+                new ReleaseStoryPoints(new BigDecimal("13.5"), 4, 1, 0));
         return new DashboardService.DashboardView(List.of(dev, prod), summary, List.of(metrics));
     }
 
@@ -106,6 +109,10 @@ class DashboardControllerTest {
                 .andExpect(jsonPath("$.stages[1].production").value(true))
                 .andExpect(jsonPath("$.stages[1].retired").value(false))
                 .andExpect(jsonPath("$.releases[0].name").value("Autumn"))
+                .andExpect(jsonPath("$.releases[0].storyPoints.total").value(13.5))
+                .andExpect(jsonPath("$.releases[0].storyPoints.estimated").value(4))
+                .andExpect(jsonPath("$.releases[0].storyPoints.unestimated").value(1))
+                .andExpect(jsonPath("$.releases[0].storyPoints.unread").value(0))
                 .andExpect(jsonPath("$.releases[0].status").value("FROZEN"))
                 .andExpect(jsonPath("$.releases[0].currentStageId").value(dev.id().toString()))
                 .andExpect(jsonPath("$.releases[0].lastFailedStageId").value(prod.id().toString()))

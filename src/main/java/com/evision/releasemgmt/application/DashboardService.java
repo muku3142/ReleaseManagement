@@ -5,6 +5,7 @@ import com.evision.releasemgmt.domain.dashboard.DashboardLedger;
 import com.evision.releasemgmt.domain.dashboard.DashboardRelease;
 import com.evision.releasemgmt.domain.dashboard.DeploymentRow;
 import com.evision.releasemgmt.domain.dashboard.ReleaseChurn;
+import com.evision.releasemgmt.domain.dashboard.ReleaseStoryPoints;
 import com.evision.releasemgmt.domain.dashboard.Stats;
 import com.evision.releasemgmt.domain.dashboard.TicketChurn;
 import com.evision.releasemgmt.domain.promotion.Promotion;
@@ -42,7 +43,8 @@ public class DashboardService {
     }
 
     public record ReleaseMetrics(DashboardRelease release, UUID currentStageId, Instant shippedAt, UUID lastFailedStageId,
-                                 Long createdToFrozenSeconds, Long frozenToProductionSeconds, ReleaseChurn churn) {
+                                 Long createdToFrozenSeconds, Long frozenToProductionSeconds, ReleaseChurn churn,
+                                 ReleaseStoryPoints storyPoints) {
     }
 
     public record DashboardView(List<Stage> stages, Summary summary, List<ReleaseMetrics> releases) {
@@ -86,7 +88,10 @@ public class DashboardService {
                 .collect(Collectors.groupingBy(ChurnItem::releaseId));
 
         List<ReleaseMetrics> metrics = visible.stream()
-                .map(c -> toMetrics(c, ReleaseChurn.of(itemsByRelease.getOrDefault(c.release().id(), List.of()))))
+                .map(c -> {
+                    List<ChurnItem> items = itemsByRelease.getOrDefault(c.release().id(), List.of());
+                    return toMetrics(c, ReleaseChurn.of(items), ReleaseStoryPoints.of(items));
+                })
                 .toList();
         return new DashboardView(ledger.stages(), summarize(metrics, ledger.stages(), ledger.releases().size()), metrics);
     }
@@ -98,13 +103,14 @@ public class DashboardService {
         return c.shipped().isEmpty() || !inProduction || !c.shipped().get().isBefore(windowStart);
     }
 
-    private static ReleaseMetrics toMetrics(Candidate c, ReleaseChurn churn) {
+    private static ReleaseMetrics toMetrics(Candidate c, ReleaseChurn churn, ReleaseStoryPoints storyPoints) {
         DashboardRelease r = c.release();
         Long createdToFrozen = r.frozenAt() == null ? null : Duration.between(r.createdAt(), r.frozenAt()).toSeconds();
         Long frozenToProduction = r.frozenAt() != null && c.shipped().isPresent()
                 ? Duration.between(r.frozenAt(), c.shipped().get()).toSeconds() : null;
         return new ReleaseMetrics(r, c.current().map(Stage::id).orElse(null), c.shipped().orElse(null),
-                c.lastFailed().orElse(null), createdToFrozen, frozenToProduction, churn);
+                c.lastFailed().orElse(null), createdToFrozen, frozenToProduction, churn,
+                storyPoints);
     }
 
     private static Summary summarize(List<ReleaseMetrics> metrics, List<Stage> stages, int totalReleases) {

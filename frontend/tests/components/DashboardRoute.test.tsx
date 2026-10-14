@@ -42,6 +42,7 @@ function row(overrides: Partial<DashboardReleaseRow> = {}): DashboardReleaseRow 
     createdToFrozenSeconds: 4 * 86400,
     frozenToProductionSeconds: null,
     composition: { tickets: 10, manual: 2, linked: 6, noLink: 2, failed: 1, noData: 1 },
+    storyPoints: { total: 21, estimated: 8, unestimated: 2, unread: 0 },
     churn: {
       medianCommitsToDone: 3.25,
       commitNoData: 2,
@@ -212,7 +213,7 @@ describe('DashboardRoute', () => {
   it('describes the code-links bar with all four counts and keeps no-data visible', async () => {
     await renderRoute();
 
-    const cell = firstRowCells()[8];
+    const cell = firstRowCells()[9];
     expect(cell.querySelector('[role="img"]')!.getAttribute('aria-label')).toBe(
       '6 linked, 2 no link, 1 failed, 1 no data',
     );
@@ -228,19 +229,70 @@ describe('DashboardRoute', () => {
       );
     await renderRoute();
 
-    expect(firstRowCells()[8].textContent).toBe('No Jira tickets');
+    expect(firstRowCells()[9].textContent).toBe('No Jira tickets');
+  });
+
+  describe('story points column', () => {
+    async function storyPointsCell(overrides: Partial<DashboardReleaseRow>): Promise<HTMLTableCellElement> {
+      dashboardResponse = () => json(200, data([row(overrides)]));
+      await renderRoute();
+      return firstRowCells()[8];
+    }
+
+    it('has a Story points column header', async () => {
+      await renderRoute();
+
+      const headings = [...container.querySelectorAll('thead th')].map((th) => th.textContent);
+      expect(headings).toContain('Story points');
+    });
+
+    it('shows the total and the unestimated count', async () => {
+      const cell = await storyPointsCell({ storyPoints: { total: 21, estimated: 8, unestimated: 2, unread: 0 } });
+
+      expect(cell.textContent).toContain('21 pts');
+      expect(cell.textContent).toContain('2 unestimated');
+    });
+
+    it('omits the unestimated note when every ticket has an estimate', async () => {
+      const cell = await storyPointsCell({ storyPoints: { total: 13.5, estimated: 4, unestimated: 0, unread: 0 } });
+
+      expect(cell.textContent).toContain('13.5 pts');
+      expect(cell.textContent).not.toContain('unestimated');
+    });
+
+    it('shows Unknown when no ticket was read', async () => {
+      const cell = await storyPointsCell({ storyPoints: { total: 0, estimated: 0, unestimated: 0, unread: 10 } });
+
+      expect(cell.textContent).toBe('Unknown');
+    });
+
+    it('shows the not-read count next to a partial total', async () => {
+      const cell = await storyPointsCell({ storyPoints: { total: 5, estimated: 2, unestimated: 0, unread: 3 } });
+
+      expect(cell.textContent).toContain('5 pts');
+      expect(cell.textContent).toContain('3 not read');
+    });
+
+    it('shows a dash for a release with no Jira tickets', async () => {
+      const cell = await storyPointsCell({
+        composition: { tickets: 0, manual: 3, linked: 0, noLink: 0, failed: 0, noData: 0 },
+        storyPoints: { total: 0, estimated: 0, unestimated: 0, unread: 0 },
+      });
+
+      expect(cell.textContent).toBe('—');
+    });
   });
 
   it('renders churn and rework with denominators', async () => {
     await renderRoute();
 
     const cells = firstRowCells();
-    expect(cells[9].textContent).toContain('3.3 commits to Done');
-    expect(cells[9].textContent).toContain('5 key-tagged only');
-    expect(cells[9].textContent).toContain('3 outliers');
-    expect(cells[9].textContent).toContain('2 no data');
-    expect(cells[10].textContent).toContain('4 reopens · 13% after Done');
-    expect(cells[10].textContent).toContain('1 no data');
+    expect(cells[10].textContent).toContain('3.3 commits to Done');
+    expect(cells[10].textContent).toContain('5 key-tagged only');
+    expect(cells[10].textContent).toContain('3 outliers');
+    expect(cells[10].textContent).toContain('2 no data');
+    expect(cells[11].textContent).toContain('4 reopens · 13% after Done');
+    expect(cells[11].textContent).toContain('1 no data');
   });
 
   it('says No data when every ticket is excluded from the churn median', async () => {
@@ -264,8 +316,8 @@ describe('DashboardRoute', () => {
     await renderRoute();
 
     const cells = firstRowCells();
-    expect(cells[9].textContent).toBe('No data');
-    expect(cells[10].textContent).toBe('0 reopens');
+    expect(cells[10].textContent).toBe('No data');
+    expect(cells[11].textContent).toBe('0 reopens');
   });
 
   it('always shows the churn disclaimer and the denominator footnote', async () => {

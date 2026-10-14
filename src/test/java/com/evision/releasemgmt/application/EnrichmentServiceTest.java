@@ -89,7 +89,7 @@ class EnrichmentServiceTest {
 
     private static TicketDetail ticket(String key, String issueId) {
         return new TicketDetail(key, "s", "Bug", "Done", null, null, null, List.of(), null, "", List.of(), 0,
-                issueId, T0, StatusCategory.DONE);
+                issueId, T0, StatusCategory.DONE, null, false);
     }
 
     private static LinkedPullRequest pr(String id) {
@@ -558,7 +558,7 @@ class EnrichmentServiceTest {
     void aTicketWithoutUpdatedTimeIsReadEveryTimeAndStoredWithoutSyncedTime() {
         categoriesKnown();
         TicketDetail noUpdated = new TicketDetail("EX-1", "s", "Bug", "Done", null, null, null, List.of(), null, "",
-                List.of(), 0, "1", null, StatusCategory.DONE);
+                List.of(), 0, "1", null, StatusCategory.DONE, null, false);
         withPreviousHistory(new StatusHistory(HistoryState.AVAILABLE, T0, null, 0, List.of()));
         when(port.fetchLinks(ACCESS, "1", "EX-1")).thenReturn(DevStatusLinks.none());
         when(historyPort.statusTransitions(ACCESS, "EX-1")).thenReturn(List.of(transition(1, "1", "2")));

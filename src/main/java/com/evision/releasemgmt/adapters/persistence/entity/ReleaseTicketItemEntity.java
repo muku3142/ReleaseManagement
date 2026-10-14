@@ -14,6 +14,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -67,6 +68,12 @@ public class ReleaseTicketItemEntity {
 
     @Column(name = "comment_total", nullable = false)
     private int commentTotal;
+
+    @Column(name = "story_points")
+    private BigDecimal storyPoints;
+
+    @Column(name = "story_points_read", nullable = false)
+    private boolean storyPointsRead;
 
     @Column(name = "added_at", nullable = false)
     private Instant addedAt;
@@ -333,6 +340,22 @@ public class ReleaseTicketItemEntity {
 
     public void setCommentTotal(int commentTotal) {
         this.commentTotal = commentTotal;
+    }
+
+    public BigDecimal getStoryPoints() {
+        return storyPoints;
+    }
+
+    public void setStoryPoints(BigDecimal storyPoints) {
+        this.storyPoints = storyPoints;
+    }
+
+    public boolean isStoryPointsRead() {
+        return storyPointsRead;
+    }
+
+    public void setStoryPointsRead(boolean storyPointsRead) {
+        this.storyPointsRead = storyPointsRead;
     }
 
     public Instant getAddedAt() {
