@@ -3,9 +3,12 @@ package com.evision.ragservice.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.evision.ragservice.domain.CollectionModelConflictException;
+import com.evision.ragservice.domain.CollectionNotFoundException;
 import com.evision.ragservice.domain.DocumentCollection;
 import com.evision.ragservice.domain.EmbeddingModelNotAllowedException;
 import com.evision.ragservice.ports.CollectionStore;
@@ -50,6 +53,27 @@ class CollectionServiceTest {
         when(store.create(CLIENT, NAME, "nomic-embed-text")).thenReturn(Optional.empty());
 
         assertThat(service.put(CLIENT, NAME, null).created()).isFalse();
+    }
+
+    @Test
+    void requireAllDeduplicatesNamesKeepingFirstSeenOrder() {
+        DocumentCollection a = new DocumentCollection(UUID.randomUUID(), CLIENT, "a", "nomic-embed-text", Instant.now());
+        DocumentCollection b = new DocumentCollection(UUID.randomUUID(), CLIENT, "b", "nomic-embed-text", Instant.now());
+        when(store.find(CLIENT, "a")).thenReturn(Optional.of(a));
+        when(store.find(CLIENT, "b")).thenReturn(Optional.of(b));
+
+        assertThat(service.requireAll(CLIENT, List.of("a", "b", "a"))).containsExactly(a, b);
+        verify(store, times(1)).find(CLIENT, "a");
+    }
+
+    @Test
+    void requireAllTreatsAForeignNameLikeAnUnknownOne() {
+        when(store.find(CLIENT, "a")).thenReturn(Optional.of(collection("nomic-embed-text")));
+        when(store.find(CLIENT, "foreign")).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.requireAll(CLIENT, List.of("a", "foreign")))
+                .isInstanceOf(CollectionNotFoundException.class)
+                .hasMessage("Collection not found: foreign");
     }
 
     @Test
