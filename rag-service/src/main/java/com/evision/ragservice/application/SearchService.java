@@ -43,6 +43,6 @@ public class SearchService {
         }
         MetadataFilter parsed = MetadataRules.parseFilter(filter);
         float[] vector = embeddings.embed(target.embeddingModel(), EmbeddingPurpose.QUERY, List.of(query)).getFirst();
-        return chunks.search(target.id(), target.embeddingModel(), vector, parsed, limit);
+        return chunks.search(List.of(target.id()), target.embeddingModel(), vector, parsed, limit);
     }
 }

@@ -26,13 +26,13 @@ class ChunkSearchRepositoryAdapter implements ChunkSearch {
     }
 
     @Override
-    public List<SearchHit> search(UUID collectionId, String embeddingModel, float[] queryVector,
+    public List<SearchHit> search(List<UUID> collectionIds, String embeddingModel, float[] queryVector,
                                   MetadataFilter filter, int k) {
         StringBuilder sql = new StringBuilder("""
-                SELECT d.external_id, d.title, d.url, d.metadata, c.ordinal, c.content,
+                SELECT c.collection_id, d.external_id, d.title, d.url, d.metadata, c.ordinal, c.content,
                        1 - (c.embedding <=> CAST(:q AS vector)) AS score
                 FROM chunk c JOIN document d ON d.id = c.document_id
-                WHERE c.collection_id = :collectionId AND c.embedding_model = :model
+                WHERE c.collection_id IN (:collectionIds) AND c.embedding_model = :model
                 """);
         Map<String, Object> filterParams = new LinkedHashMap<>();
         List<MetadataFilter.Clause> clauses = filter.clauses();
@@ -51,11 +51,12 @@ class ChunkSearchRepositoryAdapter implements ChunkSearch {
 
         return jdbc.sql(sql.toString())
                 .param("q", VectorLiteral.of(queryVector))
-                .param("collectionId", collectionId)
+                .param("collectionIds", collectionIds)
                 .param("model", embeddingModel)
                 .param("k", k)
                 .params(filterParams)
                 .query((rs, row) -> new SearchHit(
+                        rs.getObject("collection_id", UUID.class),
                         rs.getString("external_id"),
                         rs.getString("title"),
                         rs.getString("url"),

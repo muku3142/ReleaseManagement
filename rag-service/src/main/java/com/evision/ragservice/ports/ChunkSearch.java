@@ -7,5 +7,6 @@ import java.util.UUID;
 
 public interface ChunkSearch {
 
-    List<SearchHit> search(UUID collectionId, String embeddingModel, float[] queryVector, MetadataFilter filter, int k);
+    /** collectionIds must already be scoped to the caller; scores are comparable only because all share one embedding model. */
+    List<SearchHit> search(List<UUID> collectionIds, String embeddingModel, float[] queryVector, MetadataFilter filter, int k);
 }
