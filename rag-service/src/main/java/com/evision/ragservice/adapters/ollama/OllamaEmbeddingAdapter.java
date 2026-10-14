@@ -5,6 +5,7 @@ import com.evision.ragservice.domain.EmbeddingRejectedException;
 import com.evision.ragservice.domain.EmbeddingUnavailableException;
 import com.evision.ragservice.ports.EmbeddingPort;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -30,7 +31,7 @@ public class OllamaEmbeddingAdapter implements EmbeddingPort {
     private final String documentPrefix;
     private final String queryPrefix;
 
-    public OllamaEmbeddingAdapter(RestClient ollamaRestClient,
+    public OllamaEmbeddingAdapter(@Qualifier("ollamaRestClient") RestClient ollamaRestClient,
                                   @Value("${rag.ollama.base-url}") String baseUrl,
                                   @Value("${rag.ollama.batch-size}") int batchSize,
                                   @Value("${rag.ollama.health-timeout}") Duration healthTimeout,
