@@ -464,7 +464,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 7. Promotion Tracking & Audit Trail | 6/7 | In Progress|  |
 | 8. Release Insights Dashboard | 7/8 | In Progress|  |
 | 9. RAG Service Foundation & Index | 11/11 | Complete | 2026-10-13 |
-| 10. RAG Chat & Citations | 5/9 | In Progress |  |
+| 10. RAG Chat & Citations | 6/9 | In Progress |  |
 | 11. Tool-Call Protocol | 0/TBD | Not started | - |
 | 12. ReleaseManagement as First Client | 0/TBD | Not started | - |
 | 13. Assistant Screen & Quality Gate | 0/TBD | Not started | - |
@@ -604,7 +604,7 @@ Plans:
   - [x] 10-05: ChatService and TransformService (prepare/run, gate refusal, deadline, metadata log) — RAG-06, RAG-07, RAG-09, RAG-11, SAFE-01, SAFE-03
 
 **Wave 4** *(blocked on Wave 3 completion)*
-  - [ ] 10-06: /v1/chat and /v1/transform SSE controller, SseSink, DTOs, API ITs, openapi.json — RAG-06, RAG-11, SAFE-01
+  - [x] 10-06: /v1/chat and /v1/transform SSE controller, SseSink, DTOs, API ITs, openapi.json — RAG-06, RAG-11, SAFE-01
 
 **Wave 5** *(blocked on Wave 4 completion)*
   - [ ] 10-07: real-server SSE ITs (abort, deadline, 429, indexing resume), log-hygiene canary IT, ArchUnit outbound rule, docs and accepted risks — SAFE-01, SAFE-02, SAFE-03, RAG-06
