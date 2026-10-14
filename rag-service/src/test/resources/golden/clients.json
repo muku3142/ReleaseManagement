@@ -1,0 +1,30 @@
+{
+  "clients": [
+    {
+      "id": "A",
+      "collections": {
+        "rel-4.2": ["rel-4.2-notes.md", "rel-4.2-runbook.md", "rel-4.2-change-request.md", "rel-4.2-proj-109.md"],
+        "rel-4.3": ["rel-4.3-notes.md"],
+        "ops": ["ops-db-backup.md"]
+      },
+      "metadata": {
+        "rel-4.2-notes.md": {"release": "4.2.0"},
+        "rel-4.2-runbook.md": {"release": "4.2.0"},
+        "rel-4.2-change-request.md": {"release": "4.2.0"},
+        "rel-4.2-proj-109.md": {"release": "4.2.0"},
+        "rel-4.3-notes.md": {"release": "4.3.0"},
+        "ops-db-backup.md": {"area": "ops"}
+      }
+    },
+    {
+      "id": "B",
+      "collections": {
+        "rel-4.2": ["tenant-b-hotfix.md"],
+        "b-private": ["tenant-b-hotfix.md"]
+      },
+      "metadata": {
+        "tenant-b-hotfix.md": {"release": "4.2.0"}
+      }
+    }
+  ]
+}
