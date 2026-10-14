@@ -24,6 +24,7 @@
     <wiremock.version>3.13.2</wiremock.version>
     <testcontainers.version>2.0.5</testcontainers.version>
     <springdoc.version>3.1.1</springdoc.version>
+    <excludedGroups>golden</excludedGroups>
   </properties>
 
   <dependencies>
@@ -122,4 +123,14 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>golden</id>
+      <properties>
+        <groups>golden</groups>
+        <excludedGroups>none</excludedGroups>
+      </properties>
+    </profile>
+  </profiles>
 </project>
