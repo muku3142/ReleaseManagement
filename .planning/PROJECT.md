@@ -68,6 +68,13 @@ Given a set of Jira tickets, produce accurate and consistent release documentati
   > It feeds per-ticket first-Done time and reopen count, combined with Azure DevOps commit dates. The
   > *reports* stay out of scope: no velocity, no Jira cycle time, no burndown.
 
+  > **Story points partially reversed 2026-10-14 (INSIGHT-04).** The user wants the dashboard to show
+  > the **total story points of each release**. Releases are this system's own grouping of tickets, so
+  > Jira cannot answer "how big is this release". The story-point custom field is therefore read per
+  > ticket. Its id differs per site and duplicate "Story Points" names are common, so it is resolved by
+  > name through the existing field-metadata lookup. Only a per-release **total** is shown. Velocity,
+  > per-sprint points and burndown stay out of scope.
+
 ## Context
 
 **Problem being replaced.** Today the release manager does this work by hand in Jira: hand-creating release versions, chasing which tickets are actually in a release, and writing release notes and deployment instructions manually. It is slow, inconsistent between releases, and leaves a weak audit trail.
