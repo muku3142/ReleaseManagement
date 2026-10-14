@@ -252,12 +252,17 @@ public class ChatService {
             log.warn("generation requestId={} estimator under-counted: estimatedPromptTokens={} promptEvalCount={}",
                     requestId, estimated, actual);
         }
-        boolean truncated = actual <= TRUNCATION_RATIO * estimated && estimated > NEAR_FULL_CONTEXT * props.numCtx();
+        boolean truncated = probablyTruncated(estimated, actual, props.numCtx());
         if (truncated) {
             log.warn("generation requestId={} probable truncation: estimatedPromptTokens={} promptEvalCount={}",
                     requestId, estimated, actual);
         }
         return underCounted || truncated;
+    }
+
+    // Ollama silently drops prompt overflow: the model saw far fewer tokens than we sent into a nearly full context
+    static boolean probablyTruncated(int estimated, int actual, int numCtx) {
+        return actual <= TRUNCATION_RATIO * estimated && estimated > NEAR_FULL_CONTEXT * numCtx;
     }
 
     static ErrorReason errorReason(RuntimeException e) {
