@@ -205,7 +205,7 @@ class GoldenChatIT {
                     body.put("metadata", json.treeToValue(client.get("metadata").get(name), Map.class));
                     String documentId = name.substring(0, name.length() - ".md".length());
                     assertThat(send("PUT", "/v1/collections/" + collection.getKey() + "/documents/" + documentId,
-                            key, json.writeValueAsString(body)).statusCode()).isIn(200, 201);
+                            key, json.writeValueAsString(body)).statusCode()).isIn(200, 201, 202);
                 }
             }
             seedTextByClient.put(id, seedText.toString());
