@@ -124,7 +124,24 @@ class RawHttpSecurityIT {
     }
 
     @Test
-    void unknownPathsFailClosed() throws Exception {
+    void chatWithoutAValidKeyIsProblemJsonNeverAnEventStream() throws Exception {
+        for (String key : new String[] {null, "wrong-key"}) {
+            HttpRequest.Builder builder = request("/v1/chat").header("Content-Type", "application/json")
+                    .header("Accept", "text/event-stream")
+                    .POST(HttpRequest.BodyPublishers.ofString("{\"collections\":[\"docs\"],\"question\":\"q\"}"));
+            if (key != null) {
+                builder.header("Authorization", "Bearer " + key);
+            }
+            HttpResponse<String> response = send(builder.build());
+
+            assertThat(response.statusCode()).isEqualTo(401);
+            assertThat(response.headers().firstValue("Content-Type").orElse("")).doesNotContain("text/event-stream");
+            assertThat(response.body()).contains("\"reason\"");
+        }
+    }
+
+    @Test
+    void unknownPathsFailClosed()throws Exception {
         assertThat(send(request("/").GET().build()).statusCode()).isEqualTo(401);
         assertThat(send(request("/v2/anything").GET().build()).statusCode()).isEqualTo(401);
         assertThat(send(request("/actuator/health/readiness").GET().build()).statusCode()).isEqualTo(200);
