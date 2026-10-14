@@ -178,6 +178,35 @@
         }
       }
     },
+    "/v1/transform" : {
+      "post" : {
+        "tags" : [ "chat-controller" ],
+        "summary" : "Rewrite the given text following an instruction as a server-sent event stream",
+        "operationId" : "transform",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TransformRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Server-sent events. status {requestId, phase: SEARCHING|GENERATING}; token {text}; citations {basis: MARKED|RETRIEVED, items: [{n, documentId, title, url, collection, metadata}]} (chat only); done {refusal, refusalLayer: GATE|MODEL|null, finishReason, truncated, promptTokens, completionTokens}; error {reason: DEADLINE|GENERATION_FAILED|OLLAMA_UNAVAILABLE|MODEL_NOT_AVAILABLE|EMBEDDING_UNAVAILABLE|INTERNAL}. Comment lines are heartbeats. Errors before the stream opens are problem+json: 400, 404, 413 (transform), 429 with Retry-After, 503 (reason OLLAMA_UNAVAILABLE or MODEL_NOT_AVAILABLE).",
+            "content" : {
+              "text/event-stream" : {
+                "schema" : {
+                  "type" : "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/collections/{collection}/search" : {
       "post" : {
         "tags" : [ "search-controller" ],
@@ -235,6 +264,35 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ReindexResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat" : {
+      "post" : {
+        "tags" : [ "chat-controller" ],
+        "summary" : "Answer a question from the given collections as a server-sent event stream",
+        "operationId" : "chat",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/ChatRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "Server-sent events. status {requestId, phase: SEARCHING|GENERATING}; token {text}; citations {basis: MARKED|RETRIEVED, items: [{n, documentId, title, url, collection, metadata}]} (chat only); done {refusal, refusalLayer: GATE|MODEL|null, finishReason, truncated, promptTokens, completionTokens}; error {reason: DEADLINE|GENERATION_FAILED|OLLAMA_UNAVAILABLE|MODEL_NOT_AVAILABLE|EMBEDDING_UNAVAILABLE|INTERNAL}. Comment lines are heartbeats. Errors before the stream opens are problem+json: 400, 404, 413 (transform), 429 with Retry-After, 503 (reason OLLAMA_UNAVAILABLE or MODEL_NOT_AVAILABLE).",
+            "content" : {
+              "text/event-stream" : {
+                "schema" : {
+                  "type" : "string"
                 }
               }
             }
@@ -446,6 +504,20 @@
           }
         }
       },
+      "TransformRequest" : {
+        "type" : "object",
+        "properties" : {
+          "text" : {
+            "type" : "string",
+            "minLength" : 1
+          },
+          "instruction" : {
+            "type" : "string",
+            "minLength" : 1
+          }
+        },
+        "required" : [ "instruction", "text" ]
+      },
       "SearchRequest" : {
         "type" : "object",
         "properties" : {
@@ -513,6 +585,53 @@
             "format" : "int32"
           }
         }
+      },
+      "ChatRequest" : {
+        "type" : "object",
+        "properties" : {
+          "collections" : {
+            "type" : "array",
+            "items" : {
+              "type" : "string",
+              "pattern" : "[A-Za-z0-9._:-]{1,200}"
+            },
+            "maxItems" : 10,
+            "minItems" : 0
+          },
+          "question" : {
+            "type" : "string",
+            "minLength" : 1
+          },
+          "history" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Turn"
+            }
+          },
+          "filter" : {
+            "type" : "object",
+            "additionalProperties" : { }
+          },
+          "k" : {
+            "type" : "integer",
+            "format" : "int32"
+          }
+        },
+        "required" : [ "collections", "question" ]
+      },
+      "Turn" : {
+        "type" : "object",
+        "properties" : {
+          "role" : {
+            "type" : "string",
+            "pattern" : "user|assistant"
+          },
+          "content" : {
+            "type" : "string",
+            "minLength" : 1
+          }
+        },
+        "required" : [ "content", "role" ]
       },
       "CreateClientRequest" : {
         "type" : "object",
