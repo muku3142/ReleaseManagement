@@ -88,7 +88,7 @@ because Jira does not know when a release was frozen or deployed here.
 - [ ] **INSIGHT-01**: Release manager can see how long releases take through their own lifecycle — created to frozen, and frozen to production — computed from timestamps this system already owns, so slow releases are visible without manual bookkeeping
 - [ ] **INSIGHT-02**: Release manager can see each release's composition on one screen — ticket count, manual versus ticket-backed split, and what share of tickets carry linked Azure DevOps commits or pull requests — so gaps in traceability are visible before the release ships
 - [ ] **INSIGHT-03**: Release manager can see, per ticket and summarised per release, how many commits it took to reach Done (development churn) separately from how often it was reopened after Done and the commits made after first Done (testing rework) — so development problems and testing problems are distinguishable. Done means Jira status category Done; history comes from a scoped, cached read of the ticket's status changes (`/changelog`), not a velocity or cycle-time report (added 2026-10-07; caused-by bug count dropped the same day because bugs are not linked consistently in Jira)
-- [ ] **INSIGHT-04**: Release manager can see the total story points of each release on the dashboard, summed from the Jira story-point field of the release's tickets (resolved by field name per site), with tickets that have no estimate counted and shown separately so a low total is not mistaken for a small release. Only the per-release total is in scope: no velocity, per-sprint points or burndown (added 2026-10-14, partial reversal recorded in PROJECT.md)
+- [x] **INSIGHT-04**: Release manager can see the total story points of each release on the dashboard, summed from the Jira story-point field of the release's tickets (resolved by field name per site), with tickets that have no estimate counted and shown separately so a low total is not mistaken for a small release. Only the per-release total is in scope: no velocity, per-sprint points or burndown (added 2026-10-14, partial reversal recorded in PROJECT.md)
 
 ### Cross-cutting UX
 
@@ -277,7 +277,7 @@ Which phases cover which requirements. Populated during roadmap creation.
 | INSIGHT-01 | Phase 8 | Pending |
 | INSIGHT-02 | Phase 8 | Pending |
 | INSIGHT-03 | Phase 8 (data captured in Phase 6) | Pending |
-| INSIGHT-04 | Unscheduled (Phase 8 follow-up, after Phase 10) | Pending |
+| INSIGHT-04 | Quick task 261014-l33 | Complete |
 | UX-01 | Phase 5 (resolved) | Deferred to v2 |
 | RAG-01 | Phase 9 | Complete |
 | RAG-02 | Phase 9 | Complete |

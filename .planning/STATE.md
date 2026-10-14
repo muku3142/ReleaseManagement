@@ -155,6 +155,7 @@ None yet.
 | 261012-nqd | On-demand "Show linked commits" in the ticket browser (GET /api/tickets/{key}/code-links, read-only) | 2026-10-12 | c44f3e5 | [261012-nqd-ticket-browser-show-linked-commits](./quick/261012-nqd-ticket-browser-show-linked-commits/) |
 | fast | Ticket browser: click anywhere on a row to expand it (checkbox, controls and text selection excluded) | 2026-10-12 | 2518d44 | - |
 | fast | Release page: click anywhere on a ticket row to expand it (chip, Retry, Remove and text selection excluded) | 2026-10-13 | 22a1564 | - |
+| 261014-l33 | Add release story point totals to dashboard (INSIGHT-04) | 2026-10-14 | fd32cea | [261014-l33-add-release-story-point-totals-to-dashbo](./quick/261014-l33-add-release-story-point-totals-to-dashbo/) |
 
 ## Deferred Items
 
