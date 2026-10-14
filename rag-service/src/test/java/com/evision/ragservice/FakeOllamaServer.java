@@ -25,7 +25,7 @@ public final class FakeOllamaServer implements AutoCloseable {
     private static final ObjectMapper MAPPER = JsonMapper.builder().build();
 
     private final HttpServer server;
-    private final CountDownLatch chatAborted = new CountDownLatch(1);
+    private volatile CountDownLatch chatAborted = new CountDownLatch(1);
     private final AtomicInteger chatRequests = new AtomicInteger();
 
     private volatile int showStatus = 200;
@@ -64,6 +64,16 @@ public final class FakeOllamaServer implements AutoCloseable {
     @Override
     public void close() {
         server.stop(0);
+    }
+
+    /** Restores the default script and re-arms the abort latch, so one server can serve several tests. */
+    public void reset() {
+        this.chatLines = answer("Hello", " world");
+        this.lineDelay = Duration.ofMillis(10);
+        this.headerDelay = Duration.ZERO;
+        this.chatStatus = 200;
+        this.chatErrorBody = "";
+        this.chatAborted = new CountDownLatch(1);
     }
 
     public void show(int status, String body) {

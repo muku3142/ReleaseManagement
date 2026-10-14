@@ -362,6 +362,47 @@ pushes are accepted and stay PENDING (check `GET /v1/status`); indexing resumes 
 
 The container healthcheck uses `/actuator/health/readiness`, which excludes Ollama.
 
+### Chat and transform
+
+Run `ollama pull qwen3:4b` before first use. The chat model is set only by `RAG_CHAT_MODEL`;
+callers cannot choose one. Other settings: `RAG_CHAT_NUM_CTX` (lower it if `ollama ps` does not
+show 100% GPU), `RAG_CHAT_DEADLINE` (hard cap on one answer) and
+`RAG_CHAT_MAX_IN_FLIGHT_PER_CLIENT`.
+
+`POST /v1/chat` takes `{collections, question, history?, filter?, k?}` and `POST /v1/transform`
+takes `{text, instruction}`. Both answer with `text/event-stream` and the events `status`,
+`token`, `citations` (chat only), `done` and `error`:
+
+```bash
+curl -N -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"collections":["docs"],"question":"What changed in the last release?"}' \
+  http://localhost:8081/v1/chat
+```
+
+`rag-service/scripts/chat-smoke.sh` runs the same flow end to end.
+
+Status codes callers rely on:
+
+- `429` with `Retry-After`: the client is already at its in-flight limit (also with `Accept: text/event-stream`).
+- `503 OLLAMA_UNAVAILABLE`: Ollama is offline. `503 MODEL_NOT_AVAILABLE`: the chat model is not pulled.
+- `413 TEXT_TOO_LARGE`: transform text does not fit the context window.
+- Error event `DEADLINE`: the answer hit `RAG_CHAT_DEADLINE`; the tokens already sent stay valid.
+- `done.refusal=true`: the service answered "I don't know" because retrieval was too weak or the model declined.
+
+Indexing pauses while a chat or transform runs and catches up afterwards. Proxies in front of the
+service must not buffer `text/event-stream`; the service sends `X-Accel-Buffering: no`.
+
+### Accepted risks (chat)
+
+- **Residual prompt injection (SAFE-02).** Document, history and transform text is fenced as data
+  and answers are plain text, but a small model can still be steered by planted text. Nothing is
+  executed and answers are advisory. The golden injection cases measure this.
+- **The concurrency limit is in memory**, so it is correct for a single instance only.
+- **A key revoked during a stream is not re-checked** until that stream ends, which the deadline bounds.
+- **Debug logging.** Chat, transform and Ollama request bodies are kept out of logs even at
+  DEBUG. The search and document endpoints are not covered: at `org.springframework.web` DEBUG,
+  Spring logs their request and response bodies. Do not enable that level outside local debugging.
+
 ---
 
 ## Troubleshooting

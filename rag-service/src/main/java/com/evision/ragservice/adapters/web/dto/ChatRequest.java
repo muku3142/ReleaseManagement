@@ -22,7 +22,20 @@ public record ChatRequest(
 
     public static final int MAX_COLLECTIONS = 10;
 
-    public record Turn(@NotNull @Pattern(regexp = "user|assistant") String role, @NotBlank String content) {}
+    public record Turn(@NotNull @Pattern(regexp = "user|assistant") String role, @NotBlank String content) {
+        @Override
+        public String toString() {
+            return "Turn[role=" + role + ", contentChars=" + (content == null ? 0 : content.length()) + "]";
+        }
+    }
+
+    // SAFE-03: Spring's DEBUG logging of the request body calls toString; keep question, history and filter out of it
+    @Override
+    public String toString() {
+        return "ChatRequest[collections=" + (collections == null ? 0 : collections.size()) + ", questionChars="
+                + (question == null ? 0 : question.length()) + ", turns=" + (history == null ? 0 : history.size())
+                + "]";
+    }
 
     public ChatService.Command toCommand() {
         List<ChatMessage> turns = history == null ? List.of() : history.stream()
