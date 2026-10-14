@@ -22,4 +22,15 @@ public class OllamaRestClientConfig {
         requestFactory.setReadTimeout(readTimeout);
         return RestClient.builder().requestFactory(requestFactory).build();
     }
+
+    @Bean
+    RestClient ollamaStreamClient(ChatProperties chat, @Value("${rag.ollama.connect-timeout}") Duration connectTimeout) {
+        HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
+                .connectTimeout(connectTimeout)
+                .build();
+        JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
+        // Spring 7 bounds the whole exchange, body included, until the stream is closed; the deadline watchdog fires first
+        requestFactory.setReadTimeout(chat.deadline().plusSeconds(5));
+        return RestClient.builder().requestFactory(requestFactory).build();
+    }
 }
