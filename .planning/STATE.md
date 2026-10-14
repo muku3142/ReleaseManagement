@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 
 ## Current Position
 
-Phase: 10 (RAG Chat & Citations) — EXECUTING
-Plan: 1 of 9
-Status: Executing Phase 10
-Last activity: 2026-10-13 -- Phase 10 execution started
+Phase: 10 (RAG Chat & Citations) — BLOCKED on a user decision
+Plan: 9 of 9 (10-01..10-08 done; 10-09 live run stopped at the golden run)
+Status: Paused — chat model choice deferred by the user (see Blockers)
+Last activity: 2026-10-14 — debug session transform-deadline-qwen3 found the root cause
 
 **v1 (Phases 1-8) is still open — not archived, phase directories kept on purpose.** Code for every v1 phase is
 merged (backend 946, frontend 340 tests green). Four blocking human checks remain, each with no SUMMARY yet:
@@ -140,6 +140,11 @@ None yet.
 
 ### Blockers/Concerns
 
+- **OPEN (2026-10-14): Phase 10 chat model.** The installed `qwen3:4b` is the 2507 thinking-only build. Its template always opens `<think>`, so `think:false` does not stop about 2,500 reasoning tokens, and every transform hits the 120 s deadline (golden T01-T03 0/3). Chat leaks reasoning too. The user deferred the decision:
+  - A: pull `qwen3:4b-instruct-2507-q4_K_M` and set `RAG_CHAT_MODEL` (config only, recommended);
+  - B: keep the thinking model and raise the deadline (breaks D-10-12; T03 still leaked).
+
+  After the choice: resume `/gsd-debug continue transform-deadline-qwen3`, re-measure G07/G09 (both 0/3) and harden prompts if still needed, rerun golden, then finish 10-09 steps 5-9 and the user review. Evidence: `.planning/phases/10-rag-chat-citations/10-09-SUMMARY.md`, `.planning/debug/transform-deadline-qwen3.md`.
 - Resolved: Jira→ADO link-discovery spike — GO for discovery via dev-status, but commit lists are incomplete (only key-referencing commits); Phase 6 needs the ADO API for full commits. See 02-DEVSTATUS-SPIKE.md.
 
 ### Quick Tasks Completed
