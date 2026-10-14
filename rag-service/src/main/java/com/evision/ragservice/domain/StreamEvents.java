@@ -16,7 +16,12 @@ public final class StreamEvents {
     /** phase: SEARCHING | GENERATING */
     public record Status(String requestId, String phase) {}
 
-    public record Token(String text) {}
+    public record Token(String text) {
+        @Override
+        public String toString() {
+            return "Token[chars=" + (text == null ? 0 : text.length()) + "]";
+        }
+    }
 
     public record Citations(CitationBasis basis, List<Citation> items) {}
 

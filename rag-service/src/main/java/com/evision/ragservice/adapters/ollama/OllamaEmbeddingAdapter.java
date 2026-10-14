@@ -119,6 +119,11 @@ public class OllamaEmbeddingAdapter implements EmbeddingPort {
     }
 
     private record EmbedRequest(String model, List<String> input, boolean truncate) {
+        // SAFE-03: Spring's DEBUG logging of the outbound body calls toString; keep document/query text out of it
+        @Override
+        public String toString() {
+            return "EmbedRequest[model=" + model + ", inputs=" + input.size() + "]";
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)

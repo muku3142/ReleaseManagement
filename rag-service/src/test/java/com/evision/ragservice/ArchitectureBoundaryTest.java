@@ -49,6 +49,25 @@ class ArchitectureBoundaryTest {
     }
 
     @Test
+    void onlyTheOllamaAdapterAndConfigMakeOutboundHttpCalls() {
+        // SAFE-03: Ollama is the only outbound call
+        noClasses().that().resideOutsideOfPackages("..adapters.ollama..", "..config..")
+                .should().dependOnClassesThat().resideInAPackage("java.net.http..")
+                .allowEmptyShould(true)
+                .check(classes);
+    }
+
+    @Test
+    void applicationNeverDependsOnTheServletLayer() {
+        // keeps SseEmitter behind EventSink
+        noClasses().that().resideInAPackage("..application..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage("org.springframework.web.servlet..", "jakarta.servlet..")
+                .allowEmptyShould(true)
+                .check(classes);
+    }
+
+    @Test
     void restClientLivesOnlyInTheOllamaAdapterAndConfig() {
         noClasses().that().resideOutsideOfPackages("..adapters.ollama..", "..config..")
                 .should().dependOnClassesThat().resideInAPackage("org.springframework.web.client..")

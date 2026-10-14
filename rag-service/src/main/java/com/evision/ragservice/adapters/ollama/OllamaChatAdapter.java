@@ -204,6 +204,11 @@ public class OllamaChatAdapter implements ChatPort {
     }
 
     private record Msg(String role, String content) {
+        // SAFE-03: Spring's DEBUG logging of the outbound body calls toString; keep prompt content out of it
+        @Override
+        public String toString() {
+            return "Msg[role=" + role + ", contentChars=" + (content == null ? 0 : content.length()) + "]";
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
