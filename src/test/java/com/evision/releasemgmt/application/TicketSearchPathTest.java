@@ -84,7 +84,7 @@ class TicketSearchPathTest {
 
         return new TicketSearchService(
                 accessContextService,
-                new FieldMetadataService(accessContextService, new JiraFieldMetadataAdapter(restClient)),
+                new FieldMetadataService(accessContextService, new JiraFieldMetadataAdapter(restClient), ""),
                 new JiraRestTicketAdapter(restClient, 100, 50),
                 releaseRepository);
     }

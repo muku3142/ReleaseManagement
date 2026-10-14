@@ -215,7 +215,7 @@ class ReleaseControllerTest {
         UUID id = UUID.randomUUID();
         TicketDetail ticket = new TicketDetail("CNV-1", "Summary", "Bug", "Done", "Fixed",
                 "Dev Person", "Reporter Person", List.of("2026.1"), null, "Full description",
-                List.of("First comment", "Second comment"), 2, null, null, null);
+                List.of("First comment", "Second comment"), 2, null, null, null, null, false);
         ReleaseItem item = new ReleaseItem(ticket, Instant.parse("2026-08-04T09:30:00Z"), CodeLinks.notAttempted());
         ManualItem manual = new ManualItem(UUID.randomUUID(), "Run migration", "Apply schema change",
                 ManualItemCategory.DATABASE_SCRIPT, Instant.parse("2026-08-04T09:31:00Z"));
@@ -449,7 +449,7 @@ class ReleaseControllerTest {
 
     private static Release releaseWithLinkedItem(UUID id) {
         TicketDetail ticket = new TicketDetail("EXAMPLE-1", "Summary", "Bug", "Done", "Fixed", null, null,
-                List.of(), null, "", List.of(), 0, "10001", null, null);
+                List.of(), null, "", List.of(), 0, "10001", null, null, null, false);
         CodeLinks links = new CodeLinks(EnrichmentStatus.LINKED, null, false, Instant.parse("2026-08-05T09:00:00Z"),
                 CommitsSource.KEY_TAGGED,
                 List.of(new LinkedPullRequest("repo", "7", "Fix", "MERGED", "https://pr", "feature/x", "main", true, null)),

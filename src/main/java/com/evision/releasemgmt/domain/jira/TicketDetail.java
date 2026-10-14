@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.domain.jira;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
@@ -20,5 +21,7 @@ public record TicketDetail(
         int commentTotal,
         String jiraIssueId,
         Instant updatedAt,
-        StatusCategory statusCategory) {
+        StatusCategory statusCategory,
+        BigDecimal storyPoints,
+        boolean storyPointsRead) {
 }

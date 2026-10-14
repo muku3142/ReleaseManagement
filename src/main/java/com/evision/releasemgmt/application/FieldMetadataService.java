@@ -7,6 +7,7 @@ import com.evision.releasemgmt.domain.jira.TicketField;
 import com.evision.releasemgmt.ports.JiraFieldMetadataPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -14,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -26,9 +28,28 @@ public class FieldMetadataService {
 
     private volatile Map<String, List<JiraField>> fieldsByLowerCasedName;
 
-    public FieldMetadataService(JiraAccessContextService accessContextService, JiraFieldMetadataPort fieldMetadataPort) {
+    private final String storyPointsFieldIdOverride;
+
+    public FieldMetadataService(JiraAccessContextService accessContextService, JiraFieldMetadataPort fieldMetadataPort,
+                                @Value("${app.jira.story-points.field-id}") String storyPointsFieldIdOverride) {
         this.accessContextService = accessContextService;
         this.fieldMetadataPort = fieldMetadataPort;
+        this.storyPointsFieldIdOverride = storyPointsFieldIdOverride.trim();
+    }
+
+    public Optional<String> storyPointsFieldId() {
+        if (!storyPointsFieldIdOverride.isEmpty()) {
+            return Optional.of(storyPointsFieldIdOverride);
+        }
+        // No cache refresh on a miss: a site without the field would otherwise re-fetch metadata on every search.
+        List<JiraField> candidates = currentCache()
+                .get(TicketField.STORY_POINTS.displayName().toLowerCase(Locale.ROOT).trim());
+        String id = candidates == null ? null : disambiguate(TicketField.STORY_POINTS, candidates);
+        if (id == null) {
+            log.warn("Story points field not resolved (candidates: {}); set RM_JIRA_STORY_POINTS_FIELD_ID to pin one",
+                    candidates == null ? List.of() : candidates.stream().map(JiraField::id).toList());
+        }
+        return Optional.ofNullable(id);
     }
 
     public Map<TicketField, String> resolve(Set<TicketField> fields) {

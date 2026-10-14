@@ -62,7 +62,7 @@ class TicketControllerTest {
 
     private static TicketDetail ticket(String key) {
         return new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed", "Dev Person", "Reporter Person",
-                List.of("2026.1"), null, "Ship it", List.of("Looks good"), 1, null, null, null);
+                List.of("2026.1"), null, "Ship it", List.of("Looks good"), 1, null, null, null, null, false);
     }
 
     @Test
@@ -223,7 +223,7 @@ class TicketControllerTest {
     void nullResolutionAndAssigneeSerialiseAsJsonNulls() throws Exception {
         when(service.search(any(), any())).thenReturn(List.of(
                 new TicketDetail("CNV-9", "Unresolved", "Task", "In Progress", null, null, "Reporter Person",
-                        List.of(), null, "", List.of(), 0, null, null, null)));
+                        List.of(), null, "", List.of(), 0, null, null, null, null, false)));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)

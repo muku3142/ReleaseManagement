@@ -60,7 +60,7 @@ class ReleaseEnrichmentPersistenceIT {
     void createRelease() {
         Release release = Release.create("Enrichment Test", "1.0", "CNV", "rm@acme.com", Instant.now());
         TicketDetail ticket = new TicketDetail(KEY, "Summary", "Bug", "Done", null, null, null, List.of(), null,
-                "", List.of(), 0, "10001", T0, StatusCategory.DONE);
+                "", List.of(), 0, "10001", T0, StatusCategory.DONE, null, false);
         repository.create(release, List.of(new ReleaseItem(ticket, Instant.now(), CodeLinks.notAttempted())));
         releaseId = release.id();
     }

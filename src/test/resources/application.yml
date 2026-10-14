@@ -16,6 +16,8 @@ app:
     search:
       page-size: 100
       max-pages: 50
+    story-points:
+      field-id: ""
     changelog:
       max-pages: 20
   ado:

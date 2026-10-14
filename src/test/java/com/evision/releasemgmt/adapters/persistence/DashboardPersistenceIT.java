@@ -87,7 +87,7 @@ class DashboardPersistenceIT {
     private static ReleaseItem item(String key) {
         return new ReleaseItem(new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed",
                 "Dev Person", "Reporter Person", List.of("2026.08"), null,
-                "Ship it", List.of(), 0, null, null, null), Instant.now(), CodeLinks.notAttempted());
+                "Ship it", List.of(), 0, null, null, null, null, false), Instant.now(), CodeLinks.notAttempted());
     }
 
     private UUID stageId(String name) {

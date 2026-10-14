@@ -17,8 +17,10 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -89,7 +91,7 @@ class TicketSearchServiceTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<Set<TicketField>> fields = ArgumentCaptor.forClass(Set.class);
         verify(fieldMetadataService).resolve(fields.capture());
-        assertThat(fields.getValue()).containsExactlyInAnyOrder(TicketField.values());
+        assertThat(fields.getValue()).doesNotContain(TicketField.STORY_POINTS).hasSize(TicketField.values().length - 1);
 
         verify(ticketPort).searchAll(eq(ACCESS),
                 eq("project = 10023 AND sprint = 10891 AND statusCategory IN (\"Done\") ORDER BY key ASC"),
@@ -256,6 +258,31 @@ class TicketSearchServiceTest {
 
     private static TicketDetail ticket(String key) {
         return new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed", null, "Reporter",
-                List.of("1.0.0"), null, "", List.of(), 0, null, null, null);
+                List.of("1.0.0"), null, "", List.of(), 0, null, null, null, null, false);
+    }
+
+    @Test
+    void addsTheOptionalStoryPointsFieldIdToTheSearchedFieldMap() {
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(fieldMetadataService.storyPointsFieldId()).thenReturn(Optional.of("customfield_10016"));
+        when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(List.of());
+
+        service.search(TicketSearchCriteria.byProject("10023", "10891", null));
+
+        Map<TicketField, String> expected = new HashMap<>(FIELD_IDS);
+        expected.put(TicketField.STORY_POINTS, "customfield_10016");
+        verify(ticketPort).searchAll(eq(ACCESS), anyString(), eq(expected));
+    }
+
+    @Test
+    void searchesWithTheResolvedMapAloneWhenStoryPointsAreUnresolvable() {
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(List.of());
+
+        service.search(TicketSearchCriteria.byProject("10023", "10891", null));
+
+        verify(ticketPort).searchAll(eq(ACCESS), anyString(), eq(FIELD_IDS));
     }
 }

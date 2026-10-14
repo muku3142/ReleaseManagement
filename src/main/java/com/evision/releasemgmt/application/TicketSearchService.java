@@ -9,6 +9,7 @@ import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -20,7 +21,8 @@ public class TicketSearchService {
 
     // TicketField is already exactly the selected field set, so enumerating them again here
     // would be a second place to keep in sync when Phase 5 adds component/epic/label.
-    private static final Set<TicketField> FIELDS = EnumSet.allOf(TicketField.class);
+    // Story points are optional and resolved separately, so a site without the field can still search.
+    private static final Set<TicketField> FIELDS = EnumSet.complementOf(EnumSet.of(TicketField.STORY_POINTS));
 
     private final JiraAccessContextService accessContextService;
     private final FieldMetadataService fieldMetadataService;
@@ -51,7 +53,8 @@ public class TicketSearchService {
     // Jira knows nothing about releases and no clause could express it.
     public List<TicketDetail> search(TicketSearchCriteria criteria, UUID releaseScope) {
         JiraAccessContext access = accessContextService.currentContext();
-        Map<TicketField, String> fieldIds = fieldMetadataService.resolve(FIELDS);
+        Map<TicketField, String> fieldIds = new HashMap<>(fieldMetadataService.resolve(FIELDS));
+        fieldMetadataService.storyPointsFieldId().ifPresent(id -> fieldIds.put(TicketField.STORY_POINTS, id));
         List<TicketDetail> found = ticketPort.searchAll(access, criteria.toJql(), fieldIds);
         if (releaseScope == null) {
             return found;

@@ -63,7 +63,7 @@ class ReleasePersistenceIT {
     private static ReleaseItem itemWithComponent(String key, String component) {
         return new ReleaseItem(new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed",
                 "Dev Person", "Reporter Person", List.of("2026.08"), component,
-                "Ship it", List.of("Looks good", "He said \"ship it\""), 2, null, null, null), Instant.now(), CodeLinks.notAttempted());
+                "Ship it", List.of("Looks good", "He said \"ship it\""), 2, null, null, null, null, false), Instant.now(), CodeLinks.notAttempted());
     }
 
     @Test
@@ -83,6 +83,24 @@ class ReleasePersistenceIT {
                 .filter(i -> i.ticketKey().equals("CNV-1"))
                 .findFirst().orElseThrow();
         assertThat(loadedItem.ticket().comments()).contains("He said \"ship it\"");
+    }
+
+    @Test
+    void storyPointsAndReadFlagRoundTrip() {
+        Release release = Release.create("Story Points", "1.0", "CNV", "rm@acme.com", Instant.now());
+        ReleaseItem estimated = new ReleaseItem(new TicketDetail("CNV-1", "s", "Bug", "Done", null, null, null,
+                List.of(), null, "", List.of(), 0, null, null, null, new java.math.BigDecimal("3.5"), true),
+                Instant.now(), CodeLinks.notAttempted());
+
+        repository.create(release, List.of(estimated, item("CNV-2")));
+
+        Release loaded = repository.findById(release.id()).orElseThrow();
+        TicketDetail withPoints = loaded.items().get(0).ticket();
+        assertThat(withPoints.storyPoints()).isEqualByComparingTo("3.5");
+        assertThat(withPoints.storyPointsRead()).isTrue();
+        TicketDetail without = loaded.items().get(1).ticket();
+        assertThat(without.storyPoints()).isNull();
+        assertThat(without.storyPointsRead()).isFalse();
     }
 
     @Test
@@ -259,7 +277,7 @@ class ReleasePersistenceIT {
 
         ReleaseItem updated = new ReleaseItem(new TicketDetail("CNV-1", "Summary CNV-1", "Bug", "In Progress",
                 "Fixed", "Dev Person", "Reporter Person", List.of("2026.08"), null, "Ship it",
-                List.of("Looks good", "He said \"ship it\""), 2, null, null, null), Instant.now(), CodeLinks.notAttempted());
+                List.of("Looks good", "He said \"ship it\""), 2, null, null, null, null, false), Instant.now(), CodeLinks.notAttempted());
         Instant refreshedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         repository.replaceItemSnapshots(release.id(), List.of(updated), refreshedAt);
@@ -275,7 +293,7 @@ class ReleasePersistenceIT {
                                                     StatusCategory category) {
         return new ReleaseItem(new TicketDetail(key, "Summary " + key, "Bug", "Done", "Fixed",
                 "Dev Person", "Reporter Person", List.of("2026.08"), null, "Ship it", List.of(), 0,
-                issueId, updatedAt, category), Instant.now(), CodeLinks.notAttempted());
+                issueId, updatedAt, category, null, false), Instant.now(), CodeLinks.notAttempted());
     }
 
     @Test
