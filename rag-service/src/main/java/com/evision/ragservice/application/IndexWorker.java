@@ -26,6 +26,7 @@ public class IndexWorker {
 
     private static final Logger log = LoggerFactory.getLogger(IndexWorker.class);
 
+    private final GenerationGate gate;
     private final IndexQueue queue;
     private final EmbeddingPort embeddings;
     private final Chunker chunker;
@@ -37,13 +38,14 @@ public class IndexWorker {
     private volatile Duration backoff;
     private volatile Instant notBefore = Instant.EPOCH;
 
-    public IndexWorker(IndexQueue queue, EmbeddingPort embeddings,
+    public IndexWorker(GenerationGate gate, IndexQueue queue, EmbeddingPort embeddings,
                        @Value("${rag.chunking.max-chars}") int maxChars,
                        @Value("${rag.chunking.overlap-chars}") int overlapChars,
                        @Value("${rag.worker.batch-size}") int batchSize,
                        @Value("${rag.worker.lease}") Duration lease,
                        @Value("${rag.worker.backoff-min}") Duration backoffMin,
                        @Value("${rag.worker.backoff-max}") Duration backoffMax) {
+        this.gate = gate;
         this.queue = queue;
         this.embeddings = embeddings;
         this.chunker = new Chunker(maxChars, overlapChars);
@@ -55,6 +57,10 @@ public class IndexWorker {
 
     @Scheduled(initialDelayString = "${rag.worker.initial-delay}", fixedDelayString = "${rag.worker.poll-interval}")
     public void tick() {
+        // D-10-03: indexing yields the GPU while a chat or transform is in flight
+        if (gate.anyInFlight()) {
+            return;
+        }
         if (Instant.now().isBefore(notBefore)) {
             return;
         }
