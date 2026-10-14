@@ -56,8 +56,8 @@ rag:
     backoff-max: PT5M
   chat:
     model: "${RAG_CHAT_MODEL:qwen3:4b}"
-    num-ctx: ${RAG_CHAT_NUM_CTX:8192}
-    num-predict: 768
+    num-ctx: ${RAG_CHAT_NUM_CTX:4096}
+    num-predict: 512
     temperature: 0.2
     transform-temperature: 0.3
     keep-alive: 30m
@@ -66,12 +66,12 @@ rag:
     max-in-flight-per-client: ${RAG_CHAT_MAX_IN_FLIGHT_PER_CLIENT:1}
     max-in-flight-global: 4
     retry-after-seconds: 5
-    k-default: 5
-    k-max: 8
+    k-default: 4
+    k-max: 4
     min-score: 0.55
     question-max-chars: 2000
     history-max-turns: 20
     history-turn-max-chars: 4000
-    history-token-budget: 1500
+    history-token-budget: 600
     instruction-max-chars: 2000
     chars-per-token: 3.0
