@@ -1,6 +1,12 @@
 package com.evision.ragservice.adapters.web;
 
+import com.evision.ragservice.config.ChatProperties;
 import com.evision.ragservice.domain.ClientNameTakenException;
+import com.evision.ragservice.domain.MixedEmbeddingModelsException;
+import com.evision.ragservice.domain.ModelNotAvailableException;
+import com.evision.ragservice.domain.OllamaUnavailableException;
+import com.evision.ragservice.domain.TextTooLargeException;
+import com.evision.ragservice.domain.TooManyRequestsException;
 import com.evision.ragservice.domain.ClientNotFoundException;
 import com.evision.ragservice.domain.CollectionModelConflictException;
 import com.evision.ragservice.domain.CollectionNotFoundException;
@@ -29,6 +35,12 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    private final ChatProperties chatProperties;
+
+    public GlobalExceptionHandler(ChatProperties chatProperties) {
+        this.chatProperties = chatProperties;
+    }
 
     @ExceptionHandler(CollectionNotFoundException.class)
     public ProblemDetail handleCollectionNotFound(CollectionNotFoundException ex) {
@@ -79,6 +91,39 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(EmbeddingRejectedException.class)
     public ProblemDetail handleEmbeddingRejected(EmbeddingRejectedException ex) {
         return problem(HttpStatus.BAD_REQUEST, "Query rejected", ex.getMessage(), "QUERY_REJECTED");
+    }
+
+    @ExceptionHandler(TooManyRequestsException.class)
+    public ResponseEntity<ProblemDetail> handleTooManyRequests(TooManyRequestsException ex) {
+        ProblemDetail pd = problem(HttpStatus.TOO_MANY_REQUESTS, "Too many requests", ex.getMessage(),
+                "TOO_MANY_REQUESTS");
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(chatProperties.retryAfterSeconds()))
+                .body(pd);
+    }
+
+    @ExceptionHandler(OllamaUnavailableException.class)
+    public ProblemDetail handleOllamaUnavailable(OllamaUnavailableException ex) {
+        log.warn("Generation backend unavailable: {}", ex.getClass().getSimpleName());
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "Generation unavailable", ex.getMessage(),
+                "OLLAMA_UNAVAILABLE");
+    }
+
+    @ExceptionHandler(ModelNotAvailableException.class)
+    public ProblemDetail handleModelNotAvailable(ModelNotAvailableException ex) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "Chat model not available", ex.getMessage(),
+                "MODEL_NOT_AVAILABLE");
+    }
+
+    @ExceptionHandler(TextTooLargeException.class)
+    public ProblemDetail handleTextTooLarge(TextTooLargeException ex) {
+        return problem(HttpStatus.PAYLOAD_TOO_LARGE, "Text too large", ex.getMessage(), "TEXT_TOO_LARGE");
+    }
+
+    @ExceptionHandler(MixedEmbeddingModelsException.class)
+    public ProblemDetail handleMixedEmbeddingModels(MixedEmbeddingModelsException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Mixed embedding models", ex.getMessage(),
+                "MIXED_EMBEDDING_MODELS");
     }
 
     @Override

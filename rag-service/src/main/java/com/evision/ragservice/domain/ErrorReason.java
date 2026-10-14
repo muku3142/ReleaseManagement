@@ -1,0 +1,5 @@
+package com.evision.ragservice.domain;
+
+public enum ErrorReason {
+    DEADLINE, GENERATION_FAILED, OLLAMA_UNAVAILABLE, MODEL_NOT_AVAILABLE, EMBEDDING_UNAVAILABLE, INTERNAL
+}

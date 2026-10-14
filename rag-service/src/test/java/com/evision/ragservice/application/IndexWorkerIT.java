@@ -62,6 +62,9 @@ class IndexWorkerIT {
     @Autowired
     private IndexWorker worker;
 
+    @Autowired
+    private GenerationGate gate;
+
     private UUID clientId;
 
     @BeforeEach
@@ -205,6 +208,26 @@ class IndexWorkerIT {
         worker.tick();
 
         assertThat(embedCalls()).isZero();
+    }
+
+    @Test
+    void tickYieldsWhileAGenerationSlotIsHeldAndResumesAfterRelease() {
+        push("a", "A", "alpha");
+        stubOk();
+        UUID holder = UUID.randomUUID();
+        assertThat(gate.tryAcquire(holder)).isTrue();
+        try {
+            worker.tick();
+
+            assertThat(embedCalls()).isZero();
+            assertThat(status("a")).isEqualTo("PENDING");
+        } finally {
+            gate.release(holder);
+        }
+
+        worker.tick();
+
+        assertThat(status("a")).isEqualTo("INDEXED");
     }
 
     @Test

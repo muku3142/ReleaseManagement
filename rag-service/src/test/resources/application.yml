@@ -50,3 +50,24 @@ rag:
     lease: PT10M
     backoff-min: PT1S
     backoff-max: PT5M
+  chat:
+    model: "qwen3:4b"
+    num-ctx: 8192
+    num-predict: 768
+    temperature: 0.2
+    transform-temperature: 0.3
+    keep-alive: 30m
+    deadline: PT3S
+    heartbeat-interval: PT1S
+    max-in-flight-per-client: 1
+    max-in-flight-global: 4
+    retry-after-seconds: 5
+    k-default: 5
+    k-max: 8
+    min-score: 0.55
+    question-max-chars: 2000
+    history-max-turns: 20
+    history-turn-max-chars: 4000
+    history-token-budget: 1500
+    instruction-max-chars: 2000
+    chars-per-token: 3.0
