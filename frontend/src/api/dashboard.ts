@@ -33,6 +33,8 @@ export type DashboardComposition = {
   noData: number;
 };
 
+export type DashboardStoryPoints = { total: number; estimated: number; unestimated: number; unread: number };
+
 export type DashboardChurn = {
   medianCommitsToDone: number | null;
   commitNoData: number;
@@ -57,6 +59,7 @@ export type DashboardReleaseRow = {
   frozenToProductionSeconds: number | null;
   composition: DashboardComposition;
   churn: DashboardChurn;
+  storyPoints: DashboardStoryPoints;
 };
 
 export type DashboardData = {

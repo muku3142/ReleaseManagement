@@ -20,6 +20,8 @@ const TD = 'whitespace-nowrap px-4 py-2 align-top';
 
 const CODE_LINKS_TITLE = (manual: number) =>
   `Counts Jira-backed tickets only. ${manual} manual items are excluded. 'No data' means code links were never fetched for the ticket — it is not the same as 'no link'.`;
+const STORY_POINTS_TITLE =
+  "Sum of the Jira story-point estimates of this release's Jira tickets. Tickets with no estimate are counted separately, never as zero. 'Not read' tickets were snapshotted before story points were captured: refresh the release to read them (a frozen release keeps its snapshot). Manual items are excluded.";
 const CHURN_TITLE =
   "Median commits made before the ticket first reached a Done status. Tickets with no history or no linked commits are excluded and counted as 'no data', never as zero.";
 const REWORK_TITLE =
@@ -99,6 +101,26 @@ function SummaryStrip({
       </div>
       <p className="mt-2 text-xs text-gray-500">Over {summary.visibleReleases} visible releases.</p>
     </section>
+  );
+}
+
+function StoryPointsCell({ r }: { r: DashboardReleaseRow }) {
+  const { tickets } = r.composition;
+  const { total, unestimated, unread } = r.storyPoints;
+  if (tickets === 0) {
+    return <span className="text-gray-400">—</span>;
+  }
+  if (unread === tickets) {
+    return <span className="italic text-gray-400">Unknown</span>;
+  }
+  const notes = [unestimated > 0 ? `${unestimated} unestimated` : null, unread > 0 ? `${unread} not read` : null].filter(
+    Boolean,
+  );
+  return (
+    <>
+      <div>{total.toLocaleString(undefined, { maximumFractionDigits: 2 })} pts</div>
+      {notes.length > 0 && <div className="mt-1 text-xs text-gray-500">{notes.join(' · ')}</div>}
+    </>
   );
 }
 
@@ -267,7 +289,7 @@ function ReleaseMatrix({
                 <th scope="colgroup" colSpan={3} className={`${TH} text-center`}>
                   Documents
                 </th>
-                {['Stage', 'Created → frozen', 'Frozen → production', 'Composition', 'Code links', 'Development churn', 'Testing rework'].map(
+                {['Stage', 'Created → frozen', 'Frozen → production', 'Composition', 'Story points', 'Code links', 'Development churn', 'Testing rework'].map(
                   (heading) => (
                     <th key={heading} scope="col" rowSpan={2} className={TH}>
                       {heading}
@@ -317,6 +339,9 @@ function ReleaseMatrix({
                   <td className={`${TD} tabular-nums`}>
                     {r.composition.tickets} tickets · {r.composition.manual} manual
                   </td>
+                  <td className={`${TD} tabular-nums`} title={STORY_POINTS_TITLE}>
+                    <StoryPointsCell r={r} />
+                  </td>
                   <td className={TD} title={CODE_LINKS_TITLE(r.composition.manual)}>
                     <CodeLinksCell r={r} />
                   </td>
@@ -336,7 +361,7 @@ function ReleaseMatrix({
                 </th>
                 <td className={`${TD} tabular-nums`}>{formatDuration(summary.medianCreatedToFrozenSeconds)}</td>
                 <td className={`${TD} tabular-nums`}>{formatDuration(summary.medianFrozenToProductionSeconds)}</td>
-                <td colSpan={4} />
+                <td colSpan={5} />
               </tr>
             </tfoot>
           </table>
