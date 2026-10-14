@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.persistence.repository;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -26,4 +27,8 @@ public interface ChurnItemRow {
     long getPostDoneCommits();
 
     long getCommitTotal();
+
+    BigDecimal getStoryPoints();
+
+    boolean getStoryPointsRead();
 }

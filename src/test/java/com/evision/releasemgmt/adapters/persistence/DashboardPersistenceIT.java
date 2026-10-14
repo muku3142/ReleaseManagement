@@ -255,6 +255,20 @@ class DashboardPersistenceIT {
     }
 
     @Test
+    void storyPointsAndReadFlagComeBackOnTheChurnItems() {
+        UUID releaseId = release("R-SP", false, List.of(item("CNV-1"), item("CNV-2")));
+        jdbc.update("UPDATE release_ticket_item SET story_points = 5, story_points_read = TRUE "
+                + "WHERE release_id = ? AND ticket_key = 'CNV-1'", releaseId);
+
+        List<ChurnItem> items = dashboard.findChurnItems(List.of(releaseId));
+
+        assertThat(items.get(0).storyPoints()).isEqualByComparingTo("5");
+        assertThat(items.get(0).storyPointsRead()).isTrue();
+        assertThat(items.get(1).storyPoints()).isNull();
+        assertThat(items.get(1).storyPointsRead()).isFalse();
+    }
+
+    @Test
     void anEmptyReleaseIdListReturnsNothing() {
         assertThat(dashboard.findChurnItems(List.of())).isEmpty();
     }

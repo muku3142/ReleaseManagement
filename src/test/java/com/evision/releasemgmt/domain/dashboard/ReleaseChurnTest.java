@@ -19,7 +19,7 @@ class ReleaseChurnTest {
     private static ChurnItem item(String key, EnrichmentStatus status, boolean incomplete, CommitsSource source,
                                   HistoryState history, Instant firstDone, Integer reopens, long toDone, long postDone) {
         return new ChurnItem(RELEASE, key, status, incomplete, source, history, firstDone, reopens, toDone, postDone,
-                toDone + postDone);
+                toDone + postDone, null, false);
     }
 
     private static ChurnItem withData(String key, long toDone) {

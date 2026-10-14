@@ -32,6 +32,7 @@ public interface DashboardJpaRepository extends Repository<ReleaseEntity, UUID> 
                    i.enrichment_status AS enrichmentStatus, i.enrichment_incomplete AS enrichmentIncomplete,
                    i.commits_source AS commitsSource, i.history_state AS historyState,
                    i.first_done_at AS firstDoneAt, i.reopen_count AS reopenCount,
+                   i.story_points AS storyPoints, i.story_points_read AS storyPointsRead,
                    count(c.id) FILTER (WHERE i.first_done_at IS NOT NULL AND c.authored_at <= i.first_done_at) AS commitsToDone,
                    count(c.id) FILTER (WHERE i.first_done_at IS NOT NULL AND c.authored_at >  i.first_done_at) AS postDoneCommits,
                    count(c.id) AS commitTotal

@@ -60,7 +60,8 @@ public class DashboardReadRepositoryAdapter implements DashboardReadRepository {
                         r.getEnrichmentIncomplete(),
                         r.getCommitsSource() == null ? null : CommitsSource.valueOf(r.getCommitsSource()),
                         HistoryState.valueOf(r.getHistoryState()), r.getFirstDoneAt(), r.getReopenCount(),
-                        r.getCommitsToDone(), r.getPostDoneCommits(), r.getCommitTotal()))
+                        r.getCommitsToDone(), r.getPostDoneCommits(), r.getCommitTotal(),
+                        r.getStoryPoints(), r.getStoryPointsRead()))
                 .toList();
     }
 
