@@ -10,6 +10,8 @@ import com.evision.ragservice.domain.GenerationFailedException;
 import com.evision.ragservice.domain.GenerationOptions;
 import com.evision.ragservice.domain.ModelNotAvailableException;
 import com.evision.ragservice.domain.OllamaUnavailableException;
+import com.evision.ragservice.domain.ToolCall;
+import com.evision.ragservice.domain.ToolDefinition;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import org.junit.jupiter.api.Test;
@@ -21,11 +23,13 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.findAll;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.postRequestedFor;
@@ -106,6 +110,164 @@ class OllamaChatAdapterTest {
                 .withRequestBody(matchingJsonPath("$.options[?(@.temperature == 0.2)]"))
                 .withRequestBody(matchingJsonPath("$.options[?(@.top_p == 0.8)]"))
                 .withRequestBody(matchingJsonPath("$.messages[0][?(@.role == 'system')]")));
+    }
+
+    @Test
+    void noToolsRequestBodyIsByteIdenticalToPhase10(WireMockRuntimeInfo wm) {
+        stubChat(200, lines(FakeOllamaServer.doneLine("stop", 1, 0)));
+
+        adapter(wm.getHttpBaseUrl()).stream(MESSAGES, new GenerationOptions(4096, 512, 0.2), t -> { }, new Cancellation());
+
+        assertThat(findAll(postRequestedFor(urlEqualTo("/api/chat"))).getFirst().getBodyAsString())
+                .isEqualTo("{\"model\":\"qwen3:4b\",\"messages\":[{\"role\":\"system\",\"content\":\"sys\"},"
+                        + "{\"role\":\"user\",\"content\":\"q\"}],\"stream\":true,\"think\":false,\"keep_alive\":\"30m\","
+                        + "\"options\":{\"num_ctx\":4096,\"num_predict\":512,\"temperature\":0.2,\"top_p\":0.8}}");
+    }
+
+    private static final ToolDefinition TOOL = new ToolDefinition("get_release_status", "Status of a release",
+            Map.of("type", "object", "properties", Map.of("version", Map.of("type", "string"))));
+
+    private static Completion runWithTools(OllamaChatAdapter adapter, List<ChatMessage> messages, List<String> tokens) {
+        return adapter.stream(messages, new GenerationOptions(4096, 512, 0.2, List.of(TOOL)), tokens::add,
+                new Cancellation());
+    }
+
+    private static String toolCallChunk(String idJson, int index, String name, String args) {
+        return "{\"message\":{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{" + idJson
+                + "\"function\":{\"index\":" + index + ",\"name\":\"" + name + "\",\"arguments\":" + args + "}}]},\"done\":false}";
+    }
+
+    private static String lastChatBody() {
+        return findAll(postRequestedFor(urlEqualTo("/api/chat"))).getLast().getBodyAsString();
+    }
+
+    @Test
+    void toolsRequestSendsNativeToolDefinitions(WireMockRuntimeInfo wm) {
+        stubChat(200, lines(FakeOllamaServer.doneLine("stop", 1, 0)));
+
+        runWithTools(adapter(wm.getHttpBaseUrl()), MESSAGES, new ArrayList<>());
+
+        verify(postRequestedFor(urlEqualTo("/api/chat"))
+                .withRequestBody(matchingJsonPath("$.tools[0][?(@.type == 'function')]"))
+                .withRequestBody(matchingJsonPath("$.tools[0].function[?(@.name == 'get_release_status')]"))
+                .withRequestBody(matchingJsonPath("$.tools[0].function.parameters.properties.version[?(@.type == 'string')]")));
+    }
+
+    @Test
+    void thinkFollowsCapabilityOnlyForToolRequests(WireMockRuntimeInfo wm) {
+        stubChat(200, lines(FakeOllamaServer.doneLine("stop", 1, 0)));
+        OllamaChatAdapter adapter = adapter(wm.getHttpBaseUrl());
+
+        stubShow(200, "{\"capabilities\":[\"completion\",\"tools\",\"thinking\"]}");
+        adapter.assertReady();
+        runWithTools(adapter, MESSAGES, new ArrayList<>());
+        assertThat(lastChatBody()).contains("\"think\":true");
+        run(adapter, new ArrayList<>());
+        assertThat(lastChatBody()).contains("\"think\":false").doesNotContain("tools");
+
+        stubShow(200, "{\"capabilities\":[\"completion\",\"tools\"]}");
+        adapter.assertReady();
+        runWithTools(adapter, MESSAGES, new ArrayList<>());
+        assertThat(lastChatBody()).contains("\"think\":false");
+    }
+
+    @Test
+    void replaysToolRoundsWithObjectArguments(WireMockRuntimeInfo wm) {
+        stubChat(200, lines(FakeOllamaServer.doneLine("stop", 1, 0)));
+        List<ChatMessage> messages = List.of(new ChatMessage(ChatMessage.Role.SYSTEM, "sys"),
+                new ChatMessage(ChatMessage.Role.USER, "q"),
+                new ChatMessage(ChatMessage.Role.ASSISTANT, "",
+                        List.of(new ToolCall("call_1", "get_release_status", Map.of("version", "2.4.0", "n", 3))), null),
+                new ChatMessage(ChatMessage.Role.TOOL, "{\"stage\":\"UAT\"}", null, "get_release_status"));
+
+        runWithTools(adapter(wm.getHttpBaseUrl()), messages, new ArrayList<>());
+
+        verify(postRequestedFor(urlEqualTo("/api/chat"))
+                .withRequestBody(matchingJsonPath("$.messages[2].tool_calls[0].function[?(@.name == 'get_release_status')]"))
+                .withRequestBody(matchingJsonPath("$.messages[2].tool_calls[0].function.arguments[?(@.version == '2.4.0')]"))
+                .withRequestBody(matchingJsonPath("$.messages[3][?(@.role == 'tool')]"))
+                .withRequestBody(matchingJsonPath("$.messages[3][?(@.tool_name == 'get_release_status')]")));
+        assertThat(lastChatBody()).doesNotContain("\"tool_calls\":null").doesNotContain("\"tool_name\":null");
+        assertThat(lastChatBody()).contains("{\"role\":\"system\",\"content\":\"sys\"}");
+    }
+
+    @Test
+    void accumulatesToolCallsAcrossChunksAndGeneratesMissingIds(WireMockRuntimeInfo wm) {
+        stubChat(200, lines(toolCallChunk("\"id\":\"call_a\",", 0, "get_release_status", "{\"version\":\"2.4.0\"}"),
+                toolCallChunk("", 1, "get_release_status", "{\"version\":\"2.5.0\"}"),
+                FakeOllamaServer.doneLine("stop", 1, 1)));
+
+        Completion completion = runWithTools(adapter(wm.getHttpBaseUrl()), MESSAGES, new ArrayList<>());
+
+        assertThat(completion.finishReason()).isEqualTo("stop");
+        assertThat(completion.toolCalls()).hasSize(2);
+        assertThat(completion.toolCalls().get(0).id()).isEqualTo("call_a");
+        assertThat(completion.toolCalls().get(0).arguments()).containsEntry("version", "2.4.0");
+        assertThat(completion.toolCalls().get(1).id()).matches("call_[0-9a-f]{8}");
+        assertThat(completion.toolCalls().get(1).arguments()).containsEntry("version", "2.5.0");
+    }
+
+    @Test
+    void moreThanSixteenToolCallsFailGeneration(WireMockRuntimeInfo wm) {
+        List<String> chunks = new ArrayList<>();
+        for (int i = 0; i < 17; i++) {
+            chunks.add(toolCallChunk("", 0, "get_release_status", "{}"));
+        }
+        chunks.add(FakeOllamaServer.doneLine("stop", 1, 1));
+        stubChat(200, lines(chunks.toArray(String[]::new)));
+
+        assertThatThrownBy(() -> runWithTools(adapter(wm.getHttpBaseUrl()), MESSAGES, new ArrayList<>()))
+                .isInstanceOf(GenerationFailedException.class);
+    }
+
+    @Test
+    void mapsEvalDurationToMillis(WireMockRuntimeInfo wm) {
+        stubChat(200, lines("{\"message\":{\"role\":\"assistant\",\"content\":\"\"},\"done\":true,\"done_reason\":\"stop\","
+                + "\"eval_duration\":2500000000}"));
+
+        assertThat(run(adapter(wm.getHttpBaseUrl()), new ArrayList<>()).evalDurationMs()).isEqualTo(2500L);
+    }
+
+    @Test
+    void assertToolsReadyChecksToolsCapability(WireMockRuntimeInfo wm) {
+        OllamaChatAdapter adapter = adapter(wm.getHttpBaseUrl());
+
+        stubShow(200, "{\"capabilities\":[\"completion\"]}");
+        adapter.assertReady();
+        assertThatThrownBy(adapter::assertToolsReady).isInstanceOf(ModelNotAvailableException.class);
+
+        stubShow(200, "{\"capabilities\":[\"completion\",\"tools\"]}");
+        adapter.assertReady();
+        adapter.assertToolsReady();
+    }
+
+    @Test
+    void toolsRejectionMapsToModelNotAvailable(WireMockRuntimeInfo wm) {
+        stubChat(400, "{\"error\":\"registry.ollama.ai/library/x does not support tools\"}");
+
+        assertThatThrownBy(() -> runWithTools(adapter(wm.getHttpBaseUrl()), MESSAGES, new ArrayList<>()))
+                .isInstanceOf(ModelNotAvailableException.class);
+    }
+
+    @Test
+    void scriptedFakeServesOneScriptPerRequest() throws Exception {
+        try (FakeOllamaServer fake = FakeOllamaServer.start()) {
+            fake.chatScript(List.of(
+                    FakeOllamaServer.toolCalls(FakeOllamaServer.toolCallLine("call_1", "get_release_status",
+                            "{\"version\":\"2.4.0\"}")),
+                    FakeOllamaServer.answer("UAT")), Duration.ZERO);
+            OllamaChatAdapter adapter = adapter(fake.baseUrl());
+            List<String> tokens = new ArrayList<>();
+
+            Completion first = runWithTools(adapter, MESSAGES, tokens);
+            Completion second = runWithTools(adapter, MESSAGES, tokens);
+
+            assertThat(first.toolCalls()).hasSize(1);
+            assertThat(first.toolCalls().getFirst().name()).isEqualTo("get_release_status");
+            assertThat(second.toolCalls()).isEmpty();
+            assertThat(tokens).containsExactly("UAT");
+            assertThat(fake.chatBodies()).hasSize(2);
+        }
     }
 
     @Test

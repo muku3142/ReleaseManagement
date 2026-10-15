@@ -12,6 +12,9 @@ public interface ChatPort {
     /** Throws OllamaUnavailableException when the backend is unreachable and ModelNotAvailableException when the chat model is missing. */
     void assertReady();
 
+    /** Throws ModelNotAvailableException when the chat model cannot call tools; call after assertReady. */
+    void assertToolsReady();
+
     /** Streams tokens to onToken; returns Completion.cancelled(reason) once cancel fires; throws OllamaUnavailableException, ModelNotAvailableException or GenerationFailedException. */
     Completion stream(List<ChatMessage> messages, GenerationOptions options, Consumer<String> onToken, Cancellation cancel);
 }
