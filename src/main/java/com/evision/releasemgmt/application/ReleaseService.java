@@ -72,6 +72,10 @@ public class ReleaseService {
         return repository.search(query == null ? "" : query.trim());
     }
 
+    public List<ReleaseSummary> releasesContaining(String ticketKey) {
+        return repository.releasesContaining(ticketKey);
+    }
+
     public AddTicketsResult addTickets(UUID releaseId, List<String> ticketKeys) {
         Release release = get(releaseId);
         release.requireOpen();

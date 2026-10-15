@@ -28,6 +28,9 @@ public interface ReleaseRepository {
     /** Case-insensitive substring match on name or version; a blank query returns everything. */
     List<ReleaseSummary> search(String query);
 
+    /** Read-only: the releases that hold this ticket key (D-12-13). */
+    List<ReleaseSummary> releasesContaining(String ticketKey);
+
     List<String> findTicketKeys(UUID releaseId);
 
     Release addItems(UUID releaseId, List<ReleaseItem> items);

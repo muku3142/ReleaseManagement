@@ -85,6 +85,15 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<ReleaseSummary> releasesContaining(String ticketKey) {
+        Set<UUID> releaseIds = itemJpa.findByTicketKey(ticketKey).stream()
+                .map(ReleaseTicketItemEntity::getReleaseId).collect(Collectors.toSet());
+        return jpa.search("").stream().filter(row -> releaseIds.contains(row.getId()))
+                .map(ReleaseRepositoryAdapter::toSummary).toList();
+    }
+
+    @Override
     public List<ReleaseSummary> search(String query) {
         return jpa.search(escapeLikeWildcards(query)).stream().map(ReleaseRepositoryAdapter::toSummary).toList();
     }

@@ -15,5 +15,7 @@ public interface ReleaseTicketItemJpaRepository extends JpaRepository<ReleaseTic
 
     Optional<ReleaseTicketItemEntity> findByReleaseIdAndTicketKey(UUID releaseId, String ticketKey);
 
+    List<ReleaseTicketItemEntity> findByTicketKey(String ticketKey);
+
     long deleteByReleaseIdAndTicketKey(UUID releaseId, String ticketKey);
 }
