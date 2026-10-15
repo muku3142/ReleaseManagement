@@ -466,7 +466,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 9. RAG Service Foundation & Index | 11/11 | Complete | 2026-10-13 |
 | 10. RAG Chat & Citations | 8/9 | In Progress |  |
 | 11. Tool-Call Protocol | 3/9 | In Progress |  |
-| 12. ReleaseManagement as First Client | 0/11 | Planned | - |
+| 12. ReleaseManagement as First Client | 3/11 | In Progress |  |
 | 13. Assistant Screen & Quality Gate | 0/TBD | Not started | - |
 | 14. AI Document Assist | 0/TBD | Not started | - |
 
@@ -667,9 +667,9 @@ Plans:
 **Plans**: 11 across 5 waves (D-12-11..16 amendments applied: per-release ticket/code-link ids, 5 consolidated tools, `app.assistant.*` keys)
 
 **Wave 1** *(can execute before Phase 11 completes)*
-  - [ ] 12-01: AssistantProperties (app.assistant.*, fail-fast, redacted key), conditional AssistantConfig, both ymls, compose, .env.example, docs — ASST-01, ASST-03
-  - [ ] 12-02: AssistantTool contract, ReleaseRef, ToolRegistry, ReleaseService.releasesContaining, `releases` and `dashboard` tools — ASST-03, ASST-04
-  - [ ] 12-04: domain/assistant records, RagIndexPort, RagChatPort, pure IndexDocumentMapper — ASST-01, ASST-03
+  - [x] 12-01: AssistantProperties (app.assistant.*, fail-fast, redacted key), conditional AssistantConfig, both ymls, compose, .env.example, docs — ASST-01, ASST-03
+  - [x] 12-02: AssistantTool contract, ReleaseRef, ToolRegistry, ReleaseService.releasesContaining, `releases` and `dashboard` tools — ASST-03, ASST-04
+  - [x] 12-04: domain/assistant records, RagIndexPort, RagChatPort, pure IndexDocumentMapper — ASST-01, ASST-03
 
 **Wave 2** *(blocked on Wave 1 completion; can execute before Phase 11 completes)*
   - [ ] 12-03: `tickets`, `deployments`, `documents` tools and the Phase 11 definitions-limit test — ASST-03
