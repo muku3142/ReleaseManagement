@@ -465,7 +465,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 8. Release Insights Dashboard | 7/8 | In Progress|  |
 | 9. RAG Service Foundation & Index | 11/11 | Complete | 2026-10-13 |
 | 10. RAG Chat & Citations | 8/9 | In Progress |  |
-| 11. Tool-Call Protocol | 0/9 | Planned    |  |
+| 11. Tool-Call Protocol | 2/9 | In Progress |  |
 | 12. ReleaseManagement as First Client | 0/TBD | Not started | - |
 | 13. Assistant Screen & Quality Gate | 0/TBD | Not started | - |
 | 14. AI Document Assist | 0/TBD | Not started | - |
@@ -630,8 +630,8 @@ Plans:
 **Plans**: 9 across 6 waves
 
 **Wave 1** *(can execute before Phase 10 closes)*
-  - [ ] 11-01: ToolProperties (rag.tools.*, mandatory RAG_TOOL_SIGNING_SECRET), both ymls, compose, .env.example, docs config — RAG-08
-  - [ ] 11-02: tool domain types, ToolSchema subset validator, ToolTurnSigner HMAC chain, ToolPolicy caps/pairing — RAG-08
+  - [x] 11-01: ToolProperties (rag.tools.*, mandatory RAG_TOOL_SIGNING_SECRET), both ymls, compose, .env.example, docs config — RAG-08
+  - [x] 11-02: tool domain types, ToolSchema subset validator, ToolTurnSigner HMAC chain, ToolPolicy caps/pairing — RAG-08
 
 **Wave 2** *(blocked on Wave 1 completion; 11-04 also waits for Phase 10 to close)*
   - [ ] 11-03: Ollama adapter tools/tool_calls/think-by-capability, ChatPort.assertToolsReady, scriptable FakeOllamaServer — RAG-08

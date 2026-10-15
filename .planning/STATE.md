@@ -28,7 +28,7 @@ See: .planning/PROJECT.md (updated 2026-10-13)
 Phase: 10 (RAG Chat & Citations) — BLOCKED on a user decision
 Plan: 9 of 9 (10-01..10-08 done; 10-09 live run stopped at the golden run)
 Status: Paused — chat model choice deferred by the user (see Blockers)
-Last activity: 2026-10-15 — Phase 11 planned (9 plans, 6 waves, `3f2fe7e`); 11-01..11-03 may execute before Phase 10 closes, 11-04..11-09 wait for it
+Last activity: 2026-10-15 — Phase 11 wave 1 done (11-01, 11-02 merged, rag 284 green); 11-03 may run next, 11-04..11-09 wait for Phase 10
 
 **v1 (Phases 1-8) is still open — not archived, phase directories kept on purpose.** Code for every v1 phase is
 merged (backend 946, frontend 340 tests green). Four blocking human checks remain, each with no SUMMARY yet:
