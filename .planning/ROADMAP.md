@@ -465,7 +465,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 8. Release Insights Dashboard | 7/8 | In Progress|  |
 | 9. RAG Service Foundation & Index | 11/11 | Complete | 2026-10-13 |
 | 10. RAG Chat & Citations | 8/9 | In Progress |  |
-| 11. Tool-Call Protocol | 2/9 | In Progress |  |
+| 11. Tool-Call Protocol | 3/9 | In Progress |  |
 | 12. ReleaseManagement as First Client | 0/TBD | Not started | - |
 | 13. Assistant Screen & Quality Gate | 0/TBD | Not started | - |
 | 14. AI Document Assist | 0/TBD | Not started | - |
@@ -634,7 +634,7 @@ Plans:
   - [x] 11-02: tool domain types, ToolSchema subset validator, ToolTurnSigner HMAC chain, ToolPolicy caps/pairing — RAG-08
 
 **Wave 2** *(blocked on Wave 1 completion; 11-04 also waits for Phase 10 to close)*
-  - [ ] 11-03: Ollama adapter tools/tool_calls/think-by-capability, ChatPort.assertToolsReady, scriptable FakeOllamaServer — RAG-08
+  - [x] 11-03: Ollama adapter tools/tool_calls/think-by-capability, ChatPort.assertToolsReady, scriptable FakeOllamaServer — RAG-08
   - [ ] 11-04: p11-v1 tool rules, fenced and budgeted chatWithTools (413), tool-source citations with Citation.kind — RAG-08
 
 **Wave 3** *(blocked on Wave 2 completion; after Phase 10 closes)*
