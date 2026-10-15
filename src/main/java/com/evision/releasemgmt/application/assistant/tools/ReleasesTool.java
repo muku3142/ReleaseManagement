@@ -54,8 +54,7 @@ public class ReleasesTool implements AssistantTool {
 
     @Override
     public String description() {
-        return "Lists releases, or with `release` (name, version or id) returns its status, dates, ticket counts "
-                + "and current deployment stage. Values are authoritative.";
+        return "Releases: list, or with `release` its status, dates, ticket counts and current stage.";
     }
 
     @Override

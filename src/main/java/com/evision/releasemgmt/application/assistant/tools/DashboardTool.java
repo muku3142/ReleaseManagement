@@ -51,8 +51,7 @@ public class DashboardTool implements AssistantTool {
 
     @Override
     public String description() {
-        return "Dashboard summary figures (release counts, median lead times) and the deployment ladder stages with "
-                + "per-stage release counts. scope is active (default) or all. Values are authoritative.";
+        return "Dashboard figures (counts, median lead times) and ladder stages with release counts. scope: active or all.";
     }
 
     @Override
