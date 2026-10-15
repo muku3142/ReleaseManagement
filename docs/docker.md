@@ -317,7 +317,8 @@ Before pushing anywhere real, read [Not production-ready as-is](#not-production-
 ## rag-service
 
 A separate retrieval service (collections, documents, semantic search) on port **8081**. It
-starts with the stack, depends only on Postgres, and does not affect the `app` service.
+starts with the stack, depends only on Postgres, and does not affect the `app` service. `RAG_ADMIN_KEY` and
+`RAG_TOOL_SIGNING_SECRET` are required (at least 32 characters each).
 Swagger UI: `http://localhost:8081/swagger-ui/index.html`; contract at `/v3/api-docs`, committed
 at `rag-service/openapi.json`. **`RAG_ADMIN_KEY` is required** (at least 32 characters) by
 `docker compose -f compose.app.yaml up`; see `.env.example`.
@@ -391,6 +392,13 @@ Status codes callers rely on:
 
 Indexing pauses while a chat or transform runs and catches up afterwards. Proxies in front of the
 service must not buffer `text/event-stream`; the service sends `X-Accel-Buffering: no`.
+
+### Tool calls: configuration
+
+`RAG_TOOL_SIGNING_SECRET` signs each tool-call turn so callers cannot forge model calls. Generate it with the
+`RAG_TOOL_SIGNING_SECRET` sed line in `.env.example`. Rotating it invalidates only tool rounds in flight.
+`RAG_TOOL_MAX_ROUNDS` (default 4) caps rounds per question; `RAG_TOOL_RESULT_MAX_CHARS` (default 8000) caps one tool
+result (the context budget may reject smaller results first, with 413).
 
 ### Accepted risks (chat)
 

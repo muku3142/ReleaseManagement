@@ -75,3 +75,11 @@ rag:
     history-token-budget: 600
     instruction-max-chars: 2000
     chars-per-token: 3.0
+  tools:
+    signing-secret: ${RAG_TOOL_SIGNING_SECRET}
+    max-rounds: ${RAG_TOOL_MAX_ROUNDS:4}
+    max-calls: 4
+    max-tools: 5
+    definitions-max-chars: 1500
+    result-max-chars: ${RAG_TOOL_RESULT_MAX_CHARS:8000}
+    num-predict: 768

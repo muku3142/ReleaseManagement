@@ -7,7 +7,7 @@
 #
 #   docker compose -f compose.app.yaml up --build -d
 #
-# Requires RM_CREDENTIAL_KEY, RM_JWT_SECRET and RAG_ADMIN_KEY — see .env.example.
+# Requires RM_CREDENTIAL_KEY, RM_JWT_SECRET, RAG_ADMIN_KEY and RAG_TOOL_SIGNING_SECRET — see .env.example.
 
 services:
   postgres:
@@ -78,6 +78,9 @@ services:
       RAG_DB_USER: rag
       RAG_DB_PASSWORD: ${RAG_DB_PASSWORD:-rag}
       RAG_ADMIN_KEY: ${RAG_ADMIN_KEY:?set RAG_ADMIN_KEY (at least 32 chars), e.g. openssl rand -base64 32}
+      RAG_TOOL_SIGNING_SECRET: ${RAG_TOOL_SIGNING_SECRET:?set RAG_TOOL_SIGNING_SECRET (at least 32 chars), e.g. openssl rand -base64 32}
+      RAG_TOOL_MAX_ROUNDS: ${RAG_TOOL_MAX_ROUNDS:-4}
+      RAG_TOOL_RESULT_MAX_CHARS: ${RAG_TOOL_RESULT_MAX_CHARS:-8000}
       RAG_OLLAMA_BASE_URL: ${RAG_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       RAG_CHAT_MODEL: ${RAG_CHAT_MODEL:-qwen3:4b}
       RAG_CHAT_NUM_CTX: ${RAG_CHAT_NUM_CTX:-4096}
