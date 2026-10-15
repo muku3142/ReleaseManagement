@@ -466,7 +466,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 9. RAG Service Foundation & Index | 11/11 | Complete | 2026-10-13 |
 | 10. RAG Chat & Citations | 8/9 | In Progress |  |
 | 11. Tool-Call Protocol | 3/9 | In Progress |  |
-| 12. ReleaseManagement as First Client | 3/11 | In Progress |  |
+| 12. ReleaseManagement as First Client | 7/11 | In Progress |  |
 | 13. Assistant Screen & Quality Gate | 0/TBD | Not started | - |
 | 14. AI Document Assist | 0/TBD | Not started | - |
 
@@ -672,10 +672,10 @@ Plans:
   - [x] 12-04: domain/assistant records, RagIndexPort, RagChatPort, pure IndexDocumentMapper — ASST-01, ASST-03
 
 **Wave 2** *(blocked on Wave 1 completion; can execute before Phase 11 completes)*
-  - [ ] 12-03: `tickets`, `deployments`, `documents` tools and the Phase 11 definitions-limit test — ASST-03
-  - [ ] 12-05: RagRestClientConfig (index client) and RagIndexAdapter, WireMock — ASST-01
-  - [ ] 12-06: IndexSyncer (diff, push, delete, quiet failure) and IndexSweep (startup + 30 min) — ASST-01
-  - [ ] 12-07: AssistantService tool loop against a fake RagChatPort (rounds guard, error results, size cap, toolsRun/sources) — ASST-03
+  - [x] 12-03: `tickets`, `deployments`, `documents` tools and the Phase 11 definitions-limit test — ASST-03
+  - [x] 12-05: RagRestClientConfig (index client) and RagIndexAdapter, WireMock — ASST-01
+  - [x] 12-06: IndexSyncer (diff, push, delete, quiet failure) and IndexSweep (startup + 30 min) — ASST-01
+  - [x] 12-07: AssistantService tool loop against a fake RagChatPort (rounds guard, error results, size cap, toolsRun/sources) — ASST-03
 
 **Wave 3** *(blocked on Wave 2 completion; can execute before Phase 11 completes)*
   - [ ] 12-08: after-commit event publishing in persistence adapters, IndexInvalidationListener, IndexAfterCommitIT, AssistantSwitchOffIT — ASST-01
