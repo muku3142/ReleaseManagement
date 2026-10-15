@@ -466,7 +466,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 9. RAG Service Foundation & Index | 11/11 | Complete | 2026-10-13 |
 | 10. RAG Chat & Citations | 8/9 | In Progress |  |
 | 11. Tool-Call Protocol | 3/9 | In Progress |  |
-| 12. ReleaseManagement as First Client | 0/TBD | Not started | - |
+| 12. ReleaseManagement as First Client | 0/11 | Planned | - |
 | 13. Assistant Screen & Quality Gate | 0/TBD | Not started | - |
 | 14. AI Document Assist | 0/TBD | Not started | - |
 
@@ -664,7 +664,28 @@ Plans:
 
 **Research flags**: Check whether restricted-visibility Jira comments are stored today (index only what the screens show); decide the document id scheme and the `project_key` metadata stored for later filtering; confirm the after-commit event path does not run inside refresh or generate transactions; confirm the ArchUnit read-only rules are active and not vacuous.
 **Scope notes**: RAG client adapter behind a port; async push after commit for refresh/remove/edit/generate plus a backfill sweep. 8-12 coarse flat tools over existing application services in-process (list/get release, get ticket, promotion history, ladder, dashboard summary, recent deployments, ticket churn, document readiness, list/get document revisions). The tool loop runs in ReleaseManagement. `rm.assistant.enabled` switch. Shared scoping, like v1: the assistant must never claim to honour per-user Jira permissions.
-**Plans**: TBD
+**Plans**: 11 across 5 waves (D-12-11..16 amendments applied: per-release ticket/code-link ids, 5 consolidated tools, `app.assistant.*` keys)
+
+**Wave 1** *(can execute before Phase 11 completes)*
+  - [ ] 12-01: AssistantProperties (app.assistant.*, fail-fast, redacted key), conditional AssistantConfig, both ymls, compose, .env.example, docs — ASST-01, ASST-03
+  - [ ] 12-02: AssistantTool contract, ReleaseRef, ToolRegistry, ReleaseService.releasesContaining, `releases` and `dashboard` tools — ASST-03, ASST-04
+  - [ ] 12-04: domain/assistant records, RagIndexPort, RagChatPort, pure IndexDocumentMapper — ASST-01, ASST-03
+
+**Wave 2** *(blocked on Wave 1 completion; can execute before Phase 11 completes)*
+  - [ ] 12-03: `tickets`, `deployments`, `documents` tools and the Phase 11 definitions-limit test — ASST-03
+  - [ ] 12-05: RagRestClientConfig (index client) and RagIndexAdapter, WireMock — ASST-01
+  - [ ] 12-06: IndexSyncer (diff, push, delete, quiet failure) and IndexSweep (startup + 30 min) — ASST-01
+  - [ ] 12-07: AssistantService tool loop against a fake RagChatPort (rounds guard, error results, size cap, toolsRun/sources) — ASST-03
+
+**Wave 3** *(blocked on Wave 2 completion; can execute before Phase 11 completes)*
+  - [ ] 12-08: after-commit event publishing in persistence adapters, IndexInvalidationListener, IndexAfterCommitIT, AssistantSwitchOffIT — ASST-01
+  - [ ] 12-09: ArchUnit read-only/isolation rules with real-tool and fixture positive cases — ASST-04
+
+**Wave 4** *(blocked on Wave 3 completion AND Phase 11 plan 11-06)*
+  - [ ] 12-10: RagChatAdapter (/v1/chat SSE, tools/toolTurns, signed-turn round trip, error mapping), chat client bean — ASST-03
+
+**Wave 5** *(blocked on Wave 4 completion AND Phase 11 11-09 rollout — NOT autonomous, needs the user)*
+  - [ ] 12-11: register client, key into .env unprinted, switch ON, rebuild app, live backfill/push/outage/catch-up/exact-fact checks, user review — ASST-01, ASST-03, ASST-04
 
 ### Phase 13: Assistant Screen & Quality Gate
 **Goal**: The release manager asks questions on an Assistant screen or from a release page, watches the answer stream in with its sources, and answer quality and model choice are proven by a fixed question set before v1.1 ships
