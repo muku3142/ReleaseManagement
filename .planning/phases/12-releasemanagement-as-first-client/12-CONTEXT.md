@@ -48,6 +48,14 @@ Not in this phase:
 - **D-12-09: `rm.assistant.enabled` defaults to OFF.** Nothing is pushed and no tools are exposed until it is turned on, so v1 deployments without rag-service are unaffected. It is turned on on this machine for Phase 12's live check.
 - **D-12-10: Ticket comments only as the screens show them.** Research checks whether restricted-visibility Jira comments are stored today, and excludes anything the screens don't show.
 
+### Amendments after research (user decisions 2026-10-15; these override the text above where they differ)
+- **D-12-11 (amends D-12-02):** tickets and code links use **per-release** ids, `ticket:{releaseId}:{key}` and `codelinks:{releaseId}:{key}`, because each release stores its own ticket snapshot. "This release" is then an exact scalar `release_id` equality filter, with no rag-service change. Documents and manual items keep `document:{releaseId}:{type}` and `manual:{itemId}`.
+- **D-12-12 (refines D-12-05):** the sweep re-pushes everything idempotently (the server's content hash makes this a no-op when nothing changed) and deletes ids recorded in memory that are no longer wanted. A 404 on delete counts as success. Accepted limitation: an orphan survives only if a delete was dropped and the app restarted before the next sweep. No rag-service list endpoint.
+- **D-12-13 (amends D-12-07):** the ten capabilities are consolidated into **5 tools**, `releases`, `tickets`, `deployments`, `dashboard` and `documents`, to fit Phase 11's caps (5 tools, 1,500 characters of definitions) and the 4096-token budget. A read-only `ReleaseService.releasesContaining(ticketKey)` is added for ticket lookup.
+- **D-12-14 (refines D-12-10):** ticket comments are indexed exactly as the screens show them. Jira visibility is discarded at ingest today, so this may include comments restricted in Jira; that is accepted, consistent with "index what the screens show".
+- **D-12-15 (refines D-12-06):** tools never return promotion `note` or `correctionReason` (free text).
+- **D-12-16:** config keys use the app's existing prefix, **`app.assistant.*`**, not `rm.assistant.*` (env var `RM_ASSISTANT_ENABLED`, default false). Read every `rm.assistant.*` above as `app.assistant.*`.
+
 ### Claude's Discretion
 - The RAG client adapter's shape: a port in `ports/`, a `RestClient` adapter with explicit timeouts, and configuration (`rm.assistant.*`: base URL, API key, collection names, sweep interval, timeouts) in both `application.yml` files, `compose.app.yaml` and `.env.example`.
 - Where the tool loop lives in ReleaseManagement: an application-layer orchestrator that calls rag-service `/v1/chat`, executes tools, and resends. It must record which tools ran and which sources were used, for Phase 13's "how I answered" panel (ASST-06), without building any UI.
