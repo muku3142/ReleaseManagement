@@ -140,7 +140,8 @@ None yet.
 
 ### Blockers/Concerns
 
-- **DECIDED (2026-10-15) by the user: Phase 10 uses one of the INSTALLED models for dev/testing (no pulls); production may change `RAG_CHAT_MODEL` later.** The debug session is measuring A (qwen3:4b, think:true, raised dev deadline) against B (qwen2.5-coder:7b, 120 s) and will pick one. Earlier note:
+- **RESOLVED (2026-10-15): dev chat model is `qwen2.5-coder:7b` (`be562cd`), accepted by the user, including its T03 failure (planted text in a transformed document steers the output, 0/3). That failure is recorded as a dev-model residual risk under SAFE-02; a stronger production model must pass T03 before v1.1 ships (Phase 13 gate). Measured: T01/T02/G07/G09 3/3. qwen3:4b (thinking) cannot answer within any practical deadline on the 4 GB GPU. Next: finish 10-09 (golden rerun with the coder model, rollout, smoke, drills, log check, user review). Note: the coder model emits tool calls as text, so Phase 11 tool flows will not work live on the dev model.**
+- (superseded) **DECIDED (2026-10-15) by the user: Phase 10 uses one of the INSTALLED models for dev/testing (no pulls); production may change `RAG_CHAT_MODEL` later.** The debug session is measuring A (qwen3:4b, think:true, raised dev deadline) against B (qwen2.5-coder:7b, 120 s) and will pick one. Earlier note:
 - **(was OPEN 2026-10-14): Phase 10 chat model.** The installed `qwen3:4b` is the 2507 thinking-only build. Its template always opens `<think>`, so `think:false` does not stop about 2,500 reasoning tokens, and every transform hits the 120 s deadline (golden T01-T03 0/3). Chat leaks reasoning too. The user deferred the decision:
   - A: pull `qwen3:4b-instruct-2507-q4_K_M` and set `RAG_CHAT_MODEL` (config only, recommended);
   - B: keep the thinking model and raise the deadline (breaks D-10-12; T03 still leaked).

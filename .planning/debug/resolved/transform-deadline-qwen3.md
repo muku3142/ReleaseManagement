@@ -1,5 +1,5 @@
 ---
-status: investigating
+status: resolved
 trigger: "rag-service /v1/transform never completes within the 120 s deadline on live qwen3:4b"
 created: 2026-10-14
 updated: 2026-10-14
@@ -77,3 +77,8 @@ Chat cases built from Prompts.java + golden seed text (single source block per c
 - Decision: B as the dev default (RAG_CHAT_MODEL=qwen2.5-coder:7b, deadline stays PT120S). Hermetic suite 294 green. T03 golden stays red on this model; needs a stronger model for production or a human-accepted waiver.
 
 status note: root cause confirmed (see Resolution). Applied config only.
+
+
+## Resolution (2026-10-15)
+
+The user accepted `qwen2.5-coder:7b` as the dev chat model (`be562cd`), including its T03 failure as a dev-model residual risk (SAFE-02). A stronger production model must pass T03 before v1.1 ships.
