@@ -411,6 +411,16 @@ result (the context budget may reject smaller results first, with 413).
   DEBUG. The search and document endpoints are not covered: at `org.springframework.web` DEBUG,
   Spring logs their request and response bodies. Do not enable that level outside local debugging.
 
+### ReleaseManagement as a rag-service client
+
+The app can act as a rag-service client (the assistant). It is off by default: `RM_ASSISTANT_ENABLED=false`.
+When on, it needs `RM_ASSISTANT_API_KEY`, the client key from `POST /v1/admin/clients` (see Registering a client),
+and refuses to start without it. Compose sets `RM_ASSISTANT_BASE_URL=http://rag-service:8081` because the app
+container reaches rag-service over the compose network. The index sweep runs every 30 minutes; change it with
+`RM_ASSISTANT_SWEEP_INTERVAL` (ISO-8601, e.g. `PT10M`).
+
+`app` does not depend on `rag-service`, so v1 behaves the same when the switch is off or rag-service is down.
+
 ---
 
 ## Troubleshooting

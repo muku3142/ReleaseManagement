@@ -25,6 +25,22 @@ app:
     connect-timeout: PT5S
     read-timeout: PT10S
     max-pages-per-pr: 5
+  assistant:
+    enabled: false
+    base-url: http://localhost:8081
+    api-key: ""
+    embedding-model: nomic-embed-text
+    sweep:
+      initial-delay: PT10S
+      interval: PT30M
+    index:
+      connect-timeout: PT2S
+      read-timeout: PT5S
+    chat:
+      connect-timeout: PT2S
+      read-timeout: PT130S
+    max-rounds: 4
+    tool-result-max-chars: 6000
   enrichment:
     max-concurrent: 6
     deadline: PT45S
