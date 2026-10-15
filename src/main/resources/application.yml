@@ -45,6 +45,24 @@ app:
     connect-timeout: PT5S
     read-timeout: PT10S
     max-pages-per-pr: 5
+  assistant:
+    enabled: ${RM_ASSISTANT_ENABLED:false}
+    base-url: ${RM_ASSISTANT_BASE_URL:http://localhost:8081}
+    api-key: ${RM_ASSISTANT_API_KEY:}
+    embedding-model: nomic-embed-text
+    sweep:
+      initial-delay: PT10S
+      interval: ${RM_ASSISTANT_SWEEP_INTERVAL:PT30M}
+    index:
+      connect-timeout: PT2S
+      read-timeout: PT5S
+    chat:
+      connect-timeout: PT2S
+      # Above rag-service's 120 s per-POST generation deadline.
+      read-timeout: PT130S
+    max-rounds: 4
+    # Below rag-service's rag.tools.result-max-chars (8000).
+    tool-result-max-chars: 6000
   enrichment:
     max-concurrent: 6
     deadline: PT45S

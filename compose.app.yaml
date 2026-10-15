@@ -60,6 +60,10 @@ services:
       RM_CREDENTIAL_KEY_VERSION: ${RM_CREDENTIAL_KEY_VERSION:-1}
       RM_JWT_SECRET: ${RM_JWT_SECRET:?set RM_JWT_SECRET, e.g. openssl rand -base64 32}
       RM_JIRA_DEFAULT_BASE_URL: ${RM_JIRA_DEFAULT_BASE_URL:-https://example.atlassian.net}
+      # Assistant is off by default and optional: no `:?` and no depends_on rag-service, so v1 starts without it.
+      RM_ASSISTANT_ENABLED: ${RM_ASSISTANT_ENABLED:-false}
+      RM_ASSISTANT_BASE_URL: http://rag-service:8081
+      RM_ASSISTANT_API_KEY: ${RM_ASSISTANT_API_KEY:-}
     ports:
       - "${RM_PORT:-9292}:8080"
     restart: unless-stopped
