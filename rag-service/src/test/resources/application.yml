@@ -71,3 +71,11 @@ rag:
     history-token-budget: 1500
     instruction-max-chars: 2000
     chars-per-token: 3.0
+  tools:
+    signing-secret: test-tool-signing-secret-0123456789-abcdef
+    max-rounds: 4
+    max-calls: 4
+    max-tools: 5
+    definitions-max-chars: 1500
+    result-max-chars: 8000
+    num-predict: 768
