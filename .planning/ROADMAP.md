@@ -465,7 +465,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 5.1 → 5.2 → 5
 | 8. Release Insights Dashboard | 7/8 | In Progress|  |
 | 9. RAG Service Foundation & Index | 11/11 | Complete | 2026-10-13 |
 | 10. RAG Chat & Citations | 8/9 | In Progress |  |
-| 11. Tool-Call Protocol | 0/TBD | Not started | - |
+| 11. Tool-Call Protocol | 0/9 | Planned    |  |
 | 12. ReleaseManagement as First Client | 0/TBD | Not started | - |
 | 13. Assistant Screen & Quality Gate | 0/TBD | Not started | - |
 | 14. AI Document Assist | 0/TBD | Not started | - |
@@ -627,7 +627,28 @@ Plans:
 
 **Research flags**: Verify tool `arguments` arrive as an object and the `role:"tool"` message shape on the installed Ollama version; tool-calling quality of `qwen3:4b` versus `qwen3:8b`/`granite4.1:8b` is unmeasured (LOW-MEDIUM confidence); `OLLAMA_NUM_PARALLEL` and default `num_ctx` on the installed version; decide how a paused tool round is resumed statelessly (continuation token versus resending the transcript).
 **Scope notes**: Tool arguments are validated against the caller's supplied schema. From this phase tool results are authoritative for numbers, dates and status. Tool-result size is capped.
-**Plans**: TBD
+**Plans**: 9 across 6 waves
+
+**Wave 1** *(can execute before Phase 10 closes)*
+  - [ ] 11-01: ToolProperties (rag.tools.*, mandatory RAG_TOOL_SIGNING_SECRET), both ymls, compose, .env.example, docs config — RAG-08
+  - [ ] 11-02: tool domain types, ToolSchema subset validator, ToolTurnSigner HMAC chain, ToolPolicy caps/pairing — RAG-08
+
+**Wave 2** *(blocked on Wave 1 completion; 11-04 also waits for Phase 10 to close)*
+  - [ ] 11-03: Ollama adapter tools/tool_calls/think-by-capability, ChatPort.assertToolsReady, scriptable FakeOllamaServer — RAG-08
+  - [ ] 11-04: p11-v1 tool rules, fenced and budgeted chatWithTools (413), tool-source citations with Citation.kind — RAG-08
+
+**Wave 3** *(blocked on Wave 2 completion; after Phase 10 closes)*
+  - [ ] 11-05: ChatService tool loop (prepare validation, signed tool_call, early gate release, one correction retry, round cap, log fields) — RAG-08
+
+**Wave 4** *(blocked on Wave 3 completion)*
+  - [ ] 11-06: /v1/chat tool DTOs, TOOL_TURN_INVALID/TOOL_RESULT_TOO_LARGE, ChatApiIT, the only openapi.json regeneration, caller docs — RAG-08
+
+**Wave 5** *(blocked on Wave 4 completion)*
+  - [ ] 11-07: real-server ITs (immediate resume never 429, per-POST deadline, forged turn), LogHygieneIT canaries, outbound ArchUnit rule — RAG-08
+  - [ ] 11-08: golden tool fixture TC01-TC11, FakeToolApp, ToolsFixtureTest, GoldenToolsIT per-model report — RAG-08
+
+**Wave 6** *(blocked on Wave 5 completion — NOT autonomous, needs the user's Phase 10 model decision, D-11-12)*
+  - [ ] 11-09: live bake-off of installed qwen3:4b and qwen2.5-coder:7b (no pulls), signing secret, rag-service rollout, smoke, user review — RAG-08
 **AI-integration phase**: yes (run /gsd-ai-integration-phase before planning)
 
 ### Phase 12: ReleaseManagement as First Client
