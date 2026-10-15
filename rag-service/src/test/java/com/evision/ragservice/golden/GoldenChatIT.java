@@ -60,7 +60,7 @@ class GoldenChatIT {
 
     private static final int RUNS = 3;
     private static final String OLLAMA_URL = System.getenv().getOrDefault("RAG_GOLDEN_OLLAMA_URL", "http://localhost:11434");
-    private static final String CHAT_MODEL = System.getProperty("rag.golden.model", "qwen3:4b");
+    private static final String CHAT_MODEL = System.getProperty("rag.golden.model", "qwen2.5-coder:7b");
     private static final String EMBEDDING_MODEL = "nomic-embed-text";
     private static final Path GOLDEN = Path.of("src/test/resources/golden");
     private static final Path REPORT = Path.of("target/golden-report.json");

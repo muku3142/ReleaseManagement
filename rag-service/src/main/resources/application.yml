@@ -55,7 +55,7 @@ rag:
     backoff-min: PT1S
     backoff-max: PT5M
   chat:
-    model: "${RAG_CHAT_MODEL:qwen3:4b}"
+    model: "${RAG_CHAT_MODEL:qwen2.5-coder:7b}"
     num-ctx: ${RAG_CHAT_NUM_CTX:4096}
     num-predict: 512
     temperature: 0.2
