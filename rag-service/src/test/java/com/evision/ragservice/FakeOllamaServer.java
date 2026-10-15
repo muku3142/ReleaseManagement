@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -37,6 +38,9 @@ public final class FakeOllamaServer implements AutoCloseable {
     private volatile int chatStatus = 200;
     private volatile String chatErrorBody = "";
     private volatile String lastChatBody;
+    private volatile List<List<String>> chatScript;
+    private final List<String> chatBodies = new CopyOnWriteArrayList<>();
+    private final AtomicInteger scriptedRequests = new AtomicInteger();
 
     private FakeOllamaServer(HttpServer server) {
         this.server = server;
@@ -73,6 +77,9 @@ public final class FakeOllamaServer implements AutoCloseable {
         this.headerDelay = Duration.ZERO;
         this.chatStatus = 200;
         this.chatErrorBody = "";
+        this.chatScript = null;
+        this.chatBodies.clear();
+        this.scriptedRequests.set(0);
         this.chatAborted = new CountDownLatch(1);
     }
 
@@ -88,6 +95,16 @@ public final class FakeOllamaServer implements AutoCloseable {
     public void chat(List<String> lines, Duration delayBetweenLines) {
         this.chatLines = lines;
         this.lineDelay = delayBetweenLines;
+    }
+
+    /** Request i since the last reset streams scripts[i]; the last script repeats once the list is exhausted. */
+    public void chatScript(List<List<String>> scripts, Duration delayBetweenLines) {
+        this.chatScript = scripts;
+        this.lineDelay = delayBetweenLines;
+    }
+
+    public List<String> chatBodies() {
+        return List.copyOf(chatBodies);
     }
 
     public void chatHeaderDelay(Duration delay) {
@@ -124,7 +141,21 @@ public final class FakeOllamaServer implements AutoCloseable {
     public static String doneLine(String doneReason, int promptEvalCount, int evalCount) {
         return "{\"model\":\"fake\",\"message\":{\"role\":\"assistant\",\"content\":\"\"},\"done\":true,\"done_reason\":\""
                 + doneReason + "\",\"total_duration\":2000000000,\"load_duration\":1000000000,\"prompt_eval_count\":"
-                + promptEvalCount + ",\"prompt_eval_cached_count\":0,\"eval_count\":" + evalCount + "}";
+                + promptEvalCount + ",\"prompt_eval_cached_count\":0,\"eval_count\":" + evalCount
+                + ",\"eval_duration\":1000000000}";
+    }
+
+    public static String toolCallLine(String id, String name, String argumentsJson) {
+        return "{\"model\":\"fake\",\"message\":{\"role\":\"assistant\",\"content\":\"\",\"tool_calls\":[{\"id\":"
+                + MAPPER.writeValueAsString(id) + ",\"function\":{\"index\":0,\"name\":" + MAPPER.writeValueAsString(name)
+                + ",\"arguments\":" + argumentsJson + "}}]},\"done\":false}";
+    }
+
+    /** Ollama ends a tool-call stream with done_reason "stop". */
+    public static List<String> toolCalls(String... lines) {
+        List<String> all = new ArrayList<>(List.of(lines));
+        all.add(doneLine("stop", 100, 20));
+        return all;
     }
 
     public static List<String> answer(String... tokens) {
@@ -166,7 +197,11 @@ public final class FakeOllamaServer implements AutoCloseable {
 
     private void handleChat(HttpExchange exchange) throws IOException {
         lastChatBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        chatBodies.add(lastChatBody);
         chatRequests.incrementAndGet();
+        List<List<String>> script = chatScript;
+        List<String> lines = script == null ? chatLines
+                : script.get(Math.min(scriptedRequests.getAndIncrement(), script.size() - 1));
         sleep(headerDelay);
         if (chatStatus != 200) {
             respond(exchange, chatStatus, chatErrorBody);
@@ -176,7 +211,7 @@ public final class FakeOllamaServer implements AutoCloseable {
         try {
             exchange.sendResponseHeaders(200, 0);
             OutputStream out = exchange.getResponseBody();
-            for (String line : chatLines) {
+            for (String line : lines) {
                 out.write((line + "\n").getBytes(StandardCharsets.UTF_8));
                 out.flush();
                 sleep(lineDelay);
