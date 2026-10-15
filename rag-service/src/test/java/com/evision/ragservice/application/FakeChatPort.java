@@ -25,12 +25,22 @@ class FakeChatPort implements ChatPort {
     volatile List<ChatMessage> lastMessages;
     volatile GenerationOptions lastOptions;
     volatile int readyCalls;
+    volatile RuntimeException toolsReadyFailure;
+    volatile int toolsReadyCalls;
 
     @Override
     public void assertReady() {
         readyCalls++;
         if (readyFailure != null) {
             throw readyFailure;
+        }
+    }
+
+    @Override
+    public void assertToolsReady() {
+        toolsReadyCalls++;
+        if (toolsReadyFailure != null) {
+            throw toolsReadyFailure;
         }
     }
 
