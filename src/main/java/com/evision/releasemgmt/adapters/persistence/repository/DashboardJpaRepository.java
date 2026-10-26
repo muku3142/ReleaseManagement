@@ -56,11 +56,19 @@ public interface DashboardJpaRepository extends Repository<ReleaseEntity, UUID> 
              WHERE p.outcome <> 'VOIDED'
                AND NOT EXISTS (SELECT 1 FROM promotion c WHERE c.supersedes_id = p.id)
                AND (CAST(:stageId AS uuid) IS NULL OR p.stage_id = CAST(:stageId AS uuid))
+               AND (:filterByProduct = false OR EXISTS (SELECT 1 FROM release_product rp
+                     WHERE rp.release_id = p.release_id AND rp.product_id IN (:productIds)))
                AND p.deployed_at >= :from AND p.deployed_at < :to
              ORDER BY p.deployed_at DESC, p.recorded_at DESC, p.id DESC
              LIMIT :limit OFFSET :offset
             """, nativeQuery = true)
     List<DeploymentHistoryRow> deployments(@Param("stageId") UUID stageId, @Param("from") Instant from,
                                            @Param("to") Instant to, @Param("limit") int limit,
-                                           @Param("offset") int offset);
+                                           @Param("offset") int offset,
+                                           @Param("filterByProduct") boolean filterByProduct,
+                                           @Param("productIds") Collection<UUID> productIds);
+
+    @Query(value = "SELECT DISTINCT rp.release_id FROM release_product rp WHERE rp.product_id IN (:productIds)",
+            nativeQuery = true)
+    List<UUID> releaseIdsCoveringAny(@Param("productIds") Collection<UUID> productIds);
 }

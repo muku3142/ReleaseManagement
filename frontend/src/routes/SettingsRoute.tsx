@@ -3,7 +3,9 @@ import { useAdoCredential, useUpdateAdoCredential } from '../api/adoCredential';
 import { useJiraSite, useUpdateJiraSite } from '../api/jiraSite';
 import { ApiError } from '../api/client';
 import { EnvironmentLadderSection } from '../components/EnvironmentLadderSection';
-import { useSession, useReplaceJiraToken as useReplaceToken, messageForReason } from '../api/auth';
+import { useSession, useReplaceJiraToken as useReplaceToken } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
+import { BriefingSettingsSection } from '../components/BriefingSettingsSection';
 
 export function SettingsRoute() {
   const jiraSite = useJiraSite();
@@ -49,6 +51,7 @@ export function SettingsRoute() {
   }
 
   return (
+    <>
     <div className="max-w-xl">
       <h2 className="text-base font-semibold text-gray-900">Jira site</h2>
 
@@ -152,6 +155,10 @@ export function SettingsRoute() {
       <AzureDevOpsSection />
       <EnvironmentLadderSection />
     </div>
+    <div className="mt-8 max-w-3xl">
+      <BriefingSettingsSection />
+    </div>
+    </>
   );
 }
 

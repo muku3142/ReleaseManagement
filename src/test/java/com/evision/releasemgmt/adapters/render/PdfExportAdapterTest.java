@@ -3,6 +3,8 @@ package com.evision.releasemgmt.adapters.render;
 import com.evision.releasemgmt.domain.template.ChromeFields;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.LogoMetadata;
+import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
+import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -16,11 +18,18 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Instant;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.getRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.stubFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.verify;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 // Opens every produced PDF with PDFBox and asserts on its extracted text/page count/image
 // XObjects, never merely on "bytes came back non-empty" - a blank document would also pass that.
+@WireMockTest(httpsEnabled = true)
 class PdfExportAdapterTest {
 
     private final PdfExportAdapter adapter = new PdfExportAdapter(new MustacheFlexmarkRenderAdapter());
@@ -163,6 +172,37 @@ class PdfExportAdapterTest {
                 assertThat(document.getNumberOfPages()).isGreaterThanOrEqualTo(1);
             }
         }).doesNotThrowAnyException();
+    }
+
+    @Test
+    void remoteImageOverHttpIsNeverFetched(WireMockRuntimeInfo wm) throws IOException {
+        assertRemoteImageNotFetched("http://localhost:" + wm.getHttpPort() + "/img.png");
+    }
+
+    @Test
+    void remoteImageOverHttpsIsNeverFetched(WireMockRuntimeInfo wm) throws IOException {
+        assertRemoteImageNotFetched("https://localhost:" + wm.getHttpsPort() + "/img.png");
+    }
+
+    @Test
+    void remoteImageIsRefusedButCoverLogoDataUriStillRenders() throws IOException {
+        ChromeFields chrome = chrome(true, "Release 4.2.0", "", "", "", false);
+        LogoImage logo = new LogoImage(onePixelPng(), new LogoMetadata("image/png", "logo.png", 100, 1, 1,
+                Instant.now()));
+        byte[] pdf = adapter.toPdf("![x](http://localhost:1/img.png)\n", chrome, logo);
+        try (PDDocument document = PDDocument.load(pdf)) {
+            assertThat(countImageXObjects(document)).isEqualTo(1);
+        }
+    }
+
+    private void assertRemoteImageNotFetched(String imageUrl) throws IOException {
+        stubFor(get(urlEqualTo("/img.png")).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "image/png").withBody(onePixelPng())));
+        byte[] pdf = adapter.toPdf("# T\n\n![x](" + imageUrl + ")\n", ChromeFields.empty(), null);
+        try (PDDocument document = PDDocument.load(pdf)) {
+            assertThat(document.getNumberOfPages()).isGreaterThanOrEqualTo(1);
+        }
+        verify(0, getRequestedFor(urlEqualTo("/img.png")));
     }
 
     private static ChromeFields chrome(boolean coverEnabled, String coverTitle, String coverSubtitle,

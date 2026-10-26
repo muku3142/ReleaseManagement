@@ -2,47 +2,53 @@
 
 ## What This Is
 
-A web application that lets a release manager assemble a release from Jira tickets, auto-generate the release paperwork from templates (release notes, deployment runbook, approval/change documents), and track that release as it is promoted through a fixed environment ladder. Java Spring Boot REST backend with a React single-page frontend. Jira is the primary integration and the ticket source; where a Jira ticket happens to link to Azure DevOps, the system follows that link to enrich the ticket with its commits and pull requests.
+A web application that lets a release manager assemble a release from Jira tickets, auto-generate the release paperwork from templates (release notes, deployment runbook, approval/change documents), and track that release as it is promoted through an environment ladder. Java Spring Boot REST backend with a React single-page frontend. Jira is the primary integration and the ticket source; where a Jira ticket happens to link to Azure DevOps, the system follows that link to enrich the ticket with its commits and pull requests. Since v1.1 a read-only assistant answers questions over this data with sources, and generated documents can be refined by a locally hosted model, both through a standalone reusable RAG service.
 
 ## Core Value
 
 Given a set of Jira tickets, produce accurate and consistent release documentation plus a tracked deployment record — without anyone doing manual release bookkeeping in Jira.
 
-## Current Milestone: v1.1 Release Assistant
+## Current State
 
-**Goal:** Let the release manager ask questions in plain language and get answers grounded in this system's own data, with sources, from a model that runs locally.
+**Shipped:** v1.0 MVP (Phases 1-8) and v1.1 Release Assistant (Phases 9-14), both closed 2026-10-20. See
+`.planning/MILESTONES.md`. Several human checks were closed on the user's word rather than observed, and
+the v1.1 gate reports were never produced; both are listed there.
+
+Codebase: about 17.7k lines of Java in the app, 5.2k in `rag-service/`, 10k of TypeScript in the frontend;
+Flyway at V13. Last recorded suites: backend 1260, frontend 537, rag-service 360.
+
+## Current Milestone: v1.2 Portfolio & Planning
+
+**Goal:** Track which products and clients each release reaches, give technical product managers a ranked roadmap, show how the app is used, and add two AI aids: deployment notes drawn from Azure DevOps commits, and a daily plan.
 
 **Target features:**
-- Chat screen: ask a question, get an answer that cites its sources (release, ticket, document revision, commit)
-- Structured questions answered by the model calling the existing read-only endpoints as tools
-- Free-text questions answered by vector search (pgvector in the existing Postgres) over ticket text, generated documents and code links
-- Index kept current when tickets are refreshed and documents generated; no Jira/ADO call at question time
-
-**Architecture (approved 2026-10-13):** a standalone, reusable RAG service in `rag-service/`; ReleaseManagement is its first client — see Key Decisions.
-
-**Key context:** self-hosted Ollama only, so no release or Jira data leaves the machine (decided 2026-10-13). The assistant is read-only. Ticket text, comments and commit messages are untrusted and can carry prompt injection. v1 (Phases 1-8) is code-complete with four human checks still open; v1.1 starts without clearing v1's phase directories and continues phase numbering at 9.
+- **Products and clients:** a release covers several products; each product has several clients; the app records which release each client installed and when, on the unchanged shared ladder; the dashboard shows releases by product and what each client runs
+- **RICE roadmap page:** items read from Jira plus items a TPM adds by hand, scored by Reach, Impact, Confidence and Effort and ranked in this app
+- **Usage tracking:** page and feature events captured in the frontend, stored as aggregate counts with no user identity, shown as a usage matrix on the dashboard
+- **AI deployment notes (runbook Recommend):** a new AI mode on the deployment runbook that reads the release's ADO commit messages and PR titles and status, and suggests deploy steps, config and DB changes, risks and validation checks, saved as a revision after review
+- **Daily planning assistant:** a page proposing what to work on today. Ollama by default; an admin may configure an optional external OpenAI-compatible provider, which sends data off the machine only when enabled and says so clearly
 
 ## Requirements
 
 ### Validated
 
-(None yet — ship to validate)
+- ✓ Sign-in with the user's own Jira credentials, scoping what they can read — v1.0
+- ✓ Connect to a Jira Cloud site and browse/select tickets for a release — v1.0
+- ✓ Assemble a named, versioned release from Jira tickets and manual items — v1.0
+- ✓ Follow Jira's links to Azure DevOps and enrich tickets with commits and pull requests — v1.0
+- ✓ Author templates with placeholders over release, ticket and commit/PR data — v1.0
+- ✓ Generate release notes, deployment runbooks and approval documents from templates — v1.0
+- ✓ Preview generated documents and export them as PDF and DOCX — v1.0
+- ✓ Promote a release through the environment ladder and see where it sits — v1.0
+- ✓ Retain release and deployment history as an audit trail — v1.0
+- ✓ Ticket-source integration behind a provider abstraction — v1.0
+- ✓ Dashboard of release lifecycle, composition, churn and story points — v1.0
+- ✓ Ask questions in plain language and get sourced answers from a local model — v1.1
+- ✓ Refine a generated document with the model and save it as an AI-assisted revision — v1.1
 
 ### Active
 
-- [ ] Release manager signs in with their own Jira credentials, which scope what they can read
-- [ ] Release manager can connect the system to a Jira Cloud site and browse/select tickets for a release
-- [ ] Release manager can assemble a release: a named, versioned set of Jira tickets
-- [ ] Where a Jira ticket links to Azure DevOps, system follows that link and enriches the ticket with its commits and pull requests
-- [ ] Release manager can author templates with placeholders that resolve against release, ticket, and commit/PR data
-- [ ] System generates release notes from a template
-- [ ] System generates a deployment runbook (deploy and rollback steps) from a template
-- [ ] System generates approval / change-request documents from a template
-- [ ] Release manager can preview generated documents against a real release's data and export them as PDF and DOCX
-- [ ] Release manager can promote a release through a fixed environment ladder and see where it currently sits
-- [ ] System retains release and deployment history as an audit trail
-- [ ] Ticket-source integration sits behind a provider abstraction so a second provider can be added without reworking core
-- [ ] (v1.1) Release manager can ask questions in plain language and get sourced answers from a locally hosted model, over release and promotion data, ticket text, generated documents and code links
+(v1.2 requirements: see `.planning/REQUIREMENTS.md`; target features under Current Milestone.)
 
 ### Out of Scope
 
@@ -85,7 +91,9 @@ Given a set of Jira tickets, produce accurate and consistent release documentati
 
 **Template engine is the differentiating piece.** Three document types are needed on day one, and users must be able to author their own templates rather than pick from fixed formats. This makes the placeholder/data-binding model — what fields a template can reach, and how — the highest-risk design decision in the project.
 
-**Audience.** A single primary user role: the release manager. Approvers, ops and stakeholders consume the generated documents but are not users of the tool in v1. This keeps permissions and collaboration features simple.
+**Audience.** The release manager is the primary user role. v1.2's roadmap page widens this to technical product managers; there is still a single permission level.
+
+**Assistant.** Self-hosted Ollama only, so no release or Jira data leaves the machine. The assistant is read-only. Ticket text, comments and commit messages are untrusted and can carry prompt injection; the dev model is `qwen3:4b-instruct-2507-q4_K_M` on a 4 GB GPU, and a stronger production model must be measured before it is relied on.
 
 ## Constraints
 
@@ -103,35 +111,25 @@ Given a set of Jira tickets, produce accurate and consistent release documentati
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Java Spring Boot backend | User requirement; organisational standard | — Pending |
-| React SPA on a REST API | Rich template-authoring and preview UI needs a real client-side app; server-rendered templating would fight the live editor | — Pending |
-| Jira read-only; this app is the system of record | Avoids two-way sync complexity and write-scope risk; makes release history independent of Jira project changes | — Pending |
-| Provider abstraction in v1, Jira as the only implementation | User expects other providers later; retrofitting an abstraction after Jira-specific code spreads is far more expensive than defining it up front | — Pending |
-| Track deployments only — never execute or trigger them | Keeps the tool out of the delivery critical path and removes the need for deployment credentials | — Pending |
-| Azure DevOps reached only via links present on a Jira ticket, at commit/PR level | User's stated need; makes ADO an optional enrichment rather than a required integration, so the tool works against Jira alone | — Pending |
+| Java Spring Boot backend | User requirement; organisational standard | ✓ Good (v1.0) |
+| React SPA on a REST API | Rich template-authoring and preview UI needs a real client-side app; server-rendered templating would fight the live editor | ✓ Good (v1.0) |
+| Jira read-only; this app is the system of record | Avoids two-way sync complexity and write-scope risk; makes release history independent of Jira project changes | ✓ Good (v1.0) |
+| Provider abstraction in v1, Jira as the only implementation | User expects other providers later; retrofitting an abstraction after Jira-specific code spreads is far more expensive than defining it up front | ✓ Good (v1.0) |
+| Track deployments only — never execute or trigger them | Keeps the tool out of the delivery critical path and removes the need for deployment credentials | ✓ Good (v1.0) |
+| Azure DevOps reached only via links present on a Jira ticket, at commit/PR level | User's stated need; makes ADO an optional enrichment rather than a required integration, so the tool works against Jira alone | ✓ Good (v1.0) |
 | One environment ladder (not per-app), stages editable in Settings | One ladder keeps the promotion model simple; the user chose Settings-editable stages (DEV → TEST → UAT → PROD seeded, one stage flagged Production) over code-fixed — see 07-CONTEXT D-07-01..04 | Decided 2026-10-07 |
-| User-authored templates rather than fixed document formats | User explicitly asked for a template generator, not three hardcoded reports | — Pending |
-| Logic-less template engine (Mustache/jmustache), not FreeMarker, Pebble, Thymeleaf or Handlebars.java | Templates are authored by users, so template source is untrusted input. Every full-expression Java engine has a documented sandbox-bypass history — including a CVSS 9.1 Thymeleaf bypass disclosed in 2026 — and several vendors state outright that they assume trusted authors. A logic-less engine has no expression language or class-resolution surface to escape from, so this is prevention rather than mitigation | — Pending |
-| Templates see a dedicated flattened view-model, never domain or JPA entities | Two reasons that reinforce each other: it removes the reflection/method-call surface that makes template injection possible, and it stops user templates from binding to internal field names — otherwise no domain refactor is ever safe again, with no compiler to catch the breakage | — Pending |
-| Generated documents stored as immutable snapshots with template version pinned | An audit trail is worthless if a template edit retroactively changes what a three-month-old document says. Regeneration produces a new revision instead of mutating history | — Pending |
-| Modular monolith — no microservices, event sourcing, CQRS or message broker | Single-role internal tool. Hexagonal package boundaries give the isolation that actually matters (keeping Jira concepts out of the domain) without distributed-system cost | — Pending |
-| **Exception (2026-10-13): a standalone, domain-free RAG service** in `rag-service/` (own pom, Dockerfile, compose service, `ragdb` database) | The user wants retrieval-augmented Q&A reusable by other internal apps in any language. Callers push documents (`PUT/DELETE /v1/collections/{c}/documents/{id}`) and **run their own tools** — the service returns tool calls and never calls into apps or holds their credentials. Per-app API keys; Ollama is the only outbound call. Stack: Java 25 / Boot 4.1 MVC, pgvector 0.8.7, Flyway + JdbcClient, RestClient to Ollama, SseEmitter, springdoc-openapi; no AI framework. ReleaseManagement is the first client. Off-the-shelf RAG servers (AnythingLLM, Dify, RAGFlow) rejected: second stack, own user model, tool model doesn't fit. | — Approved |
-| Authenticate by reusing the user's own Jira credentials | Removes an entire user-store and password-reset surface, and makes the tool's read access exactly equal to the user's own Jira permissions rather than a broader service account | — Pending |
+| User-authored templates rather than fixed document formats | User explicitly asked for a template generator, not three hardcoded reports | ✓ Good (v1.0) |
+| Logic-less template engine (Mustache/jmustache), not FreeMarker, Pebble, Thymeleaf or Handlebars.java | Templates are authored by users, so template source is untrusted input. Every full-expression Java engine has a documented sandbox-bypass history — including a CVSS 9.1 Thymeleaf bypass disclosed in 2026 — and several vendors state outright that they assume trusted authors. A logic-less engine has no expression language or class-resolution surface to escape from, so this is prevention rather than mitigation | ✓ Good (v1.0) |
+| Templates see a dedicated flattened view-model, never domain or JPA entities | Two reasons that reinforce each other: it removes the reflection/method-call surface that makes template injection possible, and it stops user templates from binding to internal field names — otherwise no domain refactor is ever safe again, with no compiler to catch the breakage | ✓ Good (v1.0) |
+| Generated documents stored as immutable snapshots with template version pinned | An audit trail is worthless if a template edit retroactively changes what a three-month-old document says. Regeneration produces a new revision instead of mutating history | ✓ Good (v1.0) |
+| Modular monolith — no microservices, event sourcing, CQRS or message broker | Single-role internal tool. Hexagonal package boundaries give the isolation that actually matters (keeping Jira concepts out of the domain) without distributed-system cost | ✓ Good (v1.0) |
+| **Exception (2026-10-13): a standalone, domain-free RAG service** in `rag-service/` (own pom, Dockerfile, compose service, `ragdb` database) | The user wants retrieval-augmented Q&A reusable by other internal apps in any language. Callers push documents (`PUT/DELETE /v1/collections/{c}/documents/{id}`) and **run their own tools** — the service returns tool calls and never calls into apps or holds their credentials. Per-app API keys; Ollama is the only outbound call. Stack: Java 25 / Boot 4.1 MVC, pgvector 0.8.7, Flyway + JdbcClient, RestClient to Ollama, SseEmitter, springdoc-openapi; no AI framework. ReleaseManagement is the first client. Off-the-shelf RAG servers (AnythingLLM, Dify, RAGFlow) rejected: second stack, own user model, tool model doesn't fit. | ✓ Good (v1.1) |
+| Authenticate by reusing the user's own Jira credentials | Removes an entire user-store and password-reset surface, and makes the tool's read access exactly equal to the user's own Jira permissions rather than a broader service account | ✓ Good (v1.0) |
 
 ## Open Questions
 
-Resolved after research (2026-07-27):
-
-- **Jira flavour** → **Jira Cloud**. Fixes the API to `/rest/api/3/`, authentication to API-token Basic auth, and means rich-text fields arrive as Atlassian Document Format and must be flattened.
-- **Authentication** → **reuse the user's own Jira credentials**. The release manager supplies their Jira email and API token; validating it against Jira both authenticates them and naturally scopes what tickets they can read. No separate user store.
-- **Document export formats** → **PDF and DOCX**. Markdown and HTML are not required as deliverables, though HTML is likely an internal intermediate on the way to PDF.
-- **Azure DevOps link discovery** → the Jira instance **has the Azure DevOps connector app installed**, so Jira's Development-panel data should carry commits and pull requests. The endpoint behind it is still Atlassian's internal, undocumented `dev-status` API, so this remains verify-first, not assume-first.
-- **Persistence** → PostgreSQL, and generated documents are **stored as immutable snapshots** with the template version pinned, not regenerated on demand. This is what makes the audit trail trustworthy when Jira data or a template later changes.
-
-Still open, deferred to phase discussion — not blocking roadmap creation:
-
-- **Multiple applications**: whether one instance manages releases for several applications/products sharing the one standard environment ladder. Assumed yes; this is a data-model dimension, not an architecture change. Confirm before release data modelling.
-- **Environment ladder definition**: the actual stages (assumed a DEV → TEST → UAT → PROD style path) and whether promotion requires an in-tool sign-off step.
+- **Multiple applications / clients** → partly answered by v1.2's client list: one instance serves several products, each with several clients, on the one shared ladder. Per-client ladders (v2's PROV-02) stay deferred.
+- **External LLM for the planning assistant** → decided 2026-10-20: Ollama by default, optional admin-configured external provider. This reverses no-egress only for that feature and only when enabled.
 
 ## Evolution
 
@@ -151,4 +149,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-10-13 — Phase 9 complete: rag-service foundation (collections, async indexing, search, status, OpenAPI) running on 8081*
+*Last updated: 2026-10-20 at the start of milestone v1.2*

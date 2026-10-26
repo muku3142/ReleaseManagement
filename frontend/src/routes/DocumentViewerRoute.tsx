@@ -1,32 +1,20 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import { documentLogoUrl, readinessIndex, useDocument, useDocumentReadiness, type ExportFormat } from '../api/documents';
 import { useRelease } from '../api/releases';
 import { DOCUMENT_TYPE_LABELS, type DocumentType } from '../api/templates';
+import { AiAssistPanel } from '../components/AiAssistPanel';
 import { ReadinessPill } from '../components/ReadinessPill';
 import { ExportButtons } from '../components/ExportButtons';
-import { RenderedDocument, md, chipUnknownMarkers } from '../components/RenderedDocument';
+import { RenderedDocument, MarkdownBody } from '../components/RenderedDocument';
+
+const AI_VERIFY_TYPES: readonly DocumentType[] = ['RUNBOOK', 'APPROVAL'];
+const AI_MODE_TEXT = { CLEAN_UP: 'Cleaned up', SUMMARIZE: 'Summarized', CUSTOM: 'edited with a custom instruction' } as const;
 
 const PARITY_HINT =
   "Visual parity check — open the PDF and DOCX you just exported side by side and confirm the cover, header, footer and page numbers match. There's no automated check for this (see DOC-08 in the project's recorded decisions).";
-
-// The snapshot is already Mustache-resolved (D-05-05), so this needs markdown-it only. A render
-// failure here is defensive, not an expected path - DOC generation only succeeds from a template
-// that already passed save-time validation - so it falls back to TemplatePreview's own neutral panel.
-function renderBody(markdown: string): ReactNode {
-  try {
-    const html = chipUnknownMarkers(md.render(markdown));
-    return <div className="prose prose-gray max-w-none p-4" dangerouslySetInnerHTML={{ __html: html }} />;
-  } catch {
-    return (
-      <div className="m-4 bg-gray-50 p-4 text-sm text-gray-600">
-        Preview unavailable — check your template syntax (e.g., every {'{{#x}}'} needs a matching {'{{/x}}'}).
-      </div>
-    );
-  }
-}
 
 // 05-UI-SPEC screen 2: the document viewer. Params/search come from router.tsx's registration;
 // revision defaults to the latest whenever ?revision is absent (D-05-06). Every revision is an
@@ -51,6 +39,21 @@ export function DocumentViewerRoute() {
   function handleExported(format: ExportFormat) {
     if (format === 'pdf') setExportedPdf(true);
     else setExportedDocx(true);
+  }
+
+  const [resultOpen, setResultOpen] = useState(false);
+  const [savedRevision, setSavedRevision] = useState<number | null>(null);
+
+  const loaded = documentQuery.data;
+  useEffect(() => {
+    if (savedRevision === null || loaded?.revision !== savedRevision) return;
+    window.document.getElementById('ai-revision-banner')?.focus();
+    setSavedRevision(null);
+  }, [savedRevision, loaded?.revision]);
+
+  function handleAiSaved(newRevision: number) {
+    setSavedRevision(newRevision);
+    navigate({ to: '.', search: { revision: undefined } });
   }
 
   const problem =
@@ -136,7 +139,9 @@ export function DocumentViewerRoute() {
             aria-label="Revision"
             value={data.revision}
             onChange={(e) => navigate({ to: '.', search: { revision: Number(e.target.value) } })}
-            className="rounded border border-gray-300 px-2 py-1 text-sm"
+            disabled={resultOpen}
+            title={resultOpen ? 'Save or discard the AI result first.' : undefined}
+            className="rounded border border-gray-300 px-2 py-1 text-sm disabled:opacity-50"
           >
             {Array.from({ length: data.latestRevision }, (_, i) => data.latestRevision - i).map((n) => (
               <option key={n} value={n}>
@@ -176,14 +181,48 @@ export function DocumentViewerRoute() {
         </div>
       )}
 
-      <div className="m-6 rounded border border-gray-200 bg-white">
+      {data.aiAssisted && data.aiMode && (
+        <>
+          <div
+            id="ai-revision-banner"
+            role="note"
+            tabIndex={-1}
+            className="mx-6 mt-2 rounded border border-gray-200 bg-gray-100 p-3 text-sm text-gray-700"
+          >
+            <p className="font-semibold">AI-assisted revision.</p>
+            <p>
+              {`This revision was ${AI_MODE_TEXT[data.aiMode]} with the AI model and saved by ${data.generatedBy}. Compare it with the earlier revisions before relying on it.`}
+            </p>
+            {data.aiInstruction && (
+              <details className="mt-2 text-xs">
+                <summary>Instruction used</summary>
+                <p className="mt-1 whitespace-pre-wrap rounded bg-white p-3 text-xs text-gray-700">{data.aiInstruction}</p>
+              </details>
+            )}
+          </div>
+          {AI_VERIFY_TYPES.includes(documentType) && (
+            <div className="mx-6 mt-2 rounded border border-amber-600 bg-amber-50 p-3 text-sm text-amber-700">
+              <p className="font-semibold">Verify steps before use.</p>
+              <p>AI-assisted text can change commands, order, values or risk wording. Compare every step with the original before you rely on it.</p>
+            </div>
+          )}
+        </>
+      )}
+
+      <AiAssistPanel
+        document={data}
+        releaseName={releaseName}
+        releaseVersion={releaseVersion}
+        onResultOpenChange={setResultOpen}
+        onSaved={handleAiSaved}
+      >
         <RenderedDocument
           chrome={data.chrome}
           logoUrl={data.hasLogo ? documentLogoUrl(releaseId, documentType, data.revision) : null}
         >
-          {renderBody(data.markdown)}
+          <MarkdownBody markdown={data.markdown} blockImages={data.aiAssisted} />
         </RenderedDocument>
-      </div>
+      </AiAssistPanel>
 
       {parityHintVisible && (
         <p className="mx-6 mb-6 rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">

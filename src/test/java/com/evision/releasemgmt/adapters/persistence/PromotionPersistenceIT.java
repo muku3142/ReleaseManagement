@@ -161,13 +161,13 @@ class PromotionPersistenceIT {
         UUID releaseId = release("R4", true);
         service.record(releaseId, draft("DEV", PromotionOutcome.SUCCESS), "acc-1");
         CountDownLatch start = new CountDownLatch(1);
-        Callable<Boolean> rollBack = () -> attempt(start, releaseId, draft("DEV", PromotionOutcome.ROLLED_BACK));
-        Callable<Boolean> advance = () -> attempt(start, releaseId, draft("TEST", PromotionOutcome.SUCCESS));
+        Callable<Boolean> firstRollBack = () -> attempt(start, releaseId, draft("DEV", PromotionOutcome.ROLLED_BACK));
+        Callable<Boolean> secondRollBack = () -> attempt(start, releaseId, draft("DEV", PromotionOutcome.ROLLED_BACK));
 
         ExecutorService pool = Executors.newFixedThreadPool(2);
         try {
-            Future<Boolean> first = pool.submit(rollBack);
-            Future<Boolean> second = pool.submit(advance);
+            Future<Boolean> first = pool.submit(firstRollBack);
+            Future<Boolean> second = pool.submit(secondRollBack);
             start.countDown();
 
             assertThat(List.of(outcome(first), outcome(second))).containsExactlyInAnyOrder(true, false);

@@ -10,19 +10,20 @@ import java.util.UUID;
 public record Release(UUID id, String name, String version, ReleaseStatus status,
                       String jiraProjectKey, Instant createdAt, String createdBy,
                       Instant frozenAt, String frozenBy, Instant lastRefreshedAt,
-                      Instant itemsChangedAt, List<ReleaseItem> items, List<ManualItem> manualItems) {
+                      Instant itemsChangedAt, List<ReleaseItem> items, List<ManualItem> manualItems,
+                      String packagesUrl) {
 
     public static Release create(String name, String version, String jiraProjectKey,
                                  String actor, Instant now) {
         return new Release(UUID.randomUUID(), name, version, ReleaseStatus.OPEN, jiraProjectKey,
-                now, actor, null, null, null, null, List.of(), List.of());
+                now, actor, null, null, null, null, List.of(), List.of(), null);
     }
 
     public boolean isFrozen() {
         return status == ReleaseStatus.FROZEN;
     }
 
-    // D-03-10/D-03-11: freeze is a one-way door, so every mutation - add, remove, refresh,
+    // D-03-10/D-03-11: a frozen release never accepts ticket changes directly; it must be unfrozen first (D-15.1-01). Every mutation - add, remove, refresh,
     // freeze, delete - funnels through this one guard rather than repeating the check.
     public void requireOpen() {
         if (isFrozen()) {

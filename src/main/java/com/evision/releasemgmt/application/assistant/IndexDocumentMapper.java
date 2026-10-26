@@ -37,6 +37,7 @@ public final class IndexDocumentMapper {
         for (ManualItem manual : release.manualItems()) {
             documents.add(manualDocument(release, manual));
         }
+        releaseDocument(release).ifPresent(documents::add);
         latestPerType(latestSnapshots).forEach(snapshot -> documents.add(documentOf(release, snapshot)));
         return documents;
     }
@@ -116,6 +117,21 @@ public final class IndexDocumentMapper {
         }
         return new IndexDocument(IndexCollection.MANUAL_ITEMS, "manual:" + manual.id(), clean(manual.title()),
                 clean(text.toString()), metadata);
+    }
+
+    private static Optional<IndexDocument> releaseDocument(Release release) {
+        if (release.packagesUrl() == null || release.packagesUrl().isBlank()) {
+            return Optional.empty();
+        }
+        Map<String, Object> metadata = releaseMetadata(release);
+        put(metadata, "project_key", release.jiraProjectKey());
+
+        StringBuilder text = new StringBuilder();
+        line(text, "Release", release.name() + " " + release.version());
+        line(text, "Status", release.status().name());
+        line(text, "Packages", release.packagesUrl());
+        return Optional.of(new IndexDocument(IndexCollection.DOCUMENTS, "release:" + release.id(),
+                clean("Packages - " + release.name() + " " + release.version()), clean(text.toString()), metadata));
     }
 
     private static IndexDocument documentOf(Release release, DocumentSnapshot snapshot) {

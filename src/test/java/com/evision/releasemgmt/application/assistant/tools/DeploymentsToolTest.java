@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -74,13 +75,13 @@ class DeploymentsToolTest {
         when(ladderService.ladder()).thenReturn(List.of(qa));
         DeploymentRow row = new DeploymentRow(UUID.randomUUID(), UUID.randomUUID(), "Payments", "2.4", qa.id(), "QA",
                 false, PromotionOutcome.SUCCESS, NOW, "acc-1", CANARY, false);
-        when(dashboardService.deployments(eq(qa.id()), any(), any(), eq(25), eq(0)))
+        when(dashboardService.deployments(eq(qa.id()), any(), any(), eq(25), eq(0), eq(Set.of())))
                 .thenReturn(new DeploymentPage(List.of(row), true));
         when(actors.resolve(any(String[].class))).thenReturn(new ResolvedActors(Map.of()));
 
         JsonNode json = mapper.valueToTree(tool.call(Map.of("stage", "qa", "days", 7)).result());
 
-        verify(dashboardService).deployments(qa.id(), NOW.minus(Duration.ofDays(7)), NOW, 25, 0);
+        verify(dashboardService).deployments(qa.id(), NOW.minus(Duration.ofDays(7)), NOW, 25, 0, Set.of());
         assertThat(json.toString()).doesNotContain(CANARY);
         assertThat(json.get("hasMore").asBoolean()).isTrue();
         assertThat(json.get("entries").get(0).get("recordedBy").asText()).isEqualTo("acc-1");

@@ -43,6 +43,9 @@ function generatedDocument(overrides: Partial<GeneratedDocument> = {}): Generate
     },
     generatedAt: '2026-08-10T09:00:00Z',
     generatedBy: 'rm@acme.com',
+    aiAssisted: false,
+    aiMode: null,
+    aiInstruction: null,
     ...overrides,
   };
 }

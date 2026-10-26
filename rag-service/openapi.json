@@ -195,7 +195,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "Server-sent events. status {requestId, phase: SEARCHING|GENERATING}; token {text}; citations {basis: MARKED|RETRIEVED, items: [{n, documentId, title, url, collection, metadata}]} (chat only); done {refusal, refusalLayer: GATE|MODEL|null, finishReason, truncated, promptTokens, completionTokens}; error {reason: DEADLINE|GENERATION_FAILED|OLLAMA_UNAVAILABLE|MODEL_NOT_AVAILABLE|EMBEDDING_UNAVAILABLE|INTERNAL}. Comment lines are heartbeats. Errors before the stream opens are problem+json: 400, 404, 413 (transform), 429 with Retry-After, 503 (reason OLLAMA_UNAVAILABLE or MODEL_NOT_AVAILABLE).",
+            "description" : "Server-sent events. status {requestId, phase: SEARCHING|GENERATING}; token {text}; citations {basis: MARKED|RETRIEVED, items: [{n, kind: PASSAGE|TOOL, documentId, title, url, collection, metadata}]} (chat only); tool_call {round, questionId, calls: [{id, name, arguments}], signature} (chat only; the stream ends after it with done finishReason tool_calls, resend the turn unchanged with results); done {refusal, refusalLayer: GATE|MODEL|null, finishReason, truncated, promptTokens, completionTokens, historyTrimmed (true when older history turns were not used), model, promptHash}; error {reason: DEADLINE|GENERATION_FAILED|OLLAMA_UNAVAILABLE|MODEL_NOT_AVAILABLE|EMBEDDING_UNAVAILABLE|TOOL_CALL_INVALID|INTERNAL}. Comment lines are heartbeats. Errors before the stream opens are problem+json: 400 (reason includes TOOL_TURN_INVALID), 404, 413 (transform; chat reason TOOL_RESULT_TOO_LARGE), 429 with Retry-After, 503 (reason OLLAMA_UNAVAILABLE or MODEL_NOT_AVAILABLE).",
             "content" : {
               "text/event-stream" : {
                 "schema" : {
@@ -288,7 +288,7 @@
         },
         "responses" : {
           "200" : {
-            "description" : "Server-sent events. status {requestId, phase: SEARCHING|GENERATING}; token {text}; citations {basis: MARKED|RETRIEVED, items: [{n, documentId, title, url, collection, metadata}]} (chat only); done {refusal, refusalLayer: GATE|MODEL|null, finishReason, truncated, promptTokens, completionTokens}; error {reason: DEADLINE|GENERATION_FAILED|OLLAMA_UNAVAILABLE|MODEL_NOT_AVAILABLE|EMBEDDING_UNAVAILABLE|INTERNAL}. Comment lines are heartbeats. Errors before the stream opens are problem+json: 400, 404, 413 (transform), 429 with Retry-After, 503 (reason OLLAMA_UNAVAILABLE or MODEL_NOT_AVAILABLE).",
+            "description" : "Server-sent events. status {requestId, phase: SEARCHING|GENERATING}; token {text}; citations {basis: MARKED|RETRIEVED, items: [{n, kind: PASSAGE|TOOL, documentId, title, url, collection, metadata}]} (chat only); tool_call {round, questionId, calls: [{id, name, arguments}], signature} (chat only; the stream ends after it with done finishReason tool_calls, resend the turn unchanged with results); done {refusal, refusalLayer: GATE|MODEL|null, finishReason, truncated, promptTokens, completionTokens, historyTrimmed (true when older history turns were not used), model, promptHash}; error {reason: DEADLINE|GENERATION_FAILED|OLLAMA_UNAVAILABLE|MODEL_NOT_AVAILABLE|EMBEDDING_UNAVAILABLE|TOOL_CALL_INVALID|INTERNAL}. Comment lines are heartbeats. Errors before the stream opens are problem+json: 400 (reason includes TOOL_TURN_INVALID), 404, 413 (transform; chat reason TOOL_RESULT_TOO_LARGE), 429 with Retry-After, 503 (reason OLLAMA_UNAVAILABLE or MODEL_NOT_AVAILABLE).",
             "content" : {
               "text/event-stream" : {
                 "schema" : {
@@ -586,6 +586,26 @@
           }
         }
       },
+      "Call" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "maxLength" : 64,
+            "minLength" : 0
+          },
+          "name" : {
+            "type" : "string",
+            "maxLength" : 64,
+            "minLength" : 0
+          },
+          "arguments" : {
+            "type" : "object",
+            "additionalProperties" : { }
+          }
+        },
+        "required" : [ "arguments", "id", "name" ]
+      },
       "ChatRequest" : {
         "type" : "object",
         "properties" : {
@@ -615,9 +635,121 @@
           "k" : {
             "type" : "integer",
             "format" : "int32"
+          },
+          "tools" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Tool"
+            },
+            "maxItems" : 20,
+            "minItems" : 0
+          },
+          "toolTurns" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/ToolTurnDto"
+            },
+            "maxItems" : 20,
+            "minItems" : 0
           }
         },
         "required" : [ "collections", "question" ]
+      },
+      "Result" : {
+        "type" : "object",
+        "properties" : {
+          "callId" : {
+            "type" : "string",
+            "maxLength" : 64,
+            "minLength" : 0
+          },
+          "content" : {
+            "type" : "string"
+          },
+          "isError" : {
+            "type" : "boolean"
+          },
+          "source" : {
+            "$ref" : "#/components/schemas/Source"
+          }
+        },
+        "required" : [ "callId", "content" ]
+      },
+      "Source" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "maxLength" : 200,
+            "minLength" : 0
+          },
+          "title" : {
+            "type" : "string",
+            "maxLength" : 300,
+            "minLength" : 0
+          },
+          "url" : {
+            "type" : "string",
+            "pattern" : "https?://\\S{1,2040}"
+          }
+        },
+        "required" : [ "id" ]
+      },
+      "Tool" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "pattern" : "[A-Za-z0-9_]{1,64}"
+          },
+          "description" : {
+            "type" : "string",
+            "maxLength" : 300,
+            "minLength" : 0
+          },
+          "parameters" : {
+            "type" : "object",
+            "additionalProperties" : { }
+          }
+        },
+        "required" : [ "name", "parameters" ]
+      },
+      "ToolTurnDto" : {
+        "type" : "object",
+        "properties" : {
+          "round" : {
+            "type" : "integer",
+            "format" : "int32",
+            "minimum" : 1
+          },
+          "questionId" : {
+            "type" : "string",
+            "maxLength" : 64,
+            "minLength" : 0
+          },
+          "calls" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Call"
+            },
+            "maxItems" : 16,
+            "minItems" : 0
+          },
+          "signature" : {
+            "type" : "string",
+            "maxLength" : 128,
+            "minLength" : 0
+          },
+          "results" : {
+            "type" : "array",
+            "items" : {
+              "$ref" : "#/components/schemas/Result"
+            },
+            "maxItems" : 16,
+            "minItems" : 0
+          }
+        },
+        "required" : [ "calls", "questionId", "results", "signature" ]
       },
       "Turn" : {
         "type" : "object",

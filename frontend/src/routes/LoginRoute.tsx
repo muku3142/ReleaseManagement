@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useLogin, messageForReason } from '../api/auth';
+import { useLogin } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import { useJiraSite } from '../api/jiraSite';
 import { ApiError } from '../api/client';
 import { safeRedirectTarget } from '../safeRedirect';

@@ -12,6 +12,8 @@ public interface PromotionJpaRepository extends JpaRepository<PromotionEntity, U
 
     List<PromotionEntity> findByReleaseIdOrderByRecordedAtAsc(UUID releaseId);
 
+    boolean existsByReleaseId(UUID releaseId);
+
     @Query("SELECT DISTINCT p.stageId FROM PromotionEntity p")
     Set<UUID> findReferencedStageIds();
 }

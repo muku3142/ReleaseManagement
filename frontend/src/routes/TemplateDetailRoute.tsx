@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useBlocker, useParams } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import {
   DOCUMENT_TYPE_LABELS,
   GROUPING_DIMENSIONS,

@@ -60,7 +60,7 @@ class GoldenChatIT {
 
     private static final int RUNS = 3;
     private static final String OLLAMA_URL = System.getenv().getOrDefault("RAG_GOLDEN_OLLAMA_URL", "http://localhost:11434");
-    private static final String CHAT_MODEL = System.getProperty("rag.golden.model", "qwen2.5-coder:7b");
+    private static final String CHAT_MODEL = System.getProperty("rag.golden.model", "qwen3:4b-instruct-2507-q4_K_M");
     private static final String EMBEDDING_MODEL = "nomic-embed-text";
     private static final Path GOLDEN = Path.of("src/test/resources/golden");
     private static final Path REPORT = Path.of("target/golden-report.json");
@@ -79,6 +79,12 @@ class GoldenChatIT {
     @DynamicPropertySource
     static void ollama(DynamicPropertyRegistry registry) {
         registry.add("rag.ollama.base-url", () -> OLLAMA_URL);
+        registry.add("rag.chat.model", () -> CHAT_MODEL);
+        registry.add("rag.chat.num-ctx", () -> "4096");
+        registry.add("rag.chat.num-predict", () -> "512");
+        registry.add("rag.chat.k-default", () -> "4");
+        registry.add("rag.chat.k-max", () -> "4");
+        registry.add("rag.chat.history-token-budget", () -> "600");
     }
 
     @BeforeAll

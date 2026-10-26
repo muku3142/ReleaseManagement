@@ -4,6 +4,7 @@ import com.evision.releasemgmt.domain.template.view.CommentView;
 import com.evision.releasemgmt.domain.template.view.CommitView;
 import com.evision.releasemgmt.domain.template.view.GroupView;
 import com.evision.releasemgmt.domain.template.view.ItemView;
+import com.evision.releasemgmt.domain.template.view.ProductView;
 import com.evision.releasemgmt.domain.template.view.PullRequestView;
 import com.evision.releasemgmt.domain.template.view.ReleaseView;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,12 @@ class PlaceholderCatalogTest {
     @Test
     void groupTokensMatchGroupViewComponents() {
         assertThat(catalogTokens(PlaceholderScope.GROUP)).isEqualTo(names(GroupView.class.getRecordComponents()));
+    }
+
+    @Test
+    void productTokensMatchProductViewComponents() {
+        assertThat(catalogTokens(PlaceholderScope.PRODUCT))
+                .isEqualTo(names(ProductView.class.getRecordComponents()));
     }
 
     @Test
@@ -119,6 +126,7 @@ class PlaceholderCatalogTest {
             case COMMENT -> CommentView.class;
             case COMMIT -> CommitView.class;
             case PULL_REQUEST -> PullRequestView.class;
+            case PRODUCT -> ProductView.class;
         };
     }
 

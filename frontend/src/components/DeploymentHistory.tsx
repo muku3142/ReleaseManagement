@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import {
   defaultHistoryDates,
   historyRange,
@@ -36,7 +36,9 @@ export function DeploymentHistory({
   const to = search.to ?? defaults.to;
   const range = historyRange(from, to);
   const history = useDeploymentHistory(
-    range.ok ? { stageId: search.stage, fromIso: range.fromIso, toIso: range.toIso } : null,
+    range.ok
+      ? { stageId: search.stage, fromIso: range.fromIso, toIso: range.toIso, productIds: search.products }
+      : null,
   );
   const ladder = useEnvironmentLadder();
 
@@ -47,6 +49,8 @@ export function DeploymentHistory({
 
   const change = (key: 'stage' | 'from' | 'to', value: string) =>
     onSearchChange({ ...search, [key]: value || undefined });
+
+  const clearFilters = () => onSearchChange({ ...search, stage: undefined, from: undefined, to: undefined });
 
   return (
     <section className="rounded border border-gray-200 bg-white p-4">
@@ -99,7 +103,7 @@ export function DeploymentHistory({
         {!range.ok && <p className="text-xs text-amber-700">{range.message}</p>}
         <button
           type="button"
-          onClick={() => onSearchChange({ all: search.all })}
+          onClick={clearFilters}
           className="text-sm text-blue-600 hover:underline"
         >
           Clear filters
@@ -132,7 +136,7 @@ export function DeploymentHistory({
             release&apos;s page.{' '}
             <button
               type="button"
-              onClick={() => onSearchChange({ all: search.all })}
+              onClick={clearFilters}
               className="text-blue-600 underline"
             >
               Clear filters

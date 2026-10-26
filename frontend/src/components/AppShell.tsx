@@ -1,4 +1,5 @@
 import { Link, Outlet } from '@tanstack/react-router';
+import { useAssistantStatus } from '../api/assistant';
 import { useSession, useLogout } from '../api/auth';
 import { AdoCredentialBanner } from './AdoCredentialBanner';
 import { CredentialAlert } from './CredentialAlert';
@@ -6,6 +7,7 @@ import { CredentialAlert } from './CredentialAlert';
 export function AppShell() {
   const session = useSession();
   const logout = useLogout();
+  const assistant = useAssistantStatus(!!session.data);
 
   function handleSignOut() {
     logout.mutate(undefined, {
@@ -54,6 +56,36 @@ export function AppShell() {
           >
             Releases
           </Link>
+          <Link
+            to="/portfolio"
+            className="text-gray-600 hover:text-gray-900"
+            activeProps={{ className: 'font-semibold text-gray-900' }}
+          >
+            Portfolio
+          </Link>
+          <Link
+            to="/roadmap"
+            className="text-gray-600 hover:text-gray-900"
+            activeProps={{ className: 'font-semibold text-gray-900' }}
+          >
+            Roadmap
+          </Link>
+          <Link
+            to="/briefings"
+            className="text-gray-600 hover:text-gray-900"
+            activeProps={{ className: 'font-semibold text-gray-900' }}
+          >
+            Briefings
+          </Link>
+          {assistant.data?.enabled === true && (
+            <Link
+              to="/assistant"
+              className="text-gray-600 hover:text-gray-900"
+              activeProps={{ className: 'font-semibold text-gray-900' }}
+            >
+              Assistant
+            </Link>
+          )}
           <Link
             to="/templates"
             className="text-gray-600 hover:text-gray-900"

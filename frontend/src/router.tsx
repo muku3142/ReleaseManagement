@@ -8,9 +8,15 @@ import { ReleaseDetailRoute } from './routes/ReleaseDetailRoute';
 import { TemplatesRoute } from './routes/TemplatesRoute';
 import { TemplateDetailRoute } from './routes/TemplateDetailRoute';
 import { DocumentViewerRoute } from './routes/DocumentViewerRoute';
+import { PortfolioRoute } from './routes/PortfolioRoute';
+import { RoadmapRoute } from './routes/RoadmapRoute';
+import { BriefingsRoute } from './routes/BriefingsRoute';
 import { LoginRoute } from './routes/LoginRoute';
+import { AssistantRoute } from './routes/AssistantRoute';
+import { assistantStatusQueryOptions } from './api/assistant';
 import { fetchSessionOrNull } from './api/auth';
-import { parseDashboardSearch } from './api/dashboard';
+import { parseDashboardSearch, parseProducts } from './api/dashboard';
+import { parseRoadmapSearch } from './api/roadmap';
 import { queryClient } from './api/queryClient';
 import { safeRedirectTarget } from './safeRedirect';
 
@@ -76,6 +82,42 @@ const releaseDetailRoute = createRoute({
   component: ReleaseDetailRoute,
 });
 
+const portfolioRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/portfolio',
+  validateSearch: (search: Record<string, unknown>): { tab?: 'products' | 'clients'; client?: string } => ({
+    tab: search.tab === 'clients' ? 'clients' : search.tab === 'products' ? 'products' : undefined,
+    client: typeof search.client === 'string' ? search.client : undefined,
+  }),
+  component: PortfolioRoute,
+});
+
+const roadmapRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/roadmap',
+  validateSearch: parseRoadmapSearch,
+  component: RoadmapRoute,
+});
+
+const briefingsRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/briefings',
+  validateSearch: (search: Record<string, unknown>): { products?: string[] } => ({
+    products: parseProducts(search.products),
+  }),
+  component: BriefingsRoute,
+});
+
+const assistantRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/assistant',
+  beforeLoad: async () => {
+    const status = await queryClient.ensureQueryData(assistantStatusQueryOptions);
+    if (!status.enabled) throw redirect({ to: '/' });
+  },
+  component: AssistantRoute,
+});
+
 const templatesRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/templates',
@@ -105,6 +147,10 @@ const routeTree = rootRoute.addChildren([
     ticketsRoute,
     releasesRoute,
     releaseDetailRoute,
+    portfolioRoute,
+    roadmapRoute,
+    briefingsRoute,
+    assistantRoute,
     templatesRoute,
     templateDetailRoute,
     documentViewerRoute,

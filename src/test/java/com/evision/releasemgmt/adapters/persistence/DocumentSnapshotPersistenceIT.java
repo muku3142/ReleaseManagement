@@ -1,6 +1,8 @@
 package com.evision.releasemgmt.adapters.persistence;
 
 import com.evision.releasemgmt.PgVectorImage;
+import com.evision.releasemgmt.domain.document.AiAssist;
+import com.evision.releasemgmt.domain.document.AiMode;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.template.ChromeFields;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -74,6 +77,92 @@ class DocumentSnapshotPersistenceIT {
         LogoMetadata metadata = new LogoMetadata("image/png", "logo.png", 4, 10, 10,
                 Instant.now().truncatedTo(ChronoUnit.MICROS));
         return new LogoImage(new byte[] {1, 2, 3, 4}, metadata);
+    }
+
+    private static Instant micros() {
+        return Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
+    private DocumentSnapshot savedGenerated(UUID releaseId, Instant at, LogoImage logo) {
+        return repository.create(DocumentSnapshot.create(releaseId, TemplateDocumentType.RELEASE_NOTES, 1,
+                "# Body rev 1", null, "Release Notes A", "Body {{release.name}}", chrome(), "rm@acme.com", at),
+                logo);
+    }
+
+    private DocumentSnapshot saveAi(DocumentSnapshot source, int revision, AiMode mode, String instruction) {
+        return repository.create(DocumentSnapshot.createAiRevision(source, revision, "# AI rev " + revision, mode,
+                instruction, "acct-2", micros()), repository.findLogo(source.id()).orElse(null));
+    }
+
+    @Test
+    void aiRevisionRoundTripsWithProvenanceAndCopiedLogo() {
+        Release release = release("Ai Round Trip");
+        DocumentSnapshot source = savedGenerated(release.id(), micros(), logo());
+
+        saveAi(source, 2, AiMode.CLEAN_UP, "tidy this");
+
+        DocumentSnapshot latest = repository.findLatest(release.id(), TemplateDocumentType.RELEASE_NOTES)
+                .orElseThrow();
+        assertThat(latest.revision()).isEqualTo(2);
+        assertThat(latest.aiAssist()).isEqualTo(new AiAssist(AiMode.CLEAN_UP, "tidy this", 1,
+                source.generatedAt()));
+        assertThat(latest.chrome()).isEqualTo(source.chrome());
+        assertThat(repository.findLogo(latest.id()).orElseThrow().bytes()).containsExactly(1, 2, 3, 4);
+    }
+
+    @Test
+    void aiSaveLeavesTheSourceRevisionUnchanged() {
+        Release release = release("Ai Append Only");
+        DocumentSnapshot source = savedGenerated(release.id(), micros(), null);
+        DocumentSnapshot before = repository.findByRevision(release.id(), TemplateDocumentType.RELEASE_NOTES, 1)
+                .orElseThrow();
+
+        saveAi(source, 2, AiMode.CUSTOM, "shorter");
+
+        DocumentSnapshot after = repository.findByRevision(release.id(), TemplateDocumentType.RELEASE_NOTES, 1)
+                .orElseThrow();
+        assertThat(after).usingRecursiveComparison().isEqualTo(before);
+        assertThat(after.aiAssist()).isNull();
+    }
+
+    @Test
+    void chainedAiRevisionsKeepTheOriginalBasis() {
+        Release release = release("Ai Chain");
+        Instant t1 = micros();
+        DocumentSnapshot source = savedGenerated(release.id(), t1, null);
+        DocumentSnapshot second = saveAi(source, 2, AiMode.CLEAN_UP, "one");
+
+        DocumentSnapshot third = saveAi(second, 3, AiMode.CUSTOM, "two");
+
+        assertThat(third.aiAssist().basisGeneratedAt()).isEqualTo(t1);
+        assertThat(third.aiAssist().sourceRevision()).isEqualTo(2);
+    }
+
+    @Test
+    void databaseRejectsPartialAiProvenance() {
+        Release release = release("Ai Check");
+        DocumentSnapshot source = savedGenerated(release.id(), micros(), null);
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "UPDATE document_snapshot SET ai_mode = 'CLEAN_UP' WHERE id = ?", source.id()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void historyListsAiAndGeneratedRevisionsAndLatestForAllReleasesReturnsTheAiOne() {
+        Release release = release("Ai History");
+        DocumentSnapshot source = savedGenerated(release.id(), micros(), null);
+        DocumentSnapshot second = saveAi(source, 2, AiMode.CLEAN_UP, "one");
+        saveAi(second, 3, AiMode.CUSTOM, "two");
+
+        List<DocumentSnapshot> all = repository.findAllRevisions(release.id(), TemplateDocumentType.RELEASE_NOTES);
+
+        assertThat(all).extracting(DocumentSnapshot::revision).containsExactly(3, 2, 1);
+        assertThat(all).extracting(DocumentSnapshot::aiAssisted).containsExactly(true, true, false);
+        assertThat(repository.findLatestForAllReleases())
+                .filteredOn(s -> s.releaseId().equals(release.id()))
+                .singleElement()
+                .satisfies(s -> assertThat(s.revision()).isEqualTo(3));
     }
 
     @Test

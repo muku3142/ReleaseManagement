@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import { OUTCOME_COLOURS, OUTCOME_LABELS, usePromotions, type PromotionEntry } from '../api/promotions';
 import { LadderDots } from './LadderDots';
 import { RecordPromotionDialog } from './RecordPromotionDialog';

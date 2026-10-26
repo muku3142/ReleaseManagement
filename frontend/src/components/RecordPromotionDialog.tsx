@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import {
   OUTCOME_LABELS,
   useCorrectPromotion,
@@ -8,6 +8,7 @@ import {
   type PromotionEntry,
   type PromotionHistory,
   type PromotionOutcome,
+  type PromotionStage,
   type RecordPromotionInput,
 } from '../api/promotions';
 
@@ -21,9 +22,57 @@ function defaultStageId(history: PromotionHistory, outcome: PromotionOutcome): s
   return id ?? '';
 }
 
+export type StageOption = { id: string; label: string; disabled: boolean };
+
+const MAX_LISTED_SKIPS = 3;
+
+function ladder(history: PromotionHistory): PromotionStage[] {
+  return [...history.stages].sort((a, b) => a.position - b.position);
+}
+
+// D-15.1-03: the current stage (redeploy) or any later active stage; earlier stages are not offered (ROLLED_BACK goes back).
+export function recordStageOptions(history: PromotionHistory): StageOption[] {
+  const stages = ladder(history);
+  const current = stages.find((s) => s.id === history.currentStageId);
+  return stages.flatMap((stage): StageOption[] => {
+    if (stage.id === current?.id) {
+      return [
+        stage.retired
+          ? { id: stage.id, label: `${stage.name} (retired)`, disabled: true }
+          : { id: stage.id, label: `${stage.name} (redeploy)`, disabled: false },
+      ];
+    }
+    const later = current === undefined || stage.position > current.position;
+    return later && !stage.retired ? [{ id: stage.id, label: stage.name, disabled: false }] : [];
+  });
+}
+
+// Active stages strictly between the current stage (or the start of the ladder) and the selected one.
+export function skippedStages(history: PromotionHistory, selectedId: string): PromotionStage[] {
+  const stages = ladder(history);
+  const selected = stages.find((s) => s.id === selectedId);
+  if (!selected) return [];
+  const current = stages.find((s) => s.id === history.currentStageId);
+  return stages.filter(
+    (s) => !s.retired && (current === undefined || s.position > current.position) && s.position < selected.position,
+  );
+}
+
+export function skipNote(names: string[]): string {
+  const rest = names.length - MAX_LISTED_SKIPS;
+  const list = names.slice(0, MAX_LISTED_SKIPS).join(', ') + (rest > 0 ? ` and ${rest} more` : '');
+  return `This skips ${names.length} stage(s): ${list}.`;
+}
+
+function recordDefaultStageId(history: PromotionHistory, outcome: PromotionOutcome): string {
+  const enabled = recordStageOptions(history).filter((o) => !o.disabled);
+  const preferred = defaultStageId(history, outcome);
+  return enabled.find((o) => o.id === preferred)?.id ?? enabled[0]?.id ?? '';
+}
+
 const pad = (n: number) => String(n).padStart(2, '0');
 
-function toLocalInput(iso: string): string {
+export function toLocalInput(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
@@ -53,7 +102,7 @@ export function RecordPromotionDialog(props: {
     if (!dialog) return;
     if (props.open && !dialog.open) {
       setOutcome(correcting?.outcome ?? 'SUCCESS');
-      setStageId(correcting?.stageId ?? defaultStageId(props.history, 'SUCCESS'));
+      setStageId(correcting?.stageId ?? recordDefaultStageId(props.history, 'SUCCESS'));
       setDeployedAt(correcting ? toLocalInput(correcting.deployedAt) : '');
       setDeployedAtEdited(false);
       setNote(correcting?.note ?? '');
@@ -67,7 +116,7 @@ export function RecordPromotionDialog(props: {
 
   function changeOutcome(next: PromotionOutcome) {
     setOutcome(next);
-    if (!correcting) setStageId(defaultStageId(props.history, next));
+    if (!correcting) setStageId(recordDefaultStageId(props.history, next));
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -100,6 +149,10 @@ export function RecordPromotionDialog(props: {
   }
 
   const active = correcting ? correct : record;
+  const stageOptions = correcting ? [] : recordStageOptions(props.history);
+  const hasCurrentStage = props.history.currentStageId !== null;
+  const currentStageName = props.history.stages.find((st) => st.id === props.history.currentStageId)?.name;
+  const skipped = correcting ? [] : skippedStages(props.history, stageId);
   const problem = active.isError && active.error instanceof ApiError ? active.error.problem : undefined;
 
   return (
@@ -131,17 +184,40 @@ export function RecordPromotionDialog(props: {
             id="promotionStage"
             value={stageId}
             onChange={(event) => setStageId(event.target.value)}
+            aria-describedby={!correcting && hasCurrentStage ? 'promotionStageHelp' : undefined}
             className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
           >
-            {props.history.stages.map((stage) => {
-              const retired = stage.retired && stage.id !== correcting?.stageId;
-              return (
-                <option key={stage.id} value={stage.id} disabled={retired}>
-                  {stage.retired ? `${stage.name} (retired)` : stage.name}
-                </option>
-              );
-            })}
+            {correcting
+              ? props.history.stages.map((stage) => {
+                  const retired = stage.retired && stage.id !== correcting?.stageId;
+                  return (
+                    <option key={stage.id} value={stage.id} disabled={retired}>
+                      {stage.retired ? `${stage.name} (retired)` : stage.name}
+                    </option>
+                  );
+                })
+              : stageOptions.map((o) => (
+                  <option key={o.id} value={o.id} disabled={o.disabled}>
+                    {o.label}
+                  </option>
+                ))}
           </select>
+          {!correcting && hasCurrentStage && (
+            <p id="promotionStageHelp" className="mt-1 text-xs text-gray-600">
+              Choose the next stage or skip ahead. Pick {currentStageName} to record a redeploy. Earlier stages aren't
+              offered; record a rollback instead.
+            </p>
+          )}
+          {skipped.length > 0 && (
+            <p role="status" className="mt-1 text-xs text-gray-600">
+              {skipNote(skipped.map((st) => st.name))}
+            </p>
+          )}
+          {!correcting && stageOptions.every((o) => o.disabled) && (
+            <p className="mt-1 text-sm text-red-600">
+              No active stage is available to promote to. Add or restore a stage in Settings.
+            </p>
+          )}
         </div>
         <div>
           <label htmlFor="promotionDeployedAt" className="block text-sm font-semibold text-gray-700">

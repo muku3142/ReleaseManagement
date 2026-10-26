@@ -29,10 +29,12 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -95,7 +97,7 @@ class DashboardControllerTest {
 
     @Test
     void releasesDefaultsToActiveScopeAndExposesTheContract() throws Exception {
-        when(service.releases(false)).thenReturn(view());
+        when(service.releases(false, Set.of())).thenReturn(view());
 
         mockMvc.perform(get("/api/dashboard/releases").with(authenticated()))
                 .andExpect(status().isOk())
@@ -125,11 +127,56 @@ class DashboardControllerTest {
 
     @Test
     void scopeAllRequestsEveryRelease() throws Exception {
-        when(service.releases(true)).thenReturn(view());
+        when(service.releases(true, Set.of())).thenReturn(view());
 
         mockMvc.perform(get("/api/dashboard/releases?scope=all").with(authenticated())).andExpect(status().isOk());
 
-        verify(service).releases(true);
+        verify(service).releases(true, Set.of());
+    }
+
+    @Test
+    void releasesPassesTheProductFilterAsADeduplicatedSet() throws Exception {
+        UUID a = UUID.randomUUID();
+        UUID b = UUID.randomUUID();
+        when(service.releases(true, Set.of(a, b))).thenReturn(view());
+
+        mockMvc.perform(get("/api/dashboard/releases?scope=all&productIds=" + a + "," + b + "," + a).with(authenticated()))
+                .andExpect(status().isOk());
+
+        verify(service).releases(true, Set.of(a, b));
+    }
+
+    @Test
+    void releasesWithoutProductIdsMeansAllProducts() throws Exception {
+        when(service.releases(false, Set.of())).thenReturn(view());
+
+        mockMvc.perform(get("/api/dashboard/releases").with(authenticated())).andExpect(status().isOk());
+
+        verify(service).releases(false, Set.of());
+    }
+
+    @Test
+    void moreThanTheProductCapOrANonUuidIsRejected() throws Exception {
+        String tooMany = java.util.stream.IntStream.range(0, DashboardController.MAX_PRODUCT_FILTER + 1)
+                .mapToObj(i -> UUID.randomUUID().toString()).collect(java.util.stream.Collectors.joining(","));
+
+        assertValidationFailed(mockMvc.perform(get("/api/dashboard/releases?productIds=" + tooMany).with(authenticated())));
+        assertValidationFailed(mockMvc.perform(get("/api/dashboard/releases?productIds=not-a-uuid").with(authenticated())));
+        assertValidationFailed(getDeployments("from=" + FROM + "&to=" + TO + "&productIds=" + tooMany));
+        verify(service, never()).releases(anyBoolean(), any());
+        verify(service, never()).deployments(any(), any(), any(), anyInt(), anyInt(), any());
+    }
+
+    @Test
+    void deploymentsPassesTheProductFilter() throws Exception {
+        UUID a = UUID.randomUUID();
+        when(service.deployments(null, Instant.parse(FROM), Instant.parse(TO), 50, 0, Set.of(a)))
+                .thenReturn(new DashboardService.DeploymentPage(List.of(), false));
+        when(actorResolution.resolve(any(String[].class))).thenReturn(new ResolvedActors(Map.of()));
+
+        getDeployments("from=" + FROM + "&to=" + TO + "&productIds=" + a).andExpect(status().isOk());
+
+        verify(service).deployments(null, Instant.parse(FROM), Instant.parse(TO), 50, 0, Set.of(a));
     }
 
     @Test
@@ -139,7 +186,7 @@ class DashboardControllerTest {
 
     @Test
     void deploymentsDefaultsToAllStagesFirstPageAndResolvesActorsOnce() throws Exception {
-        when(service.deployments(null, Instant.parse(FROM), Instant.parse(TO), 50, 0))
+        when(service.deployments(null, Instant.parse(FROM), Instant.parse(TO), 50, 0, Set.of()))
                 .thenReturn(new DashboardService.DeploymentPage(List.of(row("acc-1"), row("acc-2"), row("acc-1")), true));
         when(actorResolution.resolve(any(String[].class)))
                 .thenReturn(new ResolvedActors(Map.of("acc-1", "rm@acme.com", "acc-2", "dev@acme.com")));
@@ -160,7 +207,7 @@ class DashboardControllerTest {
 
     @Test
     void deploymentsPassesTheStageFilterAndPaging() throws Exception {
-        when(service.deployments(eq(dev.id()), any(), any(), eq(20), eq(40)))
+        when(service.deployments(eq(dev.id()), any(), any(), eq(20), eq(40), eq(Set.of())))
                 .thenReturn(new DashboardService.DeploymentPage(List.of(), false));
         when(actorResolution.resolve(any(String[].class))).thenReturn(new ResolvedActors(Map.of()));
 
@@ -189,7 +236,7 @@ class DashboardControllerTest {
 
     @Test
     void rangeOf366DaysPlusOneHourIsAccepted() throws Exception {
-        when(service.deployments(any(), any(), any(), anyInt(), anyInt()))
+        when(service.deployments(any(), any(), any(), anyInt(), anyInt(), any()))
                 .thenReturn(new DashboardService.DeploymentPage(List.of(), false));
         when(actorResolution.resolve(any(String[].class))).thenReturn(new ResolvedActors(Map.of()));
 
@@ -201,7 +248,7 @@ class DashboardControllerTest {
         assertValidationFailed(getDeployments("from=" + FROM + "&to=" + TO + "&limit=0"));
         assertValidationFailed(getDeployments("from=" + FROM + "&to=" + TO + "&limit=101"));
         assertValidationFailed(getDeployments("from=" + FROM + "&to=" + TO + "&offset=-1"));
-        verify(service, never()).deployments(any(), any(), any(), anyInt(), anyInt());
+        verify(service, never()).deployments(any(), any(), any(), anyInt(), anyInt(), any());
     }
 
     @Test

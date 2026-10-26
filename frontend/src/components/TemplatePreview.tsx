@@ -25,6 +25,7 @@ const SCOPE_PUSHES: Record<string, Scope> = {
   comments: 'COMMENT',
   commits: 'COMMIT',
   pullRequests: 'PULL_REQUEST',
+  products: 'PRODUCT',
 };
 
 function toContext(view: ReleaseView) {
@@ -41,6 +42,7 @@ function toContext(view: ReleaseView) {
     },
     items: cap(view.items),
     groups: view.groups.map((g) => ({ groupName: g.groupName, items: cap(g.items) })),
+    products: view.products,
   };
 }
 

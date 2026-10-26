@@ -46,7 +46,7 @@ function rev(
   generatedBy = 'rm@acme.com',
   templateName = 'Standard',
 ): DocumentRevision {
-  return { revision, latest, generatedAt, generatedBy, templateName };
+  return { revision, latest, generatedAt, generatedBy, templateName, aiAssisted: false, aiMode: null, aiInstruction: null };
 }
 
 function generatedDocument(documentType: DocType, revision = 1) {
@@ -71,6 +71,9 @@ function generatedDocument(documentType: DocType, revision = 1) {
     },
     generatedAt: '2026-08-10T09:00:00Z',
     generatedBy: 'rm@acme.com',
+    aiAssisted: false,
+    aiMode: null,
+    aiInstruction: null,
   };
 }
 
@@ -638,5 +641,111 @@ describe('DocumentsSection', () => {
     expect(container.querySelector('#documents')).not.toBeNull();
     expect(container.textContent).not.toContain('Frozen');
     expect(container.textContent).not.toContain('Open');
+  });
+
+  describe('AI-assisted revisions', () => {
+    const NOTICE = 'The latest revision was AI-assisted; regenerating replaces it as current.';
+
+    function aiRev(revision: number, latest: boolean, aiMode: 'CLEAN_UP' | 'SUMMARIZE' | 'CUSTOM', aiInstruction: string | null) {
+      return { ...rev(revision, latest), aiAssisted: true, aiMode, aiInstruction };
+    }
+
+    async function openHistory(row: HTMLElement) {
+      const disclosure = [...row.querySelectorAll('button')].find((b) => b.getAttribute('aria-expanded') !== null)!;
+      await act(async () => disclosure.click());
+    }
+
+    it('cleanUpRevisionShowsSavedBadgeAndInstructionLine', async () => {
+      mockFetch({
+        readiness: { RELEASE_NOTES: 'UP_TO_DATE' },
+        revisions: { RELEASE_NOTES: [aiRev(2, true, 'CLEAN_UP', null), rev(1, false)] },
+      });
+      await renderSection();
+      const row = rowFor('Release Notes');
+      await openHistory(row);
+
+      const [ai, plain] = [...row.querySelectorAll('ul li')];
+      expect(ai.querySelector('p')!.textContent).toMatch(/Revision 2 \(latest\)AI-assisted · saved /);
+      expect(ai.textContent).toContain('AI instruction: Clean up');
+      expect(plain.textContent).toContain('generated');
+      expect(plain.textContent).not.toContain('AI-assisted');
+      expect(plain.querySelectorAll('p')).toHaveLength(1);
+    });
+
+    it('summarizeRevisionShowsTheSummarizeInstructionLine', async () => {
+      mockFetch({
+        readiness: { RELEASE_NOTES: 'UP_TO_DATE' },
+        revisions: { RELEASE_NOTES: [aiRev(2, true, 'SUMMARIZE', null), rev(1, false)] },
+      });
+      await renderSection();
+      const row = rowFor('Release Notes');
+      await openHistory(row);
+
+      const [ai] = [...row.querySelectorAll('ul li')];
+      expect(ai.textContent).toContain('AI instruction: Summarize');
+    });
+
+    it('customInstructionRendersAsTextWithFullTitle', async () => {
+      const instruction = '<b>x</b> Rewrite for executives';
+      mockFetch({
+        readiness: { RELEASE_NOTES: 'UP_TO_DATE' },
+        revisions: { RELEASE_NOTES: [aiRev(1, true, 'CUSTOM', instruction)] },
+      });
+      await renderSection();
+      const row = rowFor('Release Notes');
+      await openHistory(row);
+
+      const line = row.querySelectorAll('ul li p')[1] as HTMLElement;
+      expect(line.textContent).toBe(`AI instruction: "${instruction}"`);
+      expect(line.getAttribute('title')).toBe(`AI instruction: "${instruction}"`);
+      expect(line.querySelector('b')).toBeNull();
+    });
+
+    it('summaryLineCarriesBadgeAndSavedWording', async () => {
+      mockFetch({
+        readiness: { RELEASE_NOTES: 'UP_TO_DATE' },
+        revisions: { RELEASE_NOTES: [aiRev(1, true, 'CLEAN_UP', null)] },
+      });
+      await renderSection();
+
+      const summary = rowFor('Release Notes').querySelector('p')!;
+      expect(summary.textContent).toContain('· saved ');
+      expect(summary.textContent).toContain('AI-assisted');
+    });
+
+    it('regenerateNoticeIsDescribedByTheButtonWhenLatestIsAiAssisted', async () => {
+      mockFetch({
+        readiness: { RELEASE_NOTES: 'UP_TO_DATE' },
+        revisions: { RELEASE_NOTES: [aiRev(1, true, 'CLEAN_UP', null)] },
+      });
+      await renderSection();
+
+      const row = rowFor('Release Notes');
+      const notice = [...row.querySelectorAll('p')].find((p) => p.textContent === NOTICE)!;
+      expect(notice).toBeDefined();
+      expect(byText(row, 'Regenerate Release Notes').getAttribute('aria-describedby')).toBe(notice.id);
+    });
+
+    it('noNoticeWhenLatestIsNotAiAssisted', async () => {
+      mockFetch({
+        readiness: { RELEASE_NOTES: 'UP_TO_DATE' },
+        revisions: { RELEASE_NOTES: [rev(2, true), aiRev(1, false, 'CLEAN_UP', null)] },
+      });
+      await renderSection();
+
+      const row = rowFor('Release Notes');
+      expect(row.textContent).not.toContain(NOTICE);
+      expect(byText(row, 'Regenerate Release Notes').hasAttribute('aria-describedby')).toBe(false);
+    });
+
+    it('noNoticeWhenThereIsNoTemplate', async () => {
+      mockFetch({
+        readiness: { RELEASE_NOTES: 'NO_TEMPLATE' },
+        revisions: { RELEASE_NOTES: [aiRev(1, true, 'CLEAN_UP', null)] },
+      });
+      await renderSection();
+
+      expect(rowFor('Release Notes').textContent).not.toContain(NOTICE);
+    });
   });
 });

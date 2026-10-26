@@ -9,12 +9,14 @@ import com.github.tomakehurst.wiremock.junit5.WireMockTest;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.delete;
 import static com.github.tomakehurst.wiremock.client.WireMock.deleteRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.matchingJsonPath;
 import static com.github.tomakehurst.wiremock.client.WireMock.put;
 import static com.github.tomakehurst.wiremock.client.WireMock.putRequestedFor;
@@ -114,6 +116,39 @@ class RagIndexAdapterTest {
         assertThatThrownBy(() -> adapter(wm).put(DOC))
                 .isInstanceOfSatisfying(RagServiceException.class, e -> assertThat(e.status()).isZero());
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofMillis(2800));
+    }
+
+    @Test
+    void lastIndexedAtReadsTheCollectionInstant(WireMockRuntimeInfo wm) {
+        stubFor(get(urlPathEqualTo("/v1/collections/rm-tickets")).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"name\":\"rm-tickets\",\"pending\":0,\"indexed\":3,\"failed\":0,\"lastIndexedAt\":\"2026-10-15T08:00:00Z\"}")));
+
+        assertThat(adapter(wm).lastIndexedAt(IndexCollection.TICKETS)).contains(Instant.parse("2026-10-15T08:00:00Z"));
+    }
+
+    @Test
+    void lastIndexedAtIsEmptyForNullAndFor404(WireMockRuntimeInfo wm) {
+        stubFor(get(urlPathEqualTo("/v1/collections/rm-tickets")).willReturn(aResponse().withStatus(200)
+                .withHeader("Content-Type", "application/json").withBody("{\"lastIndexedAt\":null}")));
+        stubFor(get(urlPathEqualTo("/v1/collections/rm-documents")).willReturn(aResponse().withStatus(404)));
+
+        assertThat(adapter(wm).lastIndexedAt(IndexCollection.TICKETS)).isEmpty();
+        assertThat(adapter(wm).lastIndexedAt(IndexCollection.DOCUMENTS)).isEmpty();
+    }
+
+    @Test
+    void lastIndexedAtServerErrorIsReported(WireMockRuntimeInfo wm) {
+        stubFor(get(urlPathEqualTo("/v1/collections/rm-tickets")).willReturn(aResponse().withStatus(500)));
+
+        assertThatThrownBy(() -> adapter(wm).lastIndexedAt(IndexCollection.TICKETS))
+                .isInstanceOfSatisfying(RagServiceException.class, e -> assertThat(e.status()).isEqualTo(500));
+    }
+
+    @Test
+    void lastIndexedAtConnectionRefusedBecomesStatusZero() {
+        assertThatThrownBy(() -> adapter("http://localhost:1").lastIndexedAt(IndexCollection.TICKETS))
+                .isInstanceOfSatisfying(RagServiceException.class, e -> assertThat(e.status()).isZero());
     }
 
     @Test

@@ -2,15 +2,24 @@ package com.evision.releasemgmt.application;
 
 import com.evision.releasemgmt.domain.enrichment.CodeLinks;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
+import com.evision.releasemgmt.domain.portfolio.PortfolioEditRejectedException;
+import com.evision.releasemgmt.domain.portfolio.PortfolioEditRejection;
+import com.evision.releasemgmt.domain.portfolio.Product;
+import com.evision.releasemgmt.domain.portfolio.ProductNotFoundException;
+import com.evision.releasemgmt.domain.portfolio.ReleaseProduct;
 import com.evision.releasemgmt.domain.jira.TicketSearchCriteria;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemCategory;
+import com.evision.releasemgmt.domain.release.PackagesUrl;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
+import com.evision.releasemgmt.domain.release.UnfreezeRejection;
+import com.evision.releasemgmt.ports.ProductRepository;
+import com.evision.releasemgmt.ports.ReleaseProductRepository;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,8 +27,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -41,16 +53,52 @@ public class ReleaseService {
     private final ReleaseRepository repository;
     private final TicketSearchService ticketSearchService;
     private final EnrichmentService enrichmentService;
+    private final ReleaseProductRepository releaseProducts;
+    private final ProductRepository products;
 
     public ReleaseService(ReleaseRepository repository, TicketSearchService ticketSearchService,
-                          EnrichmentService enrichmentService) {
+                          EnrichmentService enrichmentService, ReleaseProductRepository releaseProducts,
+                          ProductRepository products) {
         this.repository = repository;
         this.ticketSearchService = ticketSearchService;
         this.enrichmentService = enrichmentService;
+        this.releaseProducts = releaseProducts;
+        this.products = products;
+    }
+
+    public List<ReleaseProduct> productsOf(UUID releaseId) {
+        return releaseProducts.productsOf(releaseId);
+    }
+
+    public Map<UUID, List<ReleaseProduct>> productsOfReleases(Collection<UUID> releaseIds) {
+        return releaseProducts.productsOfReleases(releaseIds);
+    }
+
+    // D-15-01: no requireOpen - a FROZEN release's products stay editable so v1.1 releases can be tagged and receive installs.
+    // D-15-18: an empty set is rejected by replace (RELEASE_LAST_PRODUCT), the single home of the never-empty rule.
+    public Release setProducts(UUID releaseId, Collection<UUID> productIds) {
+        releaseProducts.replace(releaseId, Set.copyOf(productIds));
+        return get(releaseId);
+    }
+
+    // D-17-21: no requireOpen - the packages link is editable in every status and is not release content.
+    public Release setPackagesUrl(UUID releaseId, String url) {
+        return repository.setPackagesUrl(releaseId, PackagesUrl.normalize(url));
     }
 
     public AddTicketsResult createWithTickets(String name, String version, String jiraProjectKey,
-                                              List<String> ticketKeys, String actor) {
+                                              List<String> ticketKeys, List<UUID> productIds,
+                                              String actor) {
+        Set<UUID> requestedProducts = Set.copyOf(productIds);
+        if (requestedProducts.isEmpty()) {
+            throw new PortfolioEditRejectedException(PortfolioEditRejection.RELEASE_PRODUCT_REQUIRED);
+        }
+        for (UUID productId : requestedProducts) {
+            Product product = products.findById(productId).orElseThrow(ProductNotFoundException::new);
+            if (product.archived()) {
+                throw new PortfolioEditRejectedException(PortfolioEditRejection.PRODUCT_ARCHIVED);
+            }
+        }
         Instant now = Instant.now();
         List<String> requested = distinct(ticketKeys);
         List<TicketDetail> fetched = fetchTickets(requested);
@@ -60,6 +108,12 @@ public class ReleaseService {
         Release release = Release.create(name.trim(), version.trim(), blankToNull(jiraProjectKey),
                 actor, now);
         Release created = repository.create(release, items);
+        try {
+            releaseProducts.replace(created.id(), requestedProducts);
+        } catch (RuntimeException e) {
+            repository.delete(created.id());   // D-15-18: a just-created OPEN release must not survive without products
+            throw e;
+        }
         enrichQuietly(created.id(), fetched);
         return new AddTicketsResult(get(created.id()), items.size(), 0, requested.size() - items.size());
     }
@@ -151,10 +205,22 @@ public class ReleaseService {
     }
 
     public Release freeze(UUID id, String actor) {
-        // D-03-10: freeze is a one-way door, so freezing an already-frozen release is a
-        // conflict, not a no-op - silently succeeding would hide a stale UI.
+        // D-03-10: freezing an already-frozen release is a conflict, not a no-op - silently succeeding would hide a stale UI.
         get(id).requireOpen();
         return repository.freeze(id, actor, Instant.now());
+    }
+
+    // D-15.1-01/02: the adapter checks status and both ledgers under the release row lock; this layer only records who did it
+    // (an INFO line is the record - there is no audit table, and Phase 15 recorded none for product or client edits).
+    public Release unfreeze(UUID id, String actor) {
+        Release release = repository.unfreeze(id);
+        log.info("Release {} unfrozen by {}", id, actor);
+        return release;
+    }
+
+    // Drives the blocked Unfreeze button only; unfreeze itself never trusts this read.
+    public Optional<UnfreezeRejection> unfreezeBlocker(Release release) {
+        return release.isFrozen() ? repository.unfreezeBlocker(release.id()) : Optional.empty();
     }
 
     public void delete(UUID id) {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import {
   DOCUMENT_TYPES,
   DOCUMENT_TYPE_LABELS,

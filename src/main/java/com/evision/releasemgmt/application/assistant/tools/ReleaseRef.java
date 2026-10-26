@@ -35,14 +35,14 @@ public class ReleaseRef {
             try {
                 return releaseService.get(id).id();
             } catch (ReleaseNotFoundException e) {
-                throw new ToolArgumentException("no release matches '" + text + "'");
+                throw new ToolArgumentException(noMatch(text));
             }
         }
         String wanted = text.toLowerCase(Locale.ROOT);
         List<ReleaseSummary> matches = releaseService.search(text).stream()
                 .filter(r -> matchesExactly(r, wanted)).toList();
         if (matches.isEmpty()) {
-            throw new ToolArgumentException("no release matches '" + text + "'");
+            throw new ToolArgumentException(noMatch(text));
         }
         if (matches.size() > 1) {
             String candidates = matches.stream().limit(MAX_CANDIDATES)
@@ -50,6 +50,16 @@ public class ReleaseRef {
             throw new ToolArgumentException("'" + text + "' is ambiguous, candidates: " + candidates);
         }
         return matches.getFirst().id();
+    }
+
+    private String noMatch(String text) {
+        String message = "no release matches '" + text + "'";
+        List<ReleaseSummary> known = releaseService.search("");
+        if (known.isEmpty()) {
+            return message;
+        }
+        return message + "; known releases: " + known.stream().limit(MAX_CANDIDATES)
+                .map(r -> r.name() + " (" + r.version() + ")").collect(Collectors.joining(", "));
     }
 
     private static boolean matchesExactly(ReleaseSummary release, String wanted) {

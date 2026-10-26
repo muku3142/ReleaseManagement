@@ -1,6 +1,7 @@
 package com.evision.ragservice.application;
 
 import com.evision.ragservice.config.ChatProperties;
+import com.evision.ragservice.config.ToolProperties;
 import com.evision.ragservice.domain.CancelReason;
 import com.evision.ragservice.domain.Cancellation;
 import com.evision.ragservice.domain.ChatMessage;
@@ -25,7 +26,14 @@ import com.evision.ragservice.domain.StreamEvents.Citations;
 import com.evision.ragservice.domain.StreamEvents.Done;
 import com.evision.ragservice.domain.StreamEvents.Status;
 import com.evision.ragservice.domain.StreamEvents.Token;
+import com.evision.ragservice.domain.StreamEvents.ToolCallEvent;
 import com.evision.ragservice.domain.TooManyRequestsException;
+import com.evision.ragservice.domain.ToolCall;
+import com.evision.ragservice.domain.ToolDefinition;
+import com.evision.ragservice.domain.ToolResult;
+import com.evision.ragservice.domain.ToolSchema;
+import com.evision.ragservice.domain.ToolTurn;
+import com.evision.ragservice.domain.ToolTurnRejectedException;
 import com.evision.ragservice.ports.ChatPort;
 import com.evision.ragservice.ports.ChunkSearch;
 import com.evision.ragservice.ports.EmbeddingPort;
@@ -37,9 +45,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
 // Deliberately not @Transactional: retrieval is one short query and no DB connection may be held across the stream
 @Service
@@ -50,10 +60,23 @@ public class ChatService {
     private static final double NEAR_FULL_CONTEXT = 0.8;
 
     public record Command(List<String> collections, String question, List<ChatMessage> history,
-                          Map<String, Object> filter, Integer k) {}
+                          Map<String, Object> filter, Integer k, List<ToolDefinition> tools,
+                          List<ToolTurn> toolTurns) {
+
+        public Command {
+            tools = tools == null ? List.of() : tools;
+            toolTurns = toolTurns == null ? List.of() : toolTurns;
+        }
+
+        public Command(List<String> collections, String question, List<ChatMessage> history,
+                       Map<String, Object> filter, Integer k) {
+            this(collections, question, history, filter, k, List.of(), List.of());
+        }
+    }
 
     public record Plan(String requestId, UUID clientId, List<DocumentCollection> collections, String question,
-                       List<ChatMessage> history, MetadataFilter filter, int k, Cancellation cancellation) {}
+                       List<ChatMessage> history, MetadataFilter filter, int k, Cancellation cancellation,
+                       List<ToolDefinition> tools, List<ToolTurn> toolTurns, String questionId) {}
 
     private final CollectionService collections;
     private final EmbeddingPort embeddings;
@@ -63,10 +86,15 @@ public class ChatService {
     private final GenerationTimers timers;
     private final ChatProperties props;
     private final PromptBuilder promptBuilder;
+    private final String promptHash;
     private final CitationBuilder citationBuilder;
+    private final ToolProperties toolProps;
+    private final ToolTurnSigner signer;
+    private final ToolPolicy toolPolicy;
 
     public ChatService(CollectionService collections, EmbeddingPort embeddings, ChunkSearch chunks, ChatPort chat,
-                       GenerationGate gate, GenerationTimers timers, ChatProperties props) {
+                       GenerationGate gate, GenerationTimers timers, ChatProperties props, ToolProperties toolProps,
+                       ObjectMapper objectMapper, PromptRules rules) {
         this.collections = collections;
         this.embeddings = embeddings;
         this.chunks = chunks;
@@ -75,8 +103,12 @@ public class ChatService {
         this.timers = timers;
         this.props = props;
         this.promptBuilder = new PromptBuilder(new TokenEstimator(props.charsPerToken()), props.numCtx(),
-                props.historyTokenBudget());
+                props.historyTokenBudget(), rules);
+        this.promptHash = rules.hash();
         this.citationBuilder = new CitationBuilder(props.minScore());
+        this.toolProps = toolProps;
+        this.signer = new ToolTurnSigner(toolProps.signingSecret(), objectMapper);
+        this.toolPolicy = new ToolPolicy(toolProps.maxRounds(), toolProps.maxCalls(), toolProps.resultMaxChars());
     }
 
     public Plan prepare(UUID clientId, Command command) {
@@ -113,14 +145,36 @@ public class ChatService {
             throw new MixedEmbeddingModelsException();
         }
 
+        List<ToolDefinition> tools = command.tools();
+        List<ToolTurn> turns = command.toolTurns();
+        if (!tools.isEmpty()) {
+            ToolSchema.requireValidDefinitions(tools, toolProps.maxTools(), toolProps.definitionsMaxChars());
+        }
+        if (!turns.isEmpty()) {
+            if (tools.isEmpty()) {
+                throw new ToolTurnRejectedException("toolTurns require tools");
+            }
+            signer.verifyChain(clientId, question, turns);
+            toolPolicy.requireValidResume(turns, tools);
+        }
+        if (!tools.isEmpty()) {
+            promptBuilder.requireToolBudget(question, tools, turns, k, toolPolicy.isFinalRound(turns),
+                    toolProps.numPredict());
+        }
+
         chat.assertReady();
+        if (!tools.isEmpty()) {
+            chat.assertToolsReady();
+        }
 
         if (!gate.tryAcquire(clientId)) {
             log.info("generation endpoint=chat outcome=TOO_MANY_REQUESTS clientId={}", clientId);
             throw new TooManyRequestsException();
         }
-        return new Plan(UUID.randomUUID().toString(), clientId, owned, question, history, filter, k,
-                new Cancellation());
+        String requestId = UUID.randomUUID().toString();
+        String questionId = turns.isEmpty() ? requestId : turns.getFirst().questionId();
+        return new Plan(requestId, clientId, owned, question, history, filter, k, new Cancellation(), tools, turns,
+                questionId);
     }
 
     private static final class RunStats {
@@ -134,6 +188,10 @@ public class ChatService {
         CitationBasis basis;
         Integer inventedIds;
         boolean truncated;
+        int callsEmitted;
+        List<String> callNames = List.of();
+        int unknownCallNames;
+        boolean correctionRetry;
     }
 
     public void run(Plan plan, EventSink sink) {
@@ -142,6 +200,14 @@ public class ChatService {
         RunStats stats = new RunStats();
         ScheduledFuture<?> watchdog = timers.after(props.deadline(), () -> cancel.cancel(CancelReason.DEADLINE));
         ScheduledFuture<?> heartbeat = timers.every(props.heartbeatInterval(), sink::heartbeat);
+        boolean withTools = !plan.tools().isEmpty();
+        boolean finalRound = withTools && toolPolicy.isFinalRound(plan.toolTurns());
+        AtomicBoolean released = new AtomicBoolean();
+        Runnable releaseOnce = () -> {
+            if (released.compareAndSet(false, true)) {
+                gate.release(plan.clientId());
+            }
+        };
         try {
             sink.send(StreamEvents.STATUS, new Status(plan.requestId(), "SEARCHING"));
             String model = plan.collections().getFirst().embeddingModel();
@@ -150,51 +216,117 @@ public class ChatService {
                     model, vector, plan.filter(), plan.k());
             stats.passages = hits.size();
             stats.topScore = hits.isEmpty() ? null : hits.getFirst().score();
-            if (hits.isEmpty() || hits.getFirst().score() < props.minScore()) {
-                refuse(sink, stats, "GATE", null);
+            if (!withTools && (hits.isEmpty() || hits.getFirst().score() < props.minScore())) {
+                refuse(sink, false, "GATE", stats, null);
                 return;
             }
 
             List<SourceDocument> sources = group(hits, plan.collections());
-            PromptBuilder.BuiltPrompt prompt = promptBuilder.chat(sources, plan.history(), plan.question(),
-                    props.numPredict());
+            PromptBuilder.BuiltPrompt answerPrompt = withTools
+                    ? promptBuilder.chatWithTools(sources, plan.history(), plan.question(), plan.tools(),
+                            plan.toolTurns(), finalRound, toolProps.numPredict())
+                    : promptBuilder.chat(sources, plan.history(), plan.question(), props.numPredict());
+            // The first tool round is a routing request without sources; its text is never streamed, except as a
+            // clarification when the answer round refuses (it saw only the question and history, no retrieved content)
+            boolean routing = withTools && !finalRound && plan.toolTurns().isEmpty();
+            PromptBuilder.BuiltPrompt prompt = routing
+                    ? promptBuilder.toolRouting(plan.history(), plan.question(), plan.tools(), toolProps.numPredict())
+                    : answerPrompt;
+            GenerationOptions options = withTools
+                    ? new GenerationOptions(props.numCtx(), toolProps.numPredict(), props.temperature(),
+                            finalRound ? null : plan.tools())
+                    : new GenerationOptions(props.numCtx(), props.numPredict(), props.temperature());
             stats.estimatedTokens = prompt.estimatedTokens();
             sink.send(StreamEvents.STATUS, new Status(plan.requestId(), "GENERATING"));
 
-            StringBuilder answer = new StringBuilder();
-            RefusalGuard guard = new RefusalGuard(text -> {
-                if (stats.ttftMs == null) {
-                    stats.ttftMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
+            int attempt = 0;
+            String clarification = null;
+            while (true) {
+                boolean routed = routing;
+                StringBuilder answer = new StringBuilder();
+                RefusalGuard guard = new RefusalGuard(text -> {
+                    if (routed) {
+                        return;
+                    }
+                    if (stats.ttftMs == null) {
+                        stats.ttftMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
+                    }
+                    sink.send(StreamEvents.TOKEN, new Token(text));
+                });
+                Completion completion = chat.stream(prompt.messages(), options,
+                        token -> {
+                            answer.append(token);
+                            guard.accept(token);
+                        }, cancel);
+                stats.completion = completion;
+                if (completion.isCancelled()) {
+                    if (completion.cancelledBy() == CancelReason.DEADLINE) {
+                        sink.send(StreamEvents.ERROR, new StreamEvents.Error(ErrorReason.DEADLINE));
+                    }
+                    stats.outcome = completion.cancelledBy().name();
+                    return;
                 }
-                sink.send(StreamEvents.TOKEN, new Token(text));
-            });
-            Completion completion = chat.stream(prompt.messages(),
-                    new GenerationOptions(props.numCtx(), props.numPredict(), props.temperature()),
-                    token -> {
-                        answer.append(token);
-                        guard.accept(token);
-                    }, cancel);
-            stats.completion = completion;
-            if (completion.isCancelled()) {
-                if (completion.cancelledBy() == CancelReason.DEADLINE) {
-                    sink.send(StreamEvents.ERROR, new StreamEvents.Error(ErrorReason.DEADLINE));
+                if (routing && !completion.hasToolCalls()) {
+                    clarification = usableClarification(answer.toString());
+                    routing = false;
+                    prompt = answerPrompt;
+                    stats.estimatedTokens = prompt.estimatedTokens();
+                    continue;
                 }
-                stats.outcome = completion.cancelledBy().name();
-                return;
+                if (!withTools || !completion.hasToolCalls()) {
+                    guard.finish();
+                    stats.truncated = calibrate(plan.requestId(), prompt.estimatedTokens(),
+                            completion.promptEvalCount());
+                    if (guard.refused() || !guard.emittedAny()) {
+                        if (clarification != null) {
+                            clarify(sink, clarification, historyTrimmed(prompt, plan), stats, completion, start);
+                        } else {
+                            refuse(sink, historyTrimmed(prompt, plan), "MODEL", stats, completion);
+                        }
+                        return;
+                    }
+                    CitationBuilder.Result result = citationBuilder.build(answer.toString(), prompt.sourcesUsed(),
+                            prompt.toolSources());
+                    stats.basis = result.basis();
+                    stats.inventedIds = result.inventedIds();
+                    stats.refusal = false;
+                    sink.send(StreamEvents.CITATIONS, new Citations(result.basis(), result.items()));
+                    sink.send(StreamEvents.DONE, new Done(false, null, completion.finishReason(), stats.truncated,
+                            completion.promptEvalCount(), completion.evalCount(), historyTrimmed(prompt, plan),
+                            props.model(), promptHash));
+                    return;
+                }
+
+                // Tokens streamed before a tool call are provisional, so the guard is deliberately not finished
+                List<ToolCall> calls = completion.toolCalls();
+                recordCalls(stats, calls, plan.tools());
+                List<String> problems = finalRound
+                        ? List.of("no more tool calls are allowed; answer now")
+                        : toolPolicy.check(calls, plan.tools(), plan.toolTurns());
+                if (problems.isEmpty()) {
+                    int round = plan.toolTurns().size() + 1;
+                    String previous = plan.toolTurns().isEmpty() ? "" : plan.toolTurns().getLast().signature();
+                    String signature = signer.sign(plan.clientId(), plan.question(), plan.questionId(), round,
+                            previous, calls);
+                    // The caller resumes as soon as it sees done, so its slot must already be free
+                    releaseOnce.run();
+                    sink.send(StreamEvents.TOOL_CALL, new ToolCallEvent(round, plan.questionId(), calls, signature));
+                    sink.send(StreamEvents.DONE,
+                            Done.forToolCalls(completion.promptEvalCount(), completion.evalCount(),
+                                    historyTrimmed(prompt, plan), props.model(), promptHash));
+                    stats.outcome = "TOOL_CALL";
+                    return;
+                }
+                if (attempt == 1 || prompt.estimatedTokens() + toolProps.numPredict() > props.numCtx()) {
+                    sink.send(StreamEvents.ERROR, new StreamEvents.Error(ErrorReason.TOOL_CALL_INVALID));
+                    stats.outcome = "TOOL_CALL_INVALID";
+                    return;
+                }
+                prompt = promptBuilder.withCorrection(prompt, calls, problems);
+                stats.estimatedTokens = prompt.estimatedTokens();
+                stats.correctionRetry = true;
+                attempt++;
             }
-            guard.finish();
-            stats.truncated = calibrate(plan.requestId(), prompt.estimatedTokens(), completion.promptEvalCount());
-            if (guard.refused() || !guard.emittedAny()) {
-                refuse(sink, stats, "MODEL", completion);
-                return;
-            }
-            CitationBuilder.Result result = citationBuilder.build(answer.toString(), prompt.sourcesUsed());
-            stats.basis = result.basis();
-            stats.inventedIds = result.inventedIds();
-            stats.refusal = false;
-            sink.send(StreamEvents.CITATIONS, new Citations(result.basis(), result.items()));
-            sink.send(StreamEvents.DONE, new Done(false, null, completion.finishReason(), stats.truncated,
-                    completion.promptEvalCount(), completion.evalCount()));
         } catch (RuntimeException e) {
             ErrorReason reason = cancel.reason() == CancelReason.DEADLINE ? ErrorReason.DEADLINE : errorReason(e);
             if (cancel.reason() == CancelReason.CLIENT_GONE) {
@@ -209,18 +341,60 @@ public class ChatService {
         } finally {
             watchdog.cancel(false);
             heartbeat.cancel(false);
-            gate.release(plan.clientId());
+            releaseOnce.run();
             logRun(plan, stats, start);
             sink.complete();
         }
     }
 
-    private void refuse(EventSink sink, RunStats stats, String layer, Completion completion) {
+    private static void recordCalls(RunStats stats, List<ToolCall> calls, List<ToolDefinition> definitions) {
+        List<String> offered = definitions.stream().map(ToolDefinition::name).toList();
+        stats.callsEmitted = calls.size();
+        stats.callNames = calls.stream().map(ToolCall::name).filter(offered::contains).toList();
+        stats.unknownCallNames = calls.size() - stats.callNames.size();
+    }
+
+    private static int resultChars(List<ToolTurn> turns) {
+        return turns.stream().flatMap(turn -> turn.results().stream()).map(ToolResult::content)
+                .mapToInt(content -> content == null ? 0 : content.length()).sum();
+    }
+
+    private static boolean historyTrimmed(PromptBuilder.BuiltPrompt prompt, Plan plan) {
+        return prompt.historyTurnsUsed() < plan.history().size();
+    }
+
+    // Models without native tool calling (e.g. qwen2.5-coder) print the call as JSON or a code fence instead
+    private static String usableClarification(String text) {
+        String stripped = text.strip();
+        if (stripped.isEmpty() || stripped.startsWith(RefusalGuard.MARKER)
+                || stripped.startsWith("{") || stripped.startsWith("[") || stripped.startsWith("`")
+                || stripped.replaceAll("\\p{Punct}+$", "").strip().equalsIgnoreCase("NONE")) {
+            return null;
+        }
+        return stripped;
+    }
+
+    private void clarify(EventSink sink, String text, boolean historyTrimmed, RunStats stats, Completion completion,
+                         long start) {
+        if (stats.ttftMs == null) {
+            stats.ttftMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
+        }
+        sink.send(StreamEvents.TOKEN, new Token(text));
+        sink.send(StreamEvents.CITATIONS, new Citations(CitationBasis.RETRIEVED, List.of()));
+        sink.send(StreamEvents.DONE, new Done(false, null, completion.finishReason(), stats.truncated,
+                completion.promptEvalCount(), completion.evalCount(), historyTrimmed, props.model(), promptHash));
+        stats.outcome = "CLARIFIED";
+        stats.refusal = false;
+        stats.basis = CitationBasis.RETRIEVED;
+    }
+
+    private void refuse(EventSink sink, boolean historyTrimmed, String layer, RunStats stats,
+                        Completion completion) {
         sink.send(StreamEvents.TOKEN, new Token(RefusalGuard.REFUSAL_TEXT));
         sink.send(StreamEvents.CITATIONS, new Citations(CitationBasis.RETRIEVED, List.of()));
         sink.send(StreamEvents.DONE, new Done(true, layer, completion == null ? "stop" : completion.finishReason(),
                 false, completion == null ? null : completion.promptEvalCount(),
-                completion == null ? null : completion.evalCount()));
+                completion == null ? null : completion.evalCount(), historyTrimmed, props.model(), promptHash));
         stats.outcome = "REFUSED";
         stats.refusal = true;
         stats.basis = CitationBasis.RETRIEVED;
@@ -277,16 +451,20 @@ public class ChatService {
 
     private void logRun(Plan plan, RunStats s, long start) {
         Completion c = s.completion;
+        String promptVersion = plan.tools().isEmpty() ? Prompts.PROMPT_VERSION : Prompts.TOOLS_PROMPT_VERSION;
         log.info("generation endpoint=chat outcome={} requestId={} clientId={} collectionIds={} k={} passages={} "
                         + "topScore={} promptVersion={} model={} estimatedPromptTokens={} promptEvalCount={} "
                         + "evalCount={} doneReason={} loadMs={} totalMs={} ttftMs={} refusal={} citationBasis={} "
-                        + "inventedIds={} truncated={}",
+                        + "inventedIds={} truncated={} tools={} round={} questionId={} callsEmitted={} "
+                        + "callNames={} unknownCallNames={} correctionRetry={} toolResultChars={} evalMs={} promptHash={}",
                 s.outcome, plan.requestId(), plan.clientId(),
                 plan.collections().stream().map(DocumentCollection::id).toList(), plan.k(), s.passages,
-                s.topScore == null ? null : String.format("%.3f", s.topScore), Prompts.PROMPT_VERSION, props.model(),
+                s.topScore == null ? null : String.format("%.3f", s.topScore), promptVersion, props.model(),
                 s.estimatedTokens, c == null ? null : c.promptEvalCount(), c == null ? null : c.evalCount(),
                 c == null ? null : c.finishReason(), c == null ? null : c.loadDurationMs(),
                 Duration.ofNanos(System.nanoTime() - start).toMillis(), s.ttftMs, s.refusal, s.basis, s.inventedIds,
-                s.truncated);
+                s.truncated, plan.tools().size(), plan.toolTurns().size(), plan.questionId(), s.callsEmitted,
+                s.callNames, s.unknownCallNames, s.correctionRetry, resultChars(plan.toolTurns()),
+                c == null ? null : c.evalDurationMs(), promptHash);
     }
 }

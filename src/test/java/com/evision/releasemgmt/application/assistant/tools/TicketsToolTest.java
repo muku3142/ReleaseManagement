@@ -43,7 +43,7 @@ class TicketsToolTest {
 
     private static Release release(UUID id, List<ReleaseItem> items) {
         return new Release(id, "Payments", "2.4", ReleaseStatus.OPEN, "PAY", Instant.EPOCH, "a", null, null, null,
-                null, items, List.of());
+                null, items, List.of(), null);
     }
 
     @Test

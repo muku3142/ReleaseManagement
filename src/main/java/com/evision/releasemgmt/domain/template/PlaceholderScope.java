@@ -6,5 +6,6 @@ public enum PlaceholderScope {
     GROUP,
     COMMENT,
     COMMIT,
-    PULL_REQUEST
+    PULL_REQUEST,
+    PRODUCT
 }

@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.adapters.persistence.entity;
 
+import com.evision.releasemgmt.domain.document.AiMode;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -67,7 +68,52 @@ public class DocumentSnapshotEntity {
     @Column(name = "generated_by", nullable = false)
     private String generatedBy;
 
+    @Column(name = "ai_mode")
+    @Enumerated(EnumType.STRING)
+    private AiMode aiMode;
+
+    @Column(name = "ai_instruction")
+    private String aiInstruction;
+
+    @Column(name = "ai_source_revision")
+    private Integer aiSourceRevision;
+
+    @Column(name = "basis_generated_at")
+    private Instant basisGeneratedAt;
+
     public DocumentSnapshotEntity() {
+    }
+
+    public AiMode getAiMode() {
+        return aiMode;
+    }
+
+    public void setAiMode(AiMode aiMode) {
+        this.aiMode = aiMode;
+    }
+
+    public String getAiInstruction() {
+        return aiInstruction;
+    }
+
+    public void setAiInstruction(String aiInstruction) {
+        this.aiInstruction = aiInstruction;
+    }
+
+    public Integer getAiSourceRevision() {
+        return aiSourceRevision;
+    }
+
+    public void setAiSourceRevision(Integer aiSourceRevision) {
+        this.aiSourceRevision = aiSourceRevision;
+    }
+
+    public Instant getBasisGeneratedAt() {
+        return basisGeneratedAt;
+    }
+
+    public void setBasisGeneratedAt(Instant basisGeneratedAt) {
+        this.basisGeneratedAt = basisGeneratedAt;
     }
 
     public UUID getId() {

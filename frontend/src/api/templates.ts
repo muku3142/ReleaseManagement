@@ -72,7 +72,7 @@ export type Template = {
 export type TemplateListResponse = { templates: TemplateSummary[] };
 
 export type PlaceholderEntry = {
-  scope: 'ROOT' | 'ITEM' | 'GROUP' | 'COMMENT' | 'COMMIT' | 'PULL_REQUEST';
+  scope: 'ROOT' | 'ITEM' | 'GROUP' | 'COMMENT' | 'COMMIT' | 'PULL_REQUEST' | 'PRODUCT';
   token: string;
   kind: 'VARIABLE' | 'SECTION';
   description: string;
@@ -118,6 +118,7 @@ export type ReleaseView = {
   lastRefreshedAt: string;
   items: ItemView[];
   groups: GroupView[];
+  products: { name: string }[];
 };
 
 export const templatesQueryKey = () => ['templates'] as const;

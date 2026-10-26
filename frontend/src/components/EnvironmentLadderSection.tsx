@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import {
   useAddStage,
   useDeleteStage,
@@ -14,7 +14,7 @@ import {
 } from '../api/ladder';
 import { ConfirmDialog } from './ConfirmDialog';
 
-const SMALL_BUTTON = 'rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 disabled:opacity-50';
+export const SMALL_BUTTON = 'rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 disabled:opacity-50';
 
 export function EnvironmentLadderSection() {
   const ladder = useEnvironmentLadder();

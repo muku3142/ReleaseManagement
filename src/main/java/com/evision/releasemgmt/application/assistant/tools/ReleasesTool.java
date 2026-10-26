@@ -34,7 +34,7 @@ public class ReleasesTool implements AssistantTool {
     public record ReleaseDetail(UUID id, String name, String version, ReleaseStatus status, Instant createdAt,
                                 Instant frozenAt, Instant lastRefreshedAt, Instant itemsChangedAt, int ticketCount,
                                 int manualItemCount, Map<String, Long> ticketsByStatusCategory,
-                                String currentStage, String nextStage, Instant shippedAt) {
+                                String currentStage, String nextStage, Instant shippedAt, String packagesUrl) {
     }
 
     private final ReleaseService releaseService;
@@ -54,7 +54,7 @@ public class ReleasesTool implements AssistantTool {
 
     @Override
     public String description() {
-        return "Releases: list, or with `release` its status, dates, ticket counts and current stage.";
+        return "Releases: list, or with `release` its status, dates, ticket counts, current stage and packages link.";
     }
 
     @Override
@@ -96,6 +96,6 @@ public class ReleasesTool implements AssistantTool {
                 release.manualItems().size(), byCategory,
                 history.currentStage().map(Stage::name).orElse(null),
                 history.nextStage().map(Stage::name).orElse(null),
-                history.firstProductionSuccess().orElse(null));
+                history.firstProductionSuccess().orElse(null), release.packagesUrl());
     }
 }

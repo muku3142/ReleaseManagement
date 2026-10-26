@@ -29,6 +29,7 @@ const RELEASE = {
   frozenBy: null,
   lastRefreshedAt: null,
   itemCount: 3,
+  products: [] as { id: string; name: string; archived: boolean; hasInstalls: boolean }[],
 };
 
 function json(status: number, body: unknown): Response {
@@ -38,13 +39,13 @@ function json(status: number, body: unknown): Response {
   });
 }
 
-function mockFetch(readiness: Response | (() => Response)) {
+function mockFetch(readiness: Response | (() => Response), release: typeof RELEASE = RELEASE) {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = typeof input === 'string' ? input : input.toString();
     if (url.startsWith('/api/documents/readiness')) {
       return typeof readiness === 'function' ? readiness() : readiness;
     }
-    return json(200, { releases: [RELEASE] });
+    return json(200, { releases: [release] });
   });
 }
 
@@ -110,10 +111,10 @@ describe('ReleasesRoute', () => {
     expect(headers.slice(-3)).toEqual(['Release Notes', 'Runbook', 'Approval']);
 
     const cells = firstDataRowCells();
-    // Name, Version, Status, Project, Items, Last refreshed, then the three readiness cells.
-    expect(cells[6].textContent).toBe('Up to date');
-    expect(cells[7].textContent).toBe('Not generated');
+    // Name, Version, Products, Status, Project, Items, Last refreshed, then the three readiness cells.
+    expect(cells[7].textContent).toBe('Up to date');
     expect(cells[8].textContent).toBe('Not generated');
+    expect(cells[9].textContent).toBe('Not generated');
   });
 
   it('existingSixColumnsAreUnchanged', async () => {
@@ -122,15 +123,23 @@ describe('ReleasesRoute', () => {
     await renderRoute();
 
     const headers = headerTexts();
-    expect(headers.slice(0, 6)).toEqual(['Name', 'Version', 'Status', 'Project', 'Items', 'Last refreshed']);
+    expect(headers.slice(0, 7)).toEqual([
+      'Name',
+      'Version',
+      'Products',
+      'Status',
+      'Project',
+      'Items',
+      'Last refreshed',
+    ]);
 
     const cells = firstDataRowCells();
     expect(cells[0].textContent).toBe('Sprint 42');
     expect(cells[1].textContent).toBe('2026.08');
-    expect(cells[2].textContent).toBe('Open');
-    expect(cells[3].textContent).toBe('CNV');
-    expect(cells[4].textContent).toBe('3');
-    expect(cells[5].textContent).toBe('—');
+    expect(cells[3].textContent).toBe('Open');
+    expect(cells[4].textContent).toBe('CNV');
+    expect(cells[5].textContent).toBe('3');
+    expect(cells[6].textContent).toBe('—');
   });
 
   it('readinessFailureStillRendersTheReleaseTable', async () => {
@@ -140,10 +149,34 @@ describe('ReleasesRoute', () => {
 
     const cells = firstDataRowCells();
     expect(cells[0].textContent).toBe('Sprint 42');
-    expect(cells[6].textContent).toBe('—');
     expect(cells[7].textContent).toBe('—');
     expect(cells[8].textContent).toBe('—');
+    expect(cells[9].textContent).toBe('—');
     // No second error banner - the table itself is still fully usable.
     expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it('showsTwoProductChipsThenPlusN', async () => {
+    const products = ['Core', 'Mobile', 'Legacy'].map((name, i) => ({
+      id: `p${i}`,
+      name,
+      archived: false,
+      hasInstalls: false,
+    }));
+    mockFetch(json(200, { entries: [] }), { ...RELEASE, products });
+
+    await renderRoute();
+
+    const cell = firstDataRowCells()[2];
+    expect(cell.textContent).toBe('CoreMobile+1');
+    expect(cell.getAttribute('title')).toBe('Core, Mobile, Legacy');
+  });
+
+  it('showsUnassignedForAReleaseWithNoProducts', async () => {
+    mockFetch(json(200, { entries: [] }));
+
+    await renderRoute();
+
+    expect(firstDataRowCells()[2].textContent).toBe('Unassigned');
   });
 });

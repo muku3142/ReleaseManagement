@@ -12,7 +12,8 @@ import org.springframework.stereotype.Service;
  * The single supported way any code in this project obtains Jira credentials for an
  * outbound call. The lookup key is always the currently authenticated principal - there
  * is no overload taking an accountId and no path to any credential outside the caller's
- * own signed-in identity (AUTH-02).
+ * own signed-in identity (AUTH-02). BriefingJiraAccess is the one other reader: it loads the credential of the user who
+ * designated themselves as the briefing scheduler (D-17.1-19).
  */
 @Service
 public class JiraAccessContextService {

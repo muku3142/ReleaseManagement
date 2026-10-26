@@ -18,7 +18,9 @@ import com.evision.releasemgmt.domain.release.ManualItemCategory;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.ports.DashboardReadRepository;
+import com.evision.releasemgmt.ports.ProductRepository;
 import com.evision.releasemgmt.ports.PromotionRepository;
+import com.evision.releasemgmt.ports.ReleaseProductRepository;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -66,9 +68,16 @@ class DashboardPersistenceIT {
     @Autowired
     private JdbcTemplate jdbc;
 
+    @Autowired
+    private ProductRepository products;
+
+    @Autowired
+    private ReleaseProductRepository releaseProducts;
+
     @AfterEach
     void clear() {
         jdbc.execute("TRUNCATE release CASCADE");
+        jdbc.execute("TRUNCATE product, client CASCADE");
     }
 
     private UUID release(String name, boolean freeze) {
@@ -130,7 +139,7 @@ class DashboardPersistenceIT {
         PromotionHistory r3History = record(r3, "DEV", PromotionOutcome.SUCCESS, minutesAgo(25));
         PromotionHistory r3Corrected = correct(r3, lastEntryId(r3History), "DEV", PromotionOutcome.SUCCESS, minutesAgo(24));
 
-        List<DeploymentRow> rows = dashboard.findDeployments(null, FROM, TO, 100, 0);
+        List<DeploymentRow> rows = dashboard.findDeployments(null, FROM, TO, 100, 0, Set.of());
 
         Set<UUID> expected = new java.util.HashSet<>();
         for (UUID releaseId : List.of(r1, r2, r3)) {
@@ -155,8 +164,8 @@ class DashboardPersistenceIT {
         record(r1, "DEV", PromotionOutcome.SUCCESS, minutesAgo(25));
         record(r1, "TEST", PromotionOutcome.SUCCESS, minutesAgo(20));
 
-        List<DeploymentRow> test = dashboard.findDeployments(stageId("TEST"), FROM, TO, 100, 0);
-        List<DeploymentRow> all = dashboard.findDeployments(null, FROM, TO, 100, 0);
+        List<DeploymentRow> test = dashboard.findDeployments(stageId("TEST"), FROM, TO, 100, 0, Set.of());
+        List<DeploymentRow> all = dashboard.findDeployments(null, FROM, TO, 100, 0, Set.of());
 
         assertThat(test).hasSize(1).allMatch(r -> r.stageName().equals("TEST"));
         assertThat(all).hasSize(2);
@@ -168,8 +177,8 @@ class DashboardPersistenceIT {
         Instant at = minutesAgo(20).truncatedTo(ChronoUnit.MILLIS);
         record(r1, "DEV", PromotionOutcome.SUCCESS, at);
 
-        assertThat(dashboard.findDeployments(null, at, at.plusSeconds(60), 100, 0)).hasSize(1);
-        assertThat(dashboard.findDeployments(null, at.minusSeconds(60), at, 100, 0)).isEmpty();
+        assertThat(dashboard.findDeployments(null, at, at.plusSeconds(60), 100, 0, Set.of())).hasSize(1);
+        assertThat(dashboard.findDeployments(null, at.minusSeconds(60), at, 100, 0, Set.of())).isEmpty();
     }
 
     @Test
@@ -181,8 +190,8 @@ class DashboardPersistenceIT {
             recordedOrder.add(lastEntryId(record(releaseId, "DEV", PromotionOutcome.SUCCESS, at)));
         }
 
-        List<DeploymentRow> pageOne = dashboard.findDeployments(null, FROM, TO, 2, 0);
-        List<DeploymentRow> pageTwo = dashboard.findDeployments(null, FROM, TO, 2, 2);
+        List<DeploymentRow> pageOne = dashboard.findDeployments(null, FROM, TO, 2, 0, Set.of());
+        List<DeploymentRow> pageTwo = dashboard.findDeployments(null, FROM, TO, 2, 2, Set.of());
 
         List<UUID> paged = new ArrayList<>();
         pageOne.forEach(r -> paged.add(r.promotionId()));
@@ -266,6 +275,61 @@ class DashboardPersistenceIT {
         assertThat(items.get(0).storyPointsRead()).isTrue();
         assertThat(items.get(1).storyPoints()).isNull();
         assertThat(items.get(1).storyPointsRead()).isFalse();
+    }
+
+    // R covers {A,B}, S covers {A}, T covers {B}; every release is frozen and promoted to DEV.
+    private UUID productFixture(UUID[] releaseIds, UUID[] productIds) {
+        productIds[0] = products.add("A").id();
+        productIds[1] = products.add("B").id();
+        Set<UUID>[] coverage = new Set[] {Set.of(productIds[0], productIds[1]), Set.of(productIds[0]), Set.of(productIds[1])};
+        String[] names = {"R", "S", "T"};
+        for (int i = 0; i < names.length; i++) {
+            UUID id = release(names[i], false);
+            releaseProducts.replace(id, coverage[i]);
+            releaseRepository.freeze(id, "rm@acme.com", minutesAgo(30));
+            record(id, "DEV", PromotionOutcome.SUCCESS, minutesAgo(20 - i));
+            releaseIds[i] = id;
+        }
+        return releaseIds[0];
+    }
+
+    @Test
+    void releaseIdsCoveringAnyListsAMultiProductReleaseOnce() {
+        UUID[] releaseIds = new UUID[3];
+        UUID[] productIds = new UUID[2];
+        productFixture(releaseIds, productIds);
+
+        assertThat(dashboard.releaseIdsCoveringAny(Set.of(productIds[0], productIds[1])))
+                .containsExactlyInAnyOrder(releaseIds);
+        assertThat(dashboard.releaseIdsCoveringAny(Set.of(productIds[1])))
+                .containsExactlyInAnyOrder(releaseIds[0], releaseIds[2]);
+        assertThat(dashboard.releaseIdsCoveringAny(Set.of())).isEmpty();
+    }
+
+    @Test
+    void deploymentsUnderATwoProductFilterAreOneRowPerPromotionAndPageWithoutRepeats() {
+        UUID[] releaseIds = new UUID[3];
+        UUID[] productIds = new UUID[2];
+        productFixture(releaseIds, productIds);
+        Set<UUID> both = Set.of(productIds[0], productIds[1]);
+
+        List<DeploymentRow> rows = dashboard.findDeployments(null, FROM, TO, 100, 0, both);
+        List<DeploymentRow> pageOne = dashboard.findDeployments(null, FROM, TO, 1, 0, both);
+        List<DeploymentRow> pageTwo = dashboard.findDeployments(null, FROM, TO, 1, 1, both);
+
+        assertThat(rows).hasSize(3);
+        assertThat(ids(rows)).hasSize(3);
+        assertThat(pageOne.getFirst().promotionId()).isNotEqualTo(pageTwo.getFirst().promotionId());
+        assertThat(dashboard.findDeployments(null, FROM, TO, 100, 0, Set.of(productIds[1]))).hasSize(2);
+        assertThat(dashboard.findDeployments(null, FROM, TO, 100, 0, Set.of())).hasSize(3);
+    }
+
+    @Test
+    void anUnknownProductIdMatchesNoDeployments() {
+        UUID[] releaseIds = new UUID[3];
+        productFixture(releaseIds, new UUID[2]);
+
+        assertThat(dashboard.findDeployments(null, FROM, TO, 100, 0, Set.of(UUID.randomUUID()))).isEmpty();
     }
 
     @Test

@@ -11,6 +11,7 @@ import com.evision.releasemgmt.domain.template.view.CommentView;
 import com.evision.releasemgmt.domain.template.view.GroupView;
 import com.evision.releasemgmt.domain.template.view.CommitView;
 import com.evision.releasemgmt.domain.template.view.ItemView;
+import com.evision.releasemgmt.domain.template.view.ProductView;
 import com.evision.releasemgmt.domain.template.view.PullRequestView;
 import com.evision.releasemgmt.domain.template.view.ReleaseView;
 import org.springframework.stereotype.Service;
@@ -28,7 +29,7 @@ import java.util.TreeMap;
 @Service
 public class ReleaseViewAssembler {
 
-    public ReleaseView assemble(Release release, GroupingDimension dimension) {
+    public ReleaseView assemble(Release release, List<String> productNames, GroupingDimension dimension) {
         List<ItemView> ticketItems = release.items().stream()
                 .sorted(Comparator.comparing(ReleaseItem::ticketKey))
                 .map(ReleaseViewAssembler::mapTicketItem)
@@ -52,7 +53,8 @@ public class ReleaseViewAssembler {
                 instantOrEmpty(release.frozenAt()),
                 instantOrEmpty(release.lastRefreshedAt()),
                 List.copyOf(items),
-                groups(items, dimension));
+                groups(items, dimension),
+                productNames.stream().map(n -> new ProductView(nullToEmpty(n))).toList());
     }
 
     // D-04-02: Mustache is logic-less and cannot group, so grouping is always a view-model concern.

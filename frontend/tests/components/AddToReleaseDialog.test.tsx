@@ -1,4 +1,4 @@
-import { StrictMode, act } from 'react';
+import { StrictMode, act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,7 +7,10 @@ import { AddToReleaseDialog } from '../../src/components/AddToReleaseDialog';
 // The component is only reachable through TicketsRoute, which is inside the router. Only
 // useNavigate is used here, and this suite asserts what happens when navigation never runs.
 const navigate = vi.fn();
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigate,
+  Link: (props: { children?: ReactNode; to?: string }) => <a href={props.to}>{props.children}</a>,
+}));
 
 const OPEN_RELEASE = {
   id: 'r1',
@@ -21,6 +24,13 @@ const OPEN_RELEASE = {
   frozenBy: null,
   lastRefreshedAt: null,
   itemCount: 0,
+};
+
+const PRODUCTS = {
+  products: [
+    { id: 'p1', name: 'Core', archived: false, clientCount: 0, releaseCount: 0 },
+    { id: 'p2', name: 'Legacy', archived: true, clientCount: 0, releaseCount: 0 },
+  ],
 };
 
 function json(status: number, body: unknown): Response {
@@ -64,8 +74,15 @@ function byText(text: string): HTMLButtonElement {
   return button!;
 }
 
-async function submitCreateForm(name: string, version: string) {
+function productCheckbox(name: string): HTMLInputElement | undefined {
+  const label = [...container.querySelectorAll('label')].find((l) => l.textContent === name);
+  return label?.querySelector('input') ?? undefined;
+}
+
+async function submitCreateForm(name: string, version: string, tickProduct = true) {
   await act(async () => byText('New release…').click());
+  await flush();
+  if (tickProduct) await act(async () => productCheckbox('Core')!.click());
   const nameInput = container.querySelector<HTMLInputElement>('#releaseName')!;
   const versionInput = container.querySelector<HTMLInputElement>('#releaseVersion')!;
   await act(async () => {
@@ -112,6 +129,7 @@ describe('AddToReleaseDialog error surfacing', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith('/items')) return json(409, { status: 409, reason: 'RELEASE_FROZEN' });
+      if (url === '/api/products') return json(200, PRODUCTS);
       return json(200, { releases: [OPEN_RELEASE] });
     });
 
@@ -128,6 +146,7 @@ describe('AddToReleaseDialog error surfacing', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith('/items')) return json(503, { status: 503, reason: 'JIRA_UNREACHABLE' });
+      if (url === '/api/products') return json(200, PRODUCTS);
       return json(200, { releases: [OPEN_RELEASE] });
     });
 
@@ -150,6 +169,7 @@ describe('AddToReleaseDialog error surfacing', () => {
           fieldErrors: { 'ticketKeys[500]': 'size must be between 0 and 500' },
         });
       }
+      if (url === '/api/products') return json(200, PRODUCTS);
       return json(200, { releases: [OPEN_RELEASE] });
     });
 
@@ -173,6 +193,7 @@ describe('AddToReleaseDialog error surfacing', () => {
         });
         return json(409, { status: 409, reason: 'RELEASE_FROZEN' });
       }
+      if (url === '/api/products') return json(200, PRODUCTS);
       return json(200, { releases: [OPEN_RELEASE] });
     });
 
@@ -194,6 +215,7 @@ describe('AddToReleaseDialog error surfacing', () => {
       if (url === '/api/releases' && init?.method === 'POST') {
         return json(409, { status: 409, reason: 'RELEASE_DUPLICATE' });
       }
+      if (url === '/api/products') return json(200, PRODUCTS);
       return json(200, { releases: [OPEN_RELEASE] });
     });
 
@@ -210,5 +232,95 @@ describe('AddToReleaseDialog error surfacing', () => {
     await act(async () => byText('New release…').click());
     expect(container.querySelector<HTMLInputElement>('#releaseName')!.value).toBe('');
     expect(container.querySelector<HTMLInputElement>('#releaseVersion')!.value).toBe('');
+    await flush();
+    expect(productCheckbox('Core')!.checked).toBe(false);
+  });
+
+  it('lists active products only and sends the ticked ids in the POST body', async () => {
+    const bodies: unknown[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === '/api/releases' && init?.method === 'POST') {
+        bodies.push(JSON.parse(String(init.body)));
+        return json(409, { status: 409, reason: 'RELEASE_DUPLICATE' });
+      }
+      if (url === '/api/products') return json(200, PRODUCTS);
+      return json(200, { releases: [OPEN_RELEASE] });
+    });
+
+    await renderDialog();
+    await submitCreateForm('Sprint 43', '2026.09');
+
+    expect(productCheckbox('Legacy')).toBeUndefined();
+    expect(bodies).toHaveLength(1);
+    expect((bodies[0] as { productIds: string[] }).productIds).toEqual(['p1']);
+  });
+
+  it('keeps Create & add disabled until a product is ticked', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+      String(input) === '/api/products' ? json(200, PRODUCTS) : json(200, { releases: [OPEN_RELEASE] }),
+    );
+
+    await renderDialog();
+    await act(async () => byText('New release…').click());
+    await flush();
+    const nameInput = container.querySelector<HTMLInputElement>('#releaseName')!;
+    const versionInput = container.querySelector<HTMLInputElement>('#releaseVersion')!;
+    // The native setter bypasses React's value tracker so the input event is seen as a change.
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!;
+    await act(async () => {
+      setValue.call(nameInput, 'Sprint 43');
+      nameInput.dispatchEvent(new Event('input', { bubbles: true }));
+      setValue.call(versionInput, '2026.09');
+      versionInput.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(byText('Create & add').disabled).toBe(true);
+
+    await act(async () => productCheckbox('Core')!.click());
+    expect(productCheckbox('Core')!.checked).toBe(true);
+    expect(container.querySelector<HTMLInputElement>('#releaseName')!.value).toBe('Sprint 43');
+    expect(container.querySelector<HTMLInputElement>('#releaseVersion')!.value).toBe('2026.09');
+    expect(byText('Create & add').disabled).toBe(false);
+  });
+
+  it('points to the Portfolio page and blocks submit when no active product exists', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+      String(input) === '/api/products' ? json(200, { products: [] }) : json(200, { releases: [OPEN_RELEASE] }),
+    );
+
+    await renderDialog();
+    await submitCreateForm('Sprint 43', '2026.09', false);
+
+    expect(container.textContent).toContain('Add a product on the Portfolio page first.');
+    expect(container.querySelector('a[href="/portfolio"]')).not.toBeNull();
+    expect(byText('Create & add').disabled).toBe(true);
+  });
+
+  it('renders the RELEASE_PRODUCT_REQUIRED message from a 422', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url === '/api/releases' && init?.method === 'POST') {
+        return json(422, { status: 422, reason: 'RELEASE_PRODUCT_REQUIRED' });
+      }
+      if (url === '/api/products') return json(200, PRODUCTS);
+      return json(200, { releases: [OPEN_RELEASE] });
+    });
+
+    await renderDialog();
+    await submitCreateForm('Sprint 43', '2026.09');
+
+    expect(container.querySelector('[data-reason="RELEASE_PRODUCT_REQUIRED"]')?.textContent).toBe(
+      'Choose at least one product for this release.',
+    );
+  });
+
+  it('does not request products until the New release form is opened', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+      String(input) === '/api/products' ? json(200, PRODUCTS) : json(200, { releases: [OPEN_RELEASE] }),
+    );
+
+    await renderDialog();
+
+    expect(spy.mock.calls.some((c) => String(c[0]) === '/api/products')).toBe(false);
   });
 });

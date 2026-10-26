@@ -145,6 +145,7 @@ public class RenderService {
     private void enforceCollectionCap(ReleaseView view) {
         checkBound(view.items().size());
         checkBound(view.groups().size());
+        checkBound(view.products().size());
         for (GroupView group : view.groups()) {
             checkBound(group.items().size());
         }

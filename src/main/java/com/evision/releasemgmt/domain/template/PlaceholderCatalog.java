@@ -33,6 +33,9 @@ public final class PlaceholderCatalog {
             new PlaceholderEntry(PlaceholderScope.ROOT, "groups", PlaceholderKind.SECTION, PlaceholderScope.GROUP,
                     "Items pre-grouped by this template's chosen dimension (issue type or component).",
                     List.of("Body only")),
+            new PlaceholderEntry(PlaceholderScope.ROOT, "products", PlaceholderKind.SECTION, PlaceholderScope.PRODUCT,
+                    "Loops over the products this release covers. Empty for an unassigned release.",
+                    List.of("Body only")),
 
             // ITEM
             new PlaceholderEntry(PlaceholderScope.ITEM, "title", PlaceholderKind.VARIABLE, null,
@@ -84,6 +87,10 @@ public final class PlaceholderCatalog {
             new PlaceholderEntry(PlaceholderScope.GROUP, "items", PlaceholderKind.SECTION, PlaceholderScope.ITEM,
                     "Loops over the items in this group, with the same fields as the root items collection.",
                     List.of("Body only")),
+
+            // PRODUCT
+            new PlaceholderEntry(PlaceholderScope.PRODUCT, "name", PlaceholderKind.VARIABLE, null,
+                    "The product's name.", List.of("Body only")),
 
             // COMMENT
             new PlaceholderEntry(PlaceholderScope.COMMENT, "text", PlaceholderKind.VARIABLE, null,

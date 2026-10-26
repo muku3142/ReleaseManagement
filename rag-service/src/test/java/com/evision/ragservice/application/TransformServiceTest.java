@@ -27,7 +27,7 @@ class TransformServiceTest {
     private final RecordingEventSink sink = new RecordingEventSink();
     private final GenerationGate gate = new GenerationGate(props);
     private final GenerationTimers timers = new GenerationTimers();
-    private final TransformService service = new TransformService(chat, gate, timers, props);
+    private final TransformService service = new TransformService(chat, gate, timers, props, PromptRules.defaults());
 
     @AfterEach
     void tearDown() {
@@ -86,7 +86,11 @@ class TransformServiceTest {
 
         assertThat(sink.events()).containsExactly("status", "token", "token", "done");
         assertThat(sink.payload(StreamEvents.STATUS, StreamEvents.Status.class).phase()).isEqualTo("GENERATING");
-        assertThat(sink.payload(StreamEvents.DONE, StreamEvents.Done.class).refusal()).isFalse();
+        var done = sink.payload(StreamEvents.DONE, StreamEvents.Done.class);
+        assertThat(done.refusal()).isFalse();
+        assertThat(done.historyTrimmed()).isFalse();
+        assertThat(done.model()).isEqualTo(props.model());
+        assertThat(done.promptHash()).isEqualTo(PromptRules.defaults().hash());
         assertThat(chat.lastMessages.getFirst().content()).isEqualTo(Prompts.TRANSFORM_SYSTEM);
         assertThat(chat.lastOptions.temperature()).isEqualTo(props.transformTemperature());
         assertThat(chat.lastOptions.numPredict())
@@ -126,5 +130,23 @@ class TransformServiceTest {
         assertThat(sink.payload(StreamEvents.ERROR, StreamEvents.Error.class).reason())
                 .isEqualTo(ErrorReason.GENERATION_FAILED);
         assertThat(gate.anyInFlight()).isFalse();
+    }
+
+    @Test
+    void logLineEndsWithPromptHash() {
+        chat.tokens = List.of("ok");
+        var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(TransformService.class);
+        var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            service.run(service.prepare(CLIENT, command("hello")), sink);
+        } finally {
+            logger.detachAppender(appender);
+        }
+
+        String line = appender.list.stream().map(e -> e.getFormattedMessage())
+                .filter(m -> m.startsWith("generation endpoint=transform")).findFirst().orElseThrow();
+        assertThat(line).endsWith("promptHash=" + PromptRules.defaults().hash());
     }
 }

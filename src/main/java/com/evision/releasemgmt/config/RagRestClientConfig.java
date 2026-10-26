@@ -23,6 +23,14 @@ public class RagRestClientConfig {
         return ragClient(baseUrl, apiKey, connectTimeout, readTimeout);
     }
 
+    @Bean
+    RestClient ragChatRestClient(@Value("${app.assistant.base-url}") String baseUrl,
+                                 @Value("${app.assistant.api-key}") String apiKey,
+                                 @Value("${app.assistant.chat.connect-timeout}") Duration connectTimeout,
+                                 @Value("${app.assistant.chat.read-timeout}") Duration readTimeout) {
+        return ragClient(baseUrl, apiKey, connectTimeout, readTimeout);
+    }
+
     // HTTP/1.1 because the JDK client's h2c upgrade attempt on plain-http bodies fails against HTTP/1.1-only servers. Redirect.NEVER is the default and kept.
     public static RestClient ragClient(String baseUrl, String apiKey, Duration connectTimeout, Duration readTimeout) {
         HttpClient httpClient = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(connectTimeout).build();

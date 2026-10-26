@@ -9,6 +9,7 @@ import ch.qos.logback.classic.spi.IThrowableProxy;
 import ch.qos.logback.core.read.ListAppender;
 import com.evision.ragservice.FakeOllamaServer;
 import com.evision.ragservice.PgVectorImage;
+import com.evision.ragservice.SseEvents;
 import com.evision.ragservice.application.ClientService;
 import com.evision.ragservice.application.CollectionService;
 import com.evision.ragservice.domain.ChunkEmbedding;
@@ -40,6 +41,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 // SAFE-03: neither request content nor answer content may reach a log event, even when frameworks log at DEBUG
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -81,8 +84,14 @@ class LogHygieneIT {
     @Autowired
     private IndexQueue queue;
 
+    private static final JsonMapper JSON = JsonMapper.builder().build();
+
+    @Value("${rag.tools.signing-secret}")
+    private String signingSecret;
+
     private final HttpClient http = HttpClient.newHttpClient();
     private String key;
+    private String signature;
 
     @BeforeEach
     void setUp() {
@@ -134,6 +143,7 @@ class LogHygieneIT {
             assertThat(badName.statusCode()).isEqualTo(400);
             // the admin key is never a legitimate bearer on a content endpoint; the point is the failed path logs nothing
             post("/v1/chat", adminKey, chat);
+            driveToolRoundTrip();
             Thread.sleep(300);
             return new ArrayList<>(appender.list);
         } finally {
@@ -141,16 +151,61 @@ class LogHygieneIT {
         }
     }
 
-    private static void assertNoCanary(List<ILoggingEvent> events) {
+    private void driveToolRoundTrip() throws Exception {
+        String tools = "[{\"name\":\"get_release_status\",\"description\":\"" + CANARY + " description\","
+                + "\"parameters\":{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"}},"
+                + "\"required\":[\"version\"]}}]";
+        ollama.reset();
+        ollama.chatScript(List.of(
+                FakeOllamaServer.toolCalls(FakeOllamaServer.toolCallLine("call_1", "get_release_status",
+                        "{\"version\":\"" + CANARY + "\"}")),
+                FakeOllamaServer.answer("Answer ", "[1].")), Duration.ofMillis(10));
+        try {
+            String first = "{\"collections\":[\"docs\"],\"question\":\"release?\",\"tools\":" + tools + "}";
+            SseEvents.Event call = SseEvents.parse(post("/v1/chat", key, first).body()).stream()
+                    .filter(e -> "tool_call".equals(e.name())).findFirst().orElseThrow();
+            ObjectNode turn = (ObjectNode) JSON.readTree(call.data());
+            signature = turn.get("signature").asString();
+
+            String content = "{\"callId\":\"call_1\",\"content\":\"" + CANARY + " result\",\"isError\":false,"
+                    + "\"source\":{\"id\":\"rel-1\",\"title\":\"" + CANARY + " title\",\"url\":\"https://x.invalid/r\"}}";
+            ObjectNode resumeTurn = turn.deepCopy();
+            resumeTurn.set("results", JSON.readTree("[" + content + "]"));
+            assertThat(post("/v1/chat", key, toolBody(tools, resumeTurn)).body()).contains("event:done");
+
+            ObjectNode forged = resumeTurn.deepCopy();
+            forged.put("signature", "A".repeat(signature.length()));
+            assertThat(post("/v1/chat", key, toolBody(tools, forged)).statusCode()).isEqualTo(400);
+
+            ObjectNode oversized = turn.deepCopy();
+            oversized.set("results", JSON.readTree("[{\"callId\":\"call_1\",\"content\":\"" + CANARY
+                    + "x".repeat(8001) + "\",\"isError\":false}]"));
+            assertThat(post("/v1/chat", key, toolBody(tools, oversized)).statusCode()).isEqualTo(413);
+        } finally {
+            ollama.reset();
+            ollama.chat(FakeOllamaServer.answer("Answer " + CANARY + " ", "[1]."), Duration.ofMillis(10));
+        }
+    }
+
+    private static String toolBody(String tools, ObjectNode turn) {
+        return "{\"collections\":[\"docs\"],\"question\":\"release?\",\"tools\":" + tools + ",\"toolTurns\":["
+                + turn + "]}";
+    }
+
+    private void assertNoCanary(List<ILoggingEvent> events) {
+        assertThat(signature).isNotBlank();
+        List<String> forbidden = List.of(CANARY, signature, signingSecret);
         for (ILoggingEvent event : events) {
-            assertThat(event.getFormattedMessage()).as(event.getLoggerName()).doesNotContain(CANARY);
-            if (event.getArgumentArray() != null) {
-                for (Object argument : event.getArgumentArray()) {
-                    assertThat(String.valueOf(argument)).as(event.getLoggerName()).doesNotContain(CANARY);
+            for (String secret : forbidden) {
+                assertThat(event.getFormattedMessage()).as(event.getLoggerName()).doesNotContain(secret);
+                if (event.getArgumentArray() != null) {
+                    for (Object argument : event.getArgumentArray()) {
+                        assertThat(String.valueOf(argument)).as(event.getLoggerName()).doesNotContain(secret);
+                    }
                 }
-            }
-            for (IThrowableProxy proxy = event.getThrowableProxy(); proxy != null; proxy = proxy.getCause()) {
-                assertThat(proxy.getMessage()).as(event.getLoggerName()).doesNotContain(CANARY);
+                for (IThrowableProxy proxy = event.getThrowableProxy(); proxy != null; proxy = proxy.getCause()) {
+                    assertThat(proxy.getMessage()).as(event.getLoggerName()).doesNotContain(secret);
+                }
             }
         }
     }
@@ -158,7 +213,9 @@ class LogHygieneIT {
     private static void assertMetadataLines(List<ILoggingEvent> events) {
         assertThat(events).extracting(ILoggingEvent::getFormattedMessage)
                 .anyMatch(m -> m.startsWith("generation endpoint=chat outcome="))
-                .anyMatch(m -> m.startsWith("generation endpoint=transform outcome="));
+                .anyMatch(m -> m.startsWith("generation endpoint=transform outcome="))
+                .anyMatch(m -> m.startsWith("generation endpoint=chat") && m.contains("promptVersion=p11-v2")
+                        && m.contains("round=1 "));
     }
 
     @Test

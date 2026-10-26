@@ -1,0 +1,8 @@
+{
+  "issues": [
+    { "id": "20004", "key": "CNV-4", "fields": { "summary": "Add audit export", "issuetype": { "name": "Story" }, "status": { "name": "Backlog", "statusCategory": { "key": "new" } } } },
+    { "id": "20005", "key": "CNV-5", "fields": { "summary": "Tidy the footer", "issuetype": { "name": "Task" }, "status": { "name": "Backlog", "statusCategory": { "key": "new" } }, "created": "not-a-timestamp" } },
+    { "id": "20006", "key": "CNV-6", "fields": { "summary": "Upgrade the build image", "issuetype": { "name": "Task" }, "status": { "name": "Backlog", "statusCategory": { "key": "new" } }, "customfield_10016": "five" } }
+  ],
+  "isLast": true
+}

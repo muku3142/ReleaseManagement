@@ -19,6 +19,8 @@ export const MANUAL_ITEM_CATEGORY_LABELS: Record<ManualItemCategory, string> = {
   OTHER: 'Other',
 };
 
+export type ReleaseProduct = { id: string; name: string; archived: boolean; hasInstalls: boolean };
+
 export type ReleaseSummary = {
   id: string;
   name: string;
@@ -31,6 +33,8 @@ export type ReleaseSummary = {
   frozenBy: string | null;
   lastRefreshedAt: string | null;
   itemCount: number;
+  // Never empty in practice (D-15-17, D-15-18); [] is displayed defensively as "Unassigned".
+  products: ReleaseProduct[];
 };
 
 export type EnrichmentStatus = 'NOT_ATTEMPTED' | 'NO_LINK' | 'LINKED' | 'FAILED';
@@ -100,9 +104,13 @@ export type ManualItem = {
   addedAt: string;
 };
 
+export type UnfreezeBlockedReason = 'UNFREEZE_HAS_PROMOTIONS' | 'UNFREEZE_HAS_INSTALLS';
+
 export type Release = Omit<ReleaseSummary, 'itemCount'> & {
   items: ReleaseItem[];
   manualItems: ManualItem[];
+  unfreezeBlockedReason: UnfreezeBlockedReason | null;
+  packagesUrl: string | null;
 };
 
 export type ReleaseSearchResponse = { releases: ReleaseSummary[] };
@@ -147,6 +155,8 @@ export type CreateReleaseInput = {
   version: string;
   jiraProjectKey: string | null;
   ticketKeys: string[];
+  // D-15-18: a release is never created without at least one product.
+  productIds: string[];
 };
 
 // D-03-02: one request creates the release and adds the selection, so a failed add can never
@@ -162,6 +172,7 @@ export function useCreateRelease() {
           version: input.version,
           ...(input.jiraProjectKey ? { jiraProjectKey: input.jiraProjectKey } : {}),
           ticketKeys: input.ticketKeys,
+          productIds: input.productIds,
         }),
       }),
     onSuccess: (result) => {
@@ -209,6 +220,39 @@ function useReleaseMutation<TVars>(request: (vars: TVars) => Promise<Release>) {
   });
 }
 
+export function useSetReleaseProducts(releaseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (productIds: string[]) =>
+      apiFetch<Release>(`/api/releases/${releaseId}/products`, {
+        method: 'PUT',
+        body: JSON.stringify({ productIds }),
+      }),
+    onSuccess: (release) => {
+      queryClient.setQueryData(releaseQueryKey(releaseId), release);
+      queryClient.invalidateQueries({ queryKey: ['releases'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['installs', releaseId] });
+      queryClient.invalidateQueries({ queryKey: ['documents', 'readiness'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+// D-17-21: the packages link is not release content, so documents, readiness and the dashboard are
+// deliberately not invalidated.
+export function useSetPackagesUrl(releaseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string | null) =>
+      apiFetch<Release>(`/api/releases/${releaseId}/packages-url`, {
+        method: 'PUT',
+        body: JSON.stringify({ url }),
+      }),
+    onSuccess: (release) => queryClient.setQueryData(releaseQueryKey(releaseId), release),
+  });
+}
+
 export function useRefreshRelease() {
   return useReleaseMutation((releaseId: string) =>
     apiFetch<Release>(`/api/releases/${releaseId}/refresh`, { method: 'POST' }),
@@ -226,11 +270,28 @@ export function useRefreshCodeLinks() {
   );
 }
 
-// D-03-10: freeze is one-way. No reverse mutation exists or should be added here.
+// D-15.1-01: a frozen release can be unfrozen while it has no promotion or install; the server decides.
 export function useFreezeRelease() {
   return useReleaseMutation((releaseId: string) =>
     apiFetch<Release>(`/api/releases/${releaseId}/freeze`, { method: 'POST' }),
   );
+}
+
+export function useUnfreezeRelease() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (releaseId: string) => apiFetch<Release>(`/api/releases/${releaseId}/unfreeze`, { method: 'POST' }),
+    onSuccess: (release) => {
+      queryClient.setQueryData(releaseQueryKey(release.id), release);
+      queryClient.invalidateQueries({ queryKey: ['releases'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['promotions', release.id] });
+      queryClient.invalidateQueries({ queryKey: ['installs', release.id] });
+      queryClient.invalidateQueries({ queryKey: ['documents', 'readiness'] });
+    },
+    // A rejection means the page was stale (a promotion or install landed elsewhere): reload so the button reflects it.
+    onError: (_error, releaseId) => queryClient.invalidateQueries({ queryKey: releaseQueryKey(releaseId) }),
+  });
 }
 
 export function useRemoveTicketItem() {

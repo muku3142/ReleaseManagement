@@ -6,6 +6,8 @@ import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
+import com.evision.releasemgmt.ports.ProductRepository;
+import com.evision.releasemgmt.ports.ReleaseProductRepository;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,17 +41,24 @@ class ReleaseServiceManualItemsTest {
     @Mock
     private EnrichmentService enrichmentService;
 
+    @Mock
+    private ReleaseProductRepository releaseProducts;
+
+    @Mock
+    private ProductRepository products;
+
     private ReleaseService service;
 
     @BeforeEach
     void setUp() {
-        service = new ReleaseService(repository, ticketSearchService, enrichmentService);
+        service = new ReleaseService(repository, ticketSearchService, enrichmentService,
+                releaseProducts, products);
     }
 
     private static Release release(UUID id, ReleaseStatus status) {
         return new Release(id, "Sprint 42", "2026.08", status, "CNV",
                 Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null, null, null,
-                List.of(), List.of());
+                List.of(), List.of(), null);
     }
 
     @Test

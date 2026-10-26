@@ -79,14 +79,14 @@ public record PromotionHistory(UUID releaseId, boolean frozen, Instant frozenAt,
         }
         if (outcome == PromotionOutcome.ROLLED_BACK) {
             checkRollback(target, deployedAt);
-        } else if (!isNextOrCurrent(target)) {
-            throw reject(PromotionRejection.PROMOTION_STAGE_SKIPPED);
+        } else if (isBeforeCurrent(target)) {
+            throw reject(PromotionRejection.PROMOTION_STAGE_EARLIER);
         }
         return new Promotion(UUID.randomUUID(), releaseId, target.id(), outcome, deployedAt, nowMicros, actor,
                 trimToNull(draft.note()), null, null);
     }
 
-    // D-07-14: a correction passes field checks only, never the ladder-sequence rules - replaying D-07-07 over corrected
+    // D-07-14: a correction passes field checks only, never the ladder-sequence rules - replaying the ladder rule (D-15.1-03) over corrected
     // history would make early entries impossible to fix.
     public Promotion correct(UUID originalId, PromotionDraft draft, String reason, String actor, Instant now) {
         Promotion original = entries.stream()
@@ -129,12 +129,13 @@ public record PromotionHistory(UUID releaseId, boolean frozen, Instant frozenAt,
             throw reject(PromotionRejection.PROMOTION_ROLLBACK_WITHOUT_SUCCESS);
         }
         if (!currentStage().filter(target::equals).isPresent()) {
-            throw reject(PromotionRejection.PROMOTION_STAGE_SKIPPED);
+            throw reject(PromotionRejection.PROMOTION_STAGE_EARLIER);
         }
     }
 
-    private boolean isNextOrCurrent(Stage target) {
-        return nextStage().filter(target::equals).isPresent() || currentStage().filter(target::equals).isPresent();
+    // D-15.1-03: any later active stage or the current one; only going back is refused (ROLLED_BACK is the way back).
+    private boolean isBeforeCurrent(Stage target) {
+        return currentStage().filter(current -> target.position() < current.position()).isPresent();
     }
 
     private boolean hasStandingSuccess(UUID stageId) {

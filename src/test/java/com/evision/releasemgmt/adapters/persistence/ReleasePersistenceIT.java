@@ -389,6 +389,28 @@ class ReleasePersistenceIT {
     }
 
     @Test
+    void packagesLinkIsStoredAndClearedInAnyStatusWithoutStampingItemsChanged() {
+        Release release = Release.create("Packages Test", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of());
+        repository.freeze(release.id(), "rm@acme.com", Instant.now());
+        Instant itemsChangedBefore = repository.findById(release.id()).orElseThrow().itemsChangedAt();
+        String url = "https://contoso.sharepoint.com/sites/rel/Shared%20Documents/1.0";
+
+        repository.setPackagesUrl(release.id(), url);
+
+        Release stored = repository.findById(release.id()).orElseThrow();
+        assertThat(stored.packagesUrl()).isEqualTo(url);
+        assertThat(stored.status()).isEqualTo(ReleaseStatus.FROZEN);
+        assertThat(stored.itemsChangedAt()).isEqualTo(itemsChangedBefore);
+
+        repository.setPackagesUrl(release.id(), null);
+
+        assertThat(repository.findById(release.id()).orElseThrow().packagesUrl()).isNull();
+        assertThatThrownBy(() -> repository.setPackagesUrl(UUID.randomUUID(), "x"))
+                .isInstanceOf(com.evision.releasemgmt.domain.release.ReleaseNotFoundException.class);
+    }
+
+    @Test
     void deleteRemovesReleaseAndCascadesToItems() {
         Release release = Release.create("Delete Test", "1.0", "CNV", "rm@acme.com", Instant.now());
         repository.create(release, List.of(item("CNV-1")));

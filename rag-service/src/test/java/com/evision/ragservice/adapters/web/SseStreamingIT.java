@@ -43,6 +43,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 // Real Tomcat: client disconnects and async dispatch cannot be shown with MockMvc
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -289,6 +290,110 @@ class SseStreamingIT {
 
         assertThat(error).isNotNull();
         assertThat(JSON.readTree(error.data()).get("reason").asString()).isEqualTo("GENERATION_FAILED");
+        awaitGateFree();
+    }
+
+    private static final String TOOLS = "[{\"name\":\"get_release_status\",\"description\":\"Status of a release\","
+            + "\"parameters\":{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"}},"
+            + "\"required\":[\"version\"]}}]";
+    private static final String RESULTS = "[{\"callId\":\"call_1\",\"content\":\"{\\\"stage\\\":\\\"UAT\\\"}\","
+            + "\"isError\":false,\"source\":{\"id\":\"rel-2.4.0\",\"title\":\"Release 2.4.0\","
+            + "\"url\":\"https://x.invalid/r/2.4.0\"}}]";
+
+    private HttpResponse<InputStream> openTool(String toolTurns) throws Exception {
+        String body = "{\"collections\":[\"docs\"],\"question\":\"release?\",\"tools\":" + TOOLS
+                + (toolTurns == null ? "" : ",\"toolTurns\":" + toolTurns) + "}";
+        return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/v1/chat"))
+                .header("Content-Type", "application/json").header("Authorization", "Bearer " + keyA)
+                .POST(HttpRequest.BodyPublishers.ofString(body)).build(), HttpResponse.BodyHandlers.ofInputStream());
+    }
+
+    private void scriptToolCallThenAnswer(Duration lineDelay) {
+        ollama.reset();
+        ollama.chatScript(List.of(
+                FakeOllamaServer.toolCalls(FakeOllamaServer.toolCallLine("call_1", "get_release_status",
+                        "{\"version\":\"2.4.0\"}")),
+                FakeOllamaServer.answer("UAT")), lineDelay);
+    }
+
+    /** Reads round 1 to its done event and returns the signed tool_call turn. */
+    private ObjectNode firstToolRound() throws Exception {
+        HttpResponse<InputStream> response = openTool(null);
+        assertThat(response.statusCode()).isEqualTo(200);
+        try (BufferedReader reader = reader(response)) {
+            SseEvents.Event call = nextOfKind(reader, "tool_call");
+            assertThat(call).isNotNull();
+            assertThat(nextOfKind(reader, "done")).isNotNull();
+            return (ObjectNode) JSON.readTree(call.data());
+        }
+    }
+
+    private static String resumeTurns(ObjectNode turn) {
+        return "[" + turn.deepCopy().set("results", JSON.readTree(RESULTS)) + "]";
+    }
+
+    @Test
+    void immediateResumeAfterAToolRoundIsNeverRefused() throws Exception {
+        for (int i = 0; i < 20; i++) {
+            scriptToolCallThenAnswer(Duration.ofMillis(1));
+            ObjectNode turn = firstToolRound();
+
+            HttpResponse<InputStream> resumed = openTool(resumeTurns(turn));
+            assertThat(resumed.statusCode()).as("resume %d", i).isEqualTo(200);
+            SseEvents.Event done;
+            try (BufferedReader reader = reader(resumed)) {
+                done = nextOfKind(reader, "done");
+            }
+            assertThat(done).as("resume %d", i).isNotNull();
+            assertThat(JSON.readTree(done.data()).get("finishReason").asString()).isEqualTo("stop");
+        }
+        awaitGateFree();
+    }
+
+    @Test
+    void eachToolPostHasItsOwnDeadline() throws Exception {
+        scriptToolCallThenAnswer(Duration.ofMillis(1));
+        ObjectNode turn = firstToolRound();
+        ollama.reset();
+        ollama.chatScript(List.of(FakeOllamaServer.answer("a", "b", "c", "d", "e")), Duration.ofSeconds(2));
+
+        HttpResponse<InputStream> resumed = openTool(resumeTurns(turn));
+        assertThat(resumed.statusCode()).isEqualTo(200);
+        List<String> names = new ArrayList<>();
+        SseEvents.Event error = null;
+        try (BufferedReader reader = reader(resumed)) {
+            SseEvents.Event event;
+            while ((event = SseEvents.next(reader)) != null) {
+                names.add(event.name());
+                if ("error".equals(event.name())) {
+                    error = event;
+                }
+            }
+        }
+
+        assertThat(names).doesNotContain("done");
+        assertThat(error).isNotNull();
+        assertThat(JSON.readTree(error.data()).get("reason").asString()).isEqualTo("DEADLINE");
+        awaitGateFree();
+    }
+
+    @Test
+    void forgedTurnNeverReachesOllama() throws Exception {
+        scriptToolCallThenAnswer(Duration.ofMillis(1));
+        ObjectNode turn = firstToolRound();
+        ((ObjectNode) turn.get("calls").get(0).get("arguments")).put("version", "9.9.9");
+        int before = ollama.chatRequests();
+
+        HttpResponse<String> forged = http.send(HttpRequest
+                .newBuilder(URI.create("http://localhost:" + port + "/v1/chat"))
+                .header("Content-Type", "application/json").header("Authorization", "Bearer " + keyA)
+                .POST(HttpRequest.BodyPublishers.ofString("{\"collections\":[\"docs\"],\"question\":\"release?\","
+                        + "\"tools\":" + TOOLS + ",\"toolTurns\":" + resumeTurns(turn) + "}"))
+                .build(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(forged.statusCode()).isEqualTo(400);
+        assertThat(JSON.readTree(forged.body()).get("reason").asString()).isEqualTo("TOOL_TURN_INVALID");
+        assertThat(ollama.chatRequests()).isEqualTo(before);
         awaitGateFree();
     }
 

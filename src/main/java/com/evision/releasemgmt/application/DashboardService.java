@@ -27,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalDouble;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -65,8 +66,9 @@ public class DashboardService {
         this.clock = clock;
     }
 
-    public DashboardView releases(boolean all) {
+    public DashboardView releases(boolean all, Set<UUID> productIds) {
         DashboardLedger ledger = repository.loadLedger();
+        Set<UUID> inScope = productIds.isEmpty() ? null : repository.releaseIdsCoveringAny(productIds);
         Map<UUID, List<Promotion>> promotionsByRelease = ledger.promotions().stream()
                 .collect(Collectors.groupingBy(Promotion::releaseId));
         Optional<Stage> production = ledger.stages().stream().filter(Stage::production).findFirst();
@@ -74,6 +76,9 @@ public class DashboardService {
 
         List<Candidate> visible = new ArrayList<>();
         for (DashboardRelease release : ledger.releases()) {
+            if (inScope != null && !inScope.contains(release.id())) {
+                continue;
+            }
             PromotionHistory history = new PromotionHistory(release.id(), release.status() == ReleaseStatus.FROZEN,
                     release.frozenAt(), ledger.stages(), promotionsByRelease.getOrDefault(release.id(), List.of()));
             Candidate candidate = new Candidate(release, history.currentStage(), history.firstProductionSuccess(),
@@ -137,8 +142,8 @@ public class DashboardService {
 
     // limit + 1 avoids a count query. OFFSET pages can shift if promotions are recorded between loads;
     // acceptable for an audit list.
-    public DeploymentPage deployments(UUID stageId, Instant from, Instant to, int limit, int offset) {
-        List<DeploymentRow> rows = repository.findDeployments(stageId, from, to, limit + 1, offset);
+    public DeploymentPage deployments(UUID stageId, Instant from, Instant to, int limit, int offset, Set<UUID> productIds) {
+        List<DeploymentRow> rows = repository.findDeployments(stageId, from, to, limit + 1, offset, productIds);
         return new DeploymentPage(rows.stream().limit(limit).toList(), rows.size() > limit);
     }
 

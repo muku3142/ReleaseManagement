@@ -5,6 +5,7 @@ import com.evision.releasemgmt.application.DashboardService;
 import com.evision.releasemgmt.application.DocumentGenerationService;
 import com.evision.releasemgmt.application.DocumentReadinessService;
 import com.evision.releasemgmt.application.EnvironmentLadderService;
+import com.evision.releasemgmt.application.PortfolioDashboardService;
 import com.evision.releasemgmt.application.PromotionService;
 import com.evision.releasemgmt.application.ReleaseService;
 import org.junit.jupiter.api.Test;
@@ -22,9 +23,9 @@ import static org.mockito.Mockito.mock;
 
 class ToolDefinitionsTest {
 
-    // Phase 11 intake limits: rag-service/src/main/resources/application.yml rag.tools
-    private static final int MAX_TOOLS = 5;
-    private static final int DEFINITIONS_MAX_CHARS = 1500;
+    // Phase 16 intake limits: rag-service/src/main/resources/application.yml rag.tools (D-16-16)
+    private static final int MAX_TOOLS = 6;
+    private static final int DEFINITIONS_MAX_CHARS = 1900;
     private static final int DESCRIPTION_MAX_CHARS = 300;
     private static final Set<String> SCHEMA_KEYS = Set.of("type", "properties", "required", "additionalProperties");
     private static final Set<String> PROPERTY_KEYS = Set.of("type", "description", "enum", "maxLength");
@@ -45,7 +46,8 @@ class ToolDefinitionsTest {
                 new TicketsTool(releaseService, dashboardService, releaseRef),
                 new DeploymentsTool(promotionService, dashboardService, ladder, actors, releaseRef, Clock.systemUTC()),
                 new DocumentsTool(mock(DocumentReadinessService.class), mock(DocumentGenerationService.class), actors,
-                        releaseService, releaseRef));
+                        releaseService, releaseRef),
+                new InstallsTool(mock(PortfolioDashboardService.class), releaseService, releaseRef));
     }
 
     private String serialised(AssistantTool tool) {
@@ -57,7 +59,7 @@ class ToolDefinitionsTest {
     }
 
     @Test
-    void fiveUniquelyNamedToolsFitThePhase11Budget() {
+    void sixUniquelyNamedToolsFitTheToolBudget() {
         List<AssistantTool> tools = tools();
 
         assertThat(tools).hasSize(MAX_TOOLS);

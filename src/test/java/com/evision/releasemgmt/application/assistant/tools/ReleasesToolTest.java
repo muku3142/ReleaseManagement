@@ -47,7 +47,7 @@ class ReleasesToolTest {
                 CANARY, List.of(CANARY), 1, "1", Instant.EPOCH, StatusCategory.DONE, null, false);
         ManualItem manual = new ManualItem(UUID.randomUUID(), "manual", CANARY, null, Instant.EPOCH);
         return new Release(id, "Payments", "2.4", ReleaseStatus.OPEN, "PAY", Instant.EPOCH, "a", null, null, null, null,
-                List.of(new ReleaseItem(ticket, Instant.EPOCH, CodeLinks.notAttempted())), List.of(manual));
+                List.of(new ReleaseItem(ticket, Instant.EPOCH, CodeLinks.notAttempted())), List.of(manual), null);
     }
 
     @Test
@@ -71,6 +71,23 @@ class ReleasesToolTest {
         assertThat(json.get("currentStage").isNull()).isTrue();
         assertThat(json.get("shippedAt").isNull()).isTrue();
         assertThat(json.toString()).doesNotContain(CANARY);
+    }
+
+    @Test
+    void detailCarriesThePackagesUrlWhenSetAndNullOtherwise() {
+        UUID id = UUID.randomUUID();
+        Release base = release(id);
+        when(promotionService.history(id)).thenReturn(new PromotionHistory(id, false, null, List.of(), List.of()));
+
+        when(releaseService.get(id)).thenReturn(base);
+        assertThat(mapper.valueToTree(tool.call(Map.of("release", id.toString())).result())
+                .get("packagesUrl").isNull()).isTrue();
+
+        when(releaseService.get(id)).thenReturn(new Release(id, base.name(), base.version(), base.status(),
+                base.jiraProjectKey(), base.createdAt(), base.createdBy(), null, null, null, null, base.items(),
+                base.manualItems(), "https://contoso.sharepoint.com/x"));
+        assertThat(mapper.valueToTree(tool.call(Map.of("release", id.toString())).result())
+                .get("packagesUrl").asText()).isEqualTo("https://contoso.sharepoint.com/x");
     }
 
     @Test

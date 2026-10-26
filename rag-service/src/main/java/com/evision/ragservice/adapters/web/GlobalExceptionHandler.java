@@ -7,6 +7,8 @@ import com.evision.ragservice.domain.ModelNotAvailableException;
 import com.evision.ragservice.domain.OllamaUnavailableException;
 import com.evision.ragservice.domain.TextTooLargeException;
 import com.evision.ragservice.domain.TooManyRequestsException;
+import com.evision.ragservice.domain.ToolResultTooLargeException;
+import com.evision.ragservice.domain.ToolTurnRejectedException;
 import com.evision.ragservice.domain.ClientNotFoundException;
 import com.evision.ragservice.domain.CollectionModelConflictException;
 import com.evision.ragservice.domain.CollectionNotFoundException;
@@ -113,6 +115,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleModelNotAvailable(ModelNotAvailableException ex) {
         return problem(HttpStatus.SERVICE_UNAVAILABLE, "Chat model not available", ex.getMessage(),
                 "MODEL_NOT_AVAILABLE");
+    }
+
+    @ExceptionHandler(ToolTurnRejectedException.class)
+    public ProblemDetail handleToolTurnRejected(ToolTurnRejectedException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Tool turn rejected", ex.getMessage(), "TOOL_TURN_INVALID");
+    }
+
+    @ExceptionHandler(ToolResultTooLargeException.class)
+    public ProblemDetail handleToolResultTooLarge(ToolResultTooLargeException ex) {
+        return problem(HttpStatus.PAYLOAD_TOO_LARGE, "Tool result too large", ex.getMessage(),
+                "TOOL_RESULT_TOO_LARGE");
     }
 
     @ExceptionHandler(TextTooLargeException.class)

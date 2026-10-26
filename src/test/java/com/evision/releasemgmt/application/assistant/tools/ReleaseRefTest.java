@@ -1,6 +1,7 @@
 package com.evision.releasemgmt.application.assistant.tools;
 
 import com.evision.releasemgmt.application.ReleaseService;
+import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,39 @@ class ReleaseRefTest {
         when(service.search(anyString())).thenReturn(List.of());
         assertThatThrownBy(() -> ref.resolve("nope")).isInstanceOf(ToolArgumentException.class)
                 .hasMessageContaining("no release matches");
+    }
+
+    @Test
+    void unknownListsKnownReleases() {
+        when(service.search("Relase")).thenReturn(List.of());
+        when(service.search("")).thenReturn(List.of(summary(UUID.randomUUID(), "Release 4.3", "4.3")));
+        assertThatThrownBy(() -> ref.resolve("Relase")).isInstanceOf(ToolArgumentException.class)
+                .hasMessage("no release matches 'Relase'; known releases: Release 4.3 (4.3)");
+    }
+
+    @Test
+    void unknownListsAtMostFiveKnownReleasesInOrder() {
+        when(service.search("nope")).thenReturn(List.of());
+        when(service.search("")).thenReturn(IntStream.range(0, 7)
+                .mapToObj(i -> summary(UUID.randomUUID(), "R", "v" + i)).toList());
+        assertThatThrownBy(() -> ref.resolve("nope")).isInstanceOf(ToolArgumentException.class)
+                .hasMessage("no release matches 'nope'; known releases: R (v0), R (v1), R (v2), R (v3), R (v4)");
+    }
+
+    @Test
+    void unknownWithNoReleasesAtAllHasNoSuffix() {
+        when(service.search(anyString())).thenReturn(List.of());
+        assertThatThrownBy(() -> ref.resolve("nope")).isInstanceOf(ToolArgumentException.class)
+                .hasMessage("no release matches 'nope'");
+    }
+
+    @Test
+    void unknownUuidListsKnownReleases() {
+        UUID id = UUID.randomUUID();
+        when(service.get(id)).thenThrow(new ReleaseNotFoundException());
+        when(service.search("")).thenReturn(List.of(summary(UUID.randomUUID(), "Release 4.3", "4.3")));
+        assertThatThrownBy(() -> ref.resolve(id.toString())).isInstanceOf(ToolArgumentException.class)
+                .hasMessageContaining("known releases: Release 4.3 (4.3)");
     }
 
     @Test

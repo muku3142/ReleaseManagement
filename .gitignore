@@ -9,3 +9,8 @@ frontend/dist/
 # Raw dev-status spike captures: real repository, branch and author names, staged
 # outside src/ on purpose and deleted once redacted fixtures are produced (plan 02-04).
 .planning/phases/*/spike-capture/
+.planning/milestones/*-phases/*/spike-capture/
+
+# Claude briefing result files (written by scheduled tasks on the host); the folder itself stays.
+briefings/data/*
+!briefings/data/.gitkeep

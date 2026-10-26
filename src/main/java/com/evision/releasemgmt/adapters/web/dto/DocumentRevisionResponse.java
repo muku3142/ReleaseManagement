@@ -3,5 +3,6 @@ package com.evision.releasemgmt.adapters.web.dto;
 import java.time.Instant;
 
 public record DocumentRevisionResponse(int revision, boolean latest, Instant generatedAt,
-                                       String generatedBy, String templateName) {
+                                       String generatedBy, String templateName,
+                                       boolean aiAssisted, String aiMode, String aiInstruction) {
 }

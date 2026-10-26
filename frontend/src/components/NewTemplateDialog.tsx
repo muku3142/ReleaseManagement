@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import { DOCUMENT_TYPE_LABELS, useCreateTemplate, type DocumentType, type Template } from '../api/templates';
 
 // Scoped to exactly one job - name-only creation for a document type fixed by the section that

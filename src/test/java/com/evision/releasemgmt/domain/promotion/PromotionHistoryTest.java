@@ -176,24 +176,48 @@ class PromotionHistoryTest {
     }
 
     @Test
-    void firstEntryMustTargetTheFirstStage() {
-        assertRejected(() -> history().record(draft(test, SUCCESS), "acc-1", NOW), PromotionRejection.PROMOTION_STAGE_SKIPPED);
-        assertThat(history().record(draft(dev, SUCCESS), "acc-1", NOW).stageId()).isEqualTo(dev.id());
+    void firstEntryMayTargetAnyActiveStage() {
+        assertThat(history().record(draft(prod, SUCCESS), "acc-1", NOW).stageId()).isEqualTo(prod.id());
+        assertThat(history().record(draft(test, SUCCESS), "acc-1", NOW).stageId()).isEqualTo(test.id());
     }
 
     @Test
-    void skippingAStageIsRejectedNextAndRedeployAreAccepted() {
+    void aLaterStageMaySkipIntermediateStages() {
         PromotionHistory h = history(entry(dev, SUCCESS, 1));
-        assertRejected(() -> h.record(draft(uat, SUCCESS), "acc-1", NOW), PromotionRejection.PROMOTION_STAGE_SKIPPED);
-        assertThat(h.record(draft(test, SUCCESS), "acc-1", NOW).stageId()).isEqualTo(test.id());
+        assertThat(h.record(draft(prod, SUCCESS), "acc-1", NOW).stageId()).isEqualTo(prod.id());
+        assertThat(h.record(draft(uat, SUCCESS), "acc-1", NOW).stageId()).isEqualTo(uat.id());
         assertThat(h.record(draft(dev, SUCCESS), "acc-1", NOW).stageId()).isEqualTo(dev.id());
     }
 
     @Test
-    void failedFollowsTheSameSequenceRules() {
+    void anEarlierStageIsRejected() {
+        PromotionHistory h = history(entry(dev, SUCCESS, 1), entry(prod, SUCCESS, 2));
+        assertRejected(() -> h.record(draft(dev, SUCCESS), "acc-1", NOW), PromotionRejection.PROMOTION_STAGE_EARLIER);
+        assertRejected(() -> h.record(draft(uat, FAILED), "acc-1", NOW), PromotionRejection.PROMOTION_STAGE_EARLIER);
+        assertThat(h.record(draft(prod, SUCCESS), "acc-1", NOW).stageId()).isEqualTo(prod.id());
+    }
+
+    @Test
+    void failedFollowsTheSameAnyLaterStageRule() {
         PromotionHistory h = history(entry(dev, SUCCESS, 1));
-        assertRejected(() -> h.record(draft(uat, FAILED), "acc-1", NOW), PromotionRejection.PROMOTION_STAGE_SKIPPED);
-        assertThat(h.record(draft(test, FAILED), "acc-1", NOW).outcome()).isEqualTo(FAILED);
+        assertThat(h.record(draft(uat, FAILED), "acc-1", NOW).outcome()).isEqualTo(FAILED);
+        PromotionHistory atUat = history(entry(dev, SUCCESS, 1), entry(uat, SUCCESS, 2));
+        assertRejected(() -> atUat.record(draft(test, FAILED), "acc-1", NOW), PromotionRejection.PROMOTION_STAGE_EARLIER);
+    }
+
+    @Test
+    void skippingOverARetiredStageIsAccepted() {
+        PromotionHistory h = history(List.of(dev, retired(test), uat, prod), entry(dev, SUCCESS, 1));
+        assertThat(h.record(draft(uat, SUCCESS), "acc-1", NOW).stageId()).isEqualTo(uat.id());
+    }
+
+    @Test
+    void rollbackAfterASkipReturnsToTheStageBeforeIt() {
+        Promotion devOk = entry(dev, SUCCESS, 1);
+        Promotion prodOk = entry(prod, SUCCESS, 2);
+        PromotionHistory h = history(devOk, prodOk);
+        Promotion rollback = h.record(draft(prod, ROLLED_BACK), "acc-1", NOW);
+        assertThat(history(devOk, prodOk, rollback).currentStage()).contains(dev);
     }
 
     @Test
@@ -240,9 +264,31 @@ class PromotionHistoryTest {
     }
 
     @Test
-    void rollbackOfANonCurrentStageIsRejectedAsSkipped() {
+    void rollbackOfANonCurrentStageIsRejectedAsEarlier() {
         PromotionHistory h = historyOf(fullLadder());
-        assertRejected(() -> h.record(draft(uat, ROLLED_BACK), "acc-1", NOW), PromotionRejection.PROMOTION_STAGE_SKIPPED);
+        assertRejected(() -> h.record(draft(uat, ROLLED_BACK), "acc-1", NOW), PromotionRejection.PROMOTION_STAGE_EARLIER);
+    }
+
+    @Test
+    void aCorrectionMayMoveAnEntryOntoASkippedStage() {
+        Promotion devOk = entry(dev, SUCCESS, 1);
+        Promotion prodOk = entry(prod, SUCCESS, 2);
+        PromotionHistory h = history(devOk, prodOk);
+
+        Promotion fix = h.correct(prodOk.id(), new PromotionDraft(uat.id(), SUCCESS, day(2), null), "wrong stage", "acc-1", NOW);
+
+        assertThat(fix.stageId()).isEqualTo(uat.id());
+        assertThat(fix.supersedesId()).isEqualTo(prodOk.id());
+    }
+
+    @Test
+    void aCorrectionMayMoveAnEntryOffASkippedStage() {
+        Promotion devOk = entry(dev, SUCCESS, 1);
+        PromotionHistory h = history(devOk);
+
+        Promotion fix = h.correct(devOk.id(), new PromotionDraft(prod.id(), SUCCESS, day(1), null), "wrong stage", "acc-1", NOW);
+
+        assertThat(fix.stageId()).isEqualTo(prod.id());
     }
 
     @Test

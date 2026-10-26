@@ -31,12 +31,16 @@ public class ChatController {
     private static final long EMITTER_BACKSTOP_SECONDS = 15;
 
     private static final String EVENTS = "Server-sent events. status {requestId, phase: SEARCHING|GENERATING}; "
-            + "token {text}; citations {basis: MARKED|RETRIEVED, items: [{n, documentId, title, url, collection, "
-            + "metadata}]} (chat only); done {refusal, refusalLayer: GATE|MODEL|null, finishReason, truncated, "
-            + "promptTokens, completionTokens}; error {reason: DEADLINE|GENERATION_FAILED|OLLAMA_UNAVAILABLE|"
-            + "MODEL_NOT_AVAILABLE|EMBEDDING_UNAVAILABLE|INTERNAL}. Comment lines are heartbeats. Errors before the "
-            + "stream opens are problem+json: 400, 404, 413 (transform), 429 with Retry-After, 503 (reason "
-            + "OLLAMA_UNAVAILABLE or MODEL_NOT_AVAILABLE).";
+            + "token {text}; citations {basis: MARKED|RETRIEVED, items: [{n, kind: PASSAGE|TOOL, documentId, title, "
+            + "url, collection, metadata}]} (chat only); tool_call {round, questionId, calls: [{id, name, "
+            + "arguments}], signature} (chat only; the stream ends after it with done finishReason tool_calls, "
+            + "resend the turn unchanged with results); done {refusal, refusalLayer: GATE|MODEL|null, finishReason, "
+            + "truncated, promptTokens, completionTokens, historyTrimmed (true when older history turns were not "
+            + "used), model, promptHash}; error {reason: DEADLINE|GENERATION_FAILED|"
+            + "OLLAMA_UNAVAILABLE|MODEL_NOT_AVAILABLE|EMBEDDING_UNAVAILABLE|TOOL_CALL_INVALID|INTERNAL}. Comment "
+            + "lines are heartbeats. Errors before the stream opens are problem+json: 400 (reason includes "
+            + "TOOL_TURN_INVALID), 404, 413 (transform; chat reason TOOL_RESULT_TOO_LARGE), 429 with Retry-After, "
+            + "503 (reason OLLAMA_UNAVAILABLE or MODEL_NOT_AVAILABLE).";
 
     private final ChatService chat;
     private final TransformService transform;

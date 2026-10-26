@@ -9,5 +9,6 @@ import java.util.UUID;
 public record DocumentResponse(UUID id, UUID releaseId, String documentType, int revision,
                                int latestRevision, String markdown, String templateName,
                                boolean templateDeleted, boolean hasLogo, ChromeFieldsResponse chrome,
-                               Instant generatedAt, String generatedBy) {
+                               Instant generatedAt, String generatedBy, boolean aiAssisted,
+                               String aiMode, String aiInstruction) {
 }

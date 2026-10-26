@@ -16,12 +16,15 @@ import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.application.ReleaseViewAssembler;
 import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.application.TemplateService;
+import com.evision.releasemgmt.domain.portfolio.ReleaseProduct;
+import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.template.ChromeFields;
 import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.PlaceholderCatalog;
 import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.view.ReleaseView;
+import com.evision.releasemgmt.ports.ReleaseProductRepository;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -54,12 +57,14 @@ public class TemplateController {
     private final ReleaseService releaseService;
     private final ReleaseViewAssembler assembler;
     private final ActorResolutionService actorResolution;
+    private final ReleaseProductRepository releaseProducts;
     private final long logoMaxBytes;
     private final int logoMaxWidth;
     private final int logoMaxHeight;
 
     public TemplateController(TemplateService templateService, ReleaseService releaseService,
                               ReleaseViewAssembler assembler, ActorResolutionService actorResolution,
+                              ReleaseProductRepository releaseProducts,
                               @Value("${app.template.logo.max-bytes}") long logoMaxBytes,
                               @Value("${app.template.logo.max-width}") int logoMaxWidth,
                               @Value("${app.template.logo.max-height}") int logoMaxHeight) {
@@ -67,6 +72,7 @@ public class TemplateController {
         this.releaseService = releaseService;
         this.assembler = assembler;
         this.actorResolution = actorResolution;
+        this.releaseProducts = releaseProducts;
         this.logoMaxBytes = logoMaxBytes;
         this.logoMaxWidth = logoMaxWidth;
         this.logoMaxHeight = logoMaxHeight;
@@ -107,7 +113,9 @@ public class TemplateController {
     // ISSUE_TYPE default rather than reading a groupingDimension the caller hasn't chosen yet.
     @GetMapping("/render-context/{releaseId}")
     public ReleaseView renderContext(@PathVariable UUID releaseId) {
-        return assembler.assemble(releaseService.get(releaseId), GroupingDimension.ISSUE_TYPE);
+        Release release = releaseService.get(releaseId);
+        List<String> productNames = releaseProducts.productsOf(releaseId).stream().map(ReleaseProduct::name).toList();
+        return assembler.assemble(release, productNames, GroupingDimension.ISSUE_TYPE);
     }
 
     @GetMapping("/{templateId}")

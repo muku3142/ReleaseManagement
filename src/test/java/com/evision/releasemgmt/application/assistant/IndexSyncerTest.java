@@ -192,7 +192,7 @@ class IndexSyncerTest {
                     new BigDecimal("5.0"), true), NOW, CodeLinks.notAttempted()));
         }
         return new Release(RELEASE_ID, "Spring", "1.0", ReleaseStatus.OPEN, "PAY", NOW, "u", null, null, null, null,
-                items, List.of());
+                items, List.of(), null);
     }
 
     private static final class FakeIndex implements RagIndexPort {

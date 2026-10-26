@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { useJiraProjects, useJiraSprints } from '../api/jiraProjects';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import { CodeLinksDetail } from './CodeLinks';
 import {
   DEFAULT_STATUS_CATEGORIES,

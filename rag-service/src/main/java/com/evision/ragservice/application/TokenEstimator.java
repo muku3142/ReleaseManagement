@@ -9,7 +9,11 @@ public final class TokenEstimator {
     }
 
     public int estimate(String s) {
-        return (int) Math.ceil(s.length() / charsPerToken);
+        return estimateChars(s.length());
+    }
+
+    public int estimateChars(int chars) {
+        return (int) Math.ceil(chars / charsPerToken);
     }
 
     public int maxChars(int tokens) {

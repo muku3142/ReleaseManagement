@@ -21,6 +21,7 @@ import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import com.evision.releasemgmt.domain.template.view.SampleReleaseView;
 import com.evision.releasemgmt.ports.DocumentSnapshotRepository;
+import com.evision.releasemgmt.ports.ReleaseProductRepository;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import com.evision.releasemgmt.ports.TemplateRepository;
 import org.apache.pdfbox.contentstream.PDFStreamEngine;
@@ -84,7 +85,8 @@ class GenerateThenExportSeamTest {
             new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(5), 500, 64);
     private final MustacheFlexmarkRenderAdapter renderAdapter = new MustacheFlexmarkRenderAdapter();
     private final DocumentGenerationService generationService = new DocumentGenerationService(
-            releaseRepository, templateRepository, snapshotRepository, assembler, renderService);
+            releaseRepository, templateRepository, snapshotRepository, assembler, renderService,
+            mock(ReleaseProductRepository.class));
     private final DocumentExportService exportService = new DocumentExportService(
             snapshotRepository, new PdfExportAdapter(renderAdapter), new DocxExportAdapter(renderAdapter));
 
@@ -211,7 +213,7 @@ class GenerateThenExportSeamTest {
 
         when(releaseRepository.findById(release.id())).thenReturn(Optional.of(release));
         when(templateRepository.findActive(template.documentType())).thenReturn(Optional.of(template));
-        when(assembler.assemble(any(), any())).thenReturn(SampleReleaseView.instance());
+        when(assembler.assemble(any(), any(), any())).thenReturn(SampleReleaseView.instance());
         when(templateRepository.findLogo(template.id())).thenReturn(Optional.ofNullable(logo));
         when(snapshotRepository.nextRevision(release.id(), template.documentType())).thenReturn(1);
         // generate() hands the caller back exactly what create() returns, so the export half of
@@ -227,7 +229,7 @@ class GenerateThenExportSeamTest {
     private static Release openRelease() {
         Instant now = Instant.now();
         return new Release(UUID.randomUUID(), "Sample Release", "2026.08", ReleaseStatus.OPEN, "CNV",
-                now, "actor-0", null, null, now, null, List.of(), List.of());
+                now, "actor-0", null, null, now, null, List.of(), List.of(), null);
     }
 
     private static Template activeTemplate(String body, ChromeFields chrome) {

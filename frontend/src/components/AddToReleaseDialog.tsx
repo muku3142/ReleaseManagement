@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
+import { useProducts } from '../api/products';
 import {
   openReleases,
   useAddTicketsToRelease,
@@ -9,6 +10,49 @@ import {
   useReleases,
   type ReleaseAddResult,
 } from '../api/releases';
+
+// Rendered only inside the "New release…" form so /api/products is requested only once it is open.
+function ProductPicker(props: { selected: string[]; onChange: (ids: string[]) => void }) {
+  const products = useProducts();
+  const active = (products.data?.products ?? [])
+    .filter((p) => !p.archived)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <fieldset>
+      <legend className="block text-sm font-semibold text-gray-700">Products</legend>
+      <small className="block text-xs text-gray-600">
+        Choose at least one product this release covers. You can change them later.
+      </small>
+      {products.isSuccess && active.length === 0 ? (
+        <small className="mt-1 block text-xs text-gray-600">
+          Add a product on the{' '}
+          <Link to="/portfolio" className="text-blue-600 underline">
+            Portfolio page
+          </Link>{' '}
+          first.
+        </small>
+      ) : (
+        <div className="mt-1 max-h-40 space-y-1 overflow-y-auto rounded border border-gray-300 p-3">
+          {active.map((p) => (
+            <label key={p.id} className="flex items-center gap-2 text-sm font-normal text-gray-900">
+              <input
+                type="checkbox"
+                checked={props.selected.includes(p.id)}
+                onChange={(event) =>
+                  props.onChange(
+                    event.target.checked ? [...props.selected, p.id] : props.selected.filter((id) => id !== p.id),
+                  )
+                }
+              />
+              {p.name}
+            </label>
+          ))}
+        </div>
+      )}
+    </fieldset>
+  );
+}
 
 // D-03-01: this component owns exactly one job - choose a destination release for an
 // already-chosen ticketKeys array. It contains no ticket search, project picker, sprint picker
@@ -30,6 +74,7 @@ export function AddToReleaseDialog(props: {
   const [formOpenState, setFormOpenState] = useState(false);
   const [name, setName] = useState('');
   const [version, setVersion] = useState('');
+  const [productIds, setProductIds] = useState<string[]>([]);
 
   // The dialog is permanently mounted by TicketsRoute, so without this reset it reopens against a
   // new ticket selection still holding the previous attempt's form values and error - and
@@ -40,6 +85,7 @@ export function AddToReleaseDialog(props: {
     if (props.open && !dialog.open) {
       setName('');
       setVersion('');
+      setProductIds([]);
       setFilter('');
       setFormOpenState(false);
       createRelease.reset();
@@ -90,6 +136,7 @@ export function AddToReleaseDialog(props: {
         version: version.trim(),
         jiraProjectKey: props.jiraProjectKey,
         ticketKeys: props.ticketKeys,
+        productIds,
       },
       { onSuccess: goToRelease },
     );
@@ -241,6 +288,7 @@ export function AddToReleaseDialog(props: {
               className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
             />
           </div>
+          <ProductPicker selected={productIds} onChange={setProductIds} />
 
           {nameError && <p className="text-sm text-red-600">{nameError}</p>}
           {versionError && <p className="text-sm text-red-600">{versionError}</p>}
@@ -257,7 +305,9 @@ export function AddToReleaseDialog(props: {
 
           <button
             type="submit"
-            disabled={createRelease.isPending || name.trim() === '' || version.trim() === ''}
+            disabled={
+              createRelease.isPending || name.trim() === '' || version.trim() === '' || productIds.length === 0
+            }
             className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
             Create &amp; add

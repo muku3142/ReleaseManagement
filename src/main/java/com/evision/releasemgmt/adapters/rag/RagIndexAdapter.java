@@ -5,6 +5,7 @@ import com.evision.releasemgmt.domain.assistant.IndexCollection;
 import com.evision.releasemgmt.domain.assistant.IndexDocument;
 import com.evision.releasemgmt.domain.assistant.RagServiceException;
 import com.evision.releasemgmt.ports.RagIndexPort;
+import com.evision.releasemgmt.ports.RagStatusPort;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -14,11 +15,14 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
 
+import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
+import java.util.function.Supplier;
 
 @Component
 @ConditionalOnProperty(prefix = "app.assistant", name = "enabled", havingValue = "true")
-public class RagIndexAdapter implements RagIndexPort {
+public class RagIndexAdapter implements RagIndexPort, RagStatusPort {
 
     private static final String COLLECTION_URI = "/v1/collections/{collection}";
     private static final String DOCUMENT_URI = "/v1/collections/{collection}/documents/{id}";
@@ -64,9 +68,32 @@ public class RagIndexAdapter implements RagIndexPort {
         }
     }
 
-    private void call(String operation, String collection, String id, Runnable request) {
+    @Override
+    public Optional<Instant> lastIndexedAt(IndexCollection collection) {
         try {
+            CollectionStatus body = fetch("status", collection.wireName(), "-", () -> client.get()
+                    .uri(COLLECTION_URI, collection.wireName())
+                    .retrieve()
+                    .body(CollectionStatus.class));
+            return Optional.ofNullable(body).map(CollectionStatus::lastIndexedAt);
+        } catch (RagServiceException e) {
+            if (e.status() == HttpStatus.NOT_FOUND.value()) {
+                return Optional.empty();
+            }
+            throw e;
+        }
+    }
+
+    private void call(String operation, String collection, String id, Runnable request) {
+        fetch(operation, collection, id, () -> {
             request.run();
+            return null;
+        });
+    }
+
+    private <T> T fetch(String operation, String collection, String id, Supplier<T> request) {
+        try {
+            return request.get();
         } catch (RestClientResponseException e) {
             throw new RagServiceException(message(operation, collection, id), e.getStatusCode().value());
         } catch (ResourceAccessException e) {
@@ -76,6 +103,9 @@ public class RagIndexAdapter implements RagIndexPort {
 
     private static String message(String operation, String collection, String id) {
         return "rag " + operation + " failed collection=" + collection + " id=" + id;
+    }
+
+    private record CollectionStatus(Instant lastIndexedAt) {
     }
 
     private record CollectionBody(String embeddingModel) {

@@ -28,6 +28,8 @@ const ENTRIES: PlaceholderEntry[] = [
   { scope: 'ROOT', token: 'release.lastRefreshedAt', kind: 'VARIABLE', description: '', tags: [] },
   { scope: 'ROOT', token: 'items', kind: 'SECTION', description: '', tags: [] },
   { scope: 'ROOT', token: 'groups', kind: 'SECTION', description: '', tags: [] },
+  { scope: 'ROOT', token: 'products', kind: 'SECTION', description: '', tags: [] },
+  { scope: 'PRODUCT', token: 'name', kind: 'VARIABLE', description: '', tags: [] },
   { scope: 'ITEM', token: 'title', kind: 'VARIABLE', description: '', tags: [] },
   { scope: 'ITEM', token: 'isManual', kind: 'SECTION', description: '', tags: [] },
   { scope: 'ITEM', token: 'key', kind: 'VARIABLE', description: '', tags: [] },
@@ -113,6 +115,7 @@ function sampleView(overrides: Partial<ReleaseView> = {}): ReleaseView {
     frozenAt: '',
     lastRefreshedAt: '2026-08-05T00:00:00Z',
     items: [CNV_2896, CNV_2901, MANUAL_ITEM],
+    products: [{ name: 'Core' }, { name: 'Mobile' }],
     groups: [
       { groupName: 'Bug', items: [CNV_2896] },
       { groupName: 'Story', items: [CNV_2901] },
@@ -167,6 +170,12 @@ describe('TemplatePreview', () => {
     await renderPreview('{{#items}}{{title}}{{/items}}', view);
     expect(container.innerHTML).toContain('&lt;img');
     expect(container.innerHTML).not.toContain('<img');
+  });
+
+  it('renders the products section and does not flag it as unknown', async () => {
+    await renderPreview('{{#products}}{{name}};{{/products}}', sampleView());
+    expect(container.textContent).toContain('Core;Mobile;');
+    expect(container.textContent).not.toContain('unknown');
   });
 
   it('renders Markdown bold and inline code', async () => {

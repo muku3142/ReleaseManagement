@@ -6,6 +6,8 @@ import com.evision.releasemgmt.adapters.persistence.entity.ReleaseItemPullReques
 import com.evision.releasemgmt.adapters.persistence.entity.ReleaseItemStatusChangeEntity;
 import com.evision.releasemgmt.adapters.persistence.entity.ReleaseManualItemEntity;
 import com.evision.releasemgmt.adapters.persistence.entity.ReleaseTicketItemEntity;
+import com.evision.releasemgmt.adapters.persistence.repository.ClientDeploymentJpaRepository;
+import com.evision.releasemgmt.adapters.persistence.repository.PromotionJpaRepository;
 import com.evision.releasemgmt.adapters.persistence.repository.ReleaseItemCommitJpaRepository;
 import com.evision.releasemgmt.adapters.persistence.repository.ReleaseItemPullRequestJpaRepository;
 import com.evision.releasemgmt.adapters.persistence.repository.ReleaseItemStatusChangeJpaRepository;
@@ -13,6 +15,7 @@ import com.evision.releasemgmt.adapters.persistence.repository.ReleaseJpaReposit
 import com.evision.releasemgmt.adapters.persistence.repository.ReleaseManualItemJpaRepository;
 import com.evision.releasemgmt.adapters.persistence.repository.ReleaseSummaryRow;
 import com.evision.releasemgmt.adapters.persistence.repository.ReleaseTicketItemJpaRepository;
+import com.evision.releasemgmt.domain.assistant.ReleaseIndexInvalidated;
 import com.evision.releasemgmt.domain.enrichment.CodeLinks;
 import com.evision.releasemgmt.domain.enrichment.LinkedCommit;
 import com.evision.releasemgmt.domain.enrichment.LinkedPullRequest;
@@ -28,7 +31,10 @@ import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
+import com.evision.releasemgmt.domain.release.UnfreezeRejectedException;
+import com.evision.releasemgmt.domain.release.UnfreezeRejection;
 import com.evision.releasemgmt.ports.ReleaseRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,19 +56,28 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     private final ReleaseItemPullRequestJpaRepository pullRequestJpa;
     private final ReleaseItemCommitJpaRepository commitJpa;
     private final ReleaseItemStatusChangeJpaRepository statusChangeJpa;
+    private final PromotionJpaRepository promotionJpa;
+    private final ClientDeploymentJpaRepository clientDeploymentJpa;
+    private final ApplicationEventPublisher publisher;
 
     public ReleaseRepositoryAdapter(ReleaseJpaRepository jpa,
                                      ReleaseTicketItemJpaRepository itemJpa,
                                      ReleaseManualItemJpaRepository manualJpa,
                                      ReleaseItemPullRequestJpaRepository pullRequestJpa,
                                      ReleaseItemCommitJpaRepository commitJpa,
-                                     ReleaseItemStatusChangeJpaRepository statusChangeJpa) {
+                                     ReleaseItemStatusChangeJpaRepository statusChangeJpa,
+                                     PromotionJpaRepository promotionJpa,
+                                     ClientDeploymentJpaRepository clientDeploymentJpa,
+                                     ApplicationEventPublisher publisher) {
         this.jpa = jpa;
         this.itemJpa = itemJpa;
         this.manualJpa = manualJpa;
         this.pullRequestJpa = pullRequestJpa;
         this.commitJpa = commitJpa;
         this.statusChangeJpa = statusChangeJpa;
+        this.promotionJpa = promotionJpa;
+        this.clientDeploymentJpa = clientDeploymentJpa;
+        this.publisher = publisher;
     }
 
     @Override
@@ -76,6 +91,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
             throw new ReleaseDuplicateException();
         }
         insertItems(release.id(), items);
+        publisher.publishEvent(new ReleaseIndexInvalidated(release.id()));
         return load(release.id());
     }
 
@@ -122,6 +138,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
             stampItemsChanged(entity);
             jpa.save(entity);
         }
+        publisher.publishEvent(new ReleaseIndexInvalidated(releaseId));
         return load(releaseId);
     }
 
@@ -134,6 +151,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
             stampItemsChanged(entity);
             jpa.save(entity);
         }
+        publisher.publishEvent(new ReleaseIndexInvalidated(releaseId));
         return load(releaseId);
     }
 
@@ -148,6 +166,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         release.setLastRefreshedAt(refreshedAt);
         stampItemsChanged(release);
         jpa.save(release);
+        publisher.publishEvent(new ReleaseIndexInvalidated(releaseId));
         return load(releaseId);
     }
 
@@ -172,6 +191,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
             stampItemsChanged(release);
             jpa.save(release);
         }
+        publisher.publishEvent(new ReleaseIndexInvalidated(releaseId));
         return load(releaseId);
     }
 
@@ -246,7 +266,56 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         entity.setFrozenAt(at);
         entity.setFrozenBy(actor);
         jpa.save(entity);
+        publisher.publishEvent(new ReleaseIndexInvalidated(releaseId));
         return load(releaseId);
+    }
+
+    @Override
+    @Transactional
+    public Release unfreeze(UUID releaseId) {
+        // Same row lock the promotion and install ledgers take before reading "frozen", so a concurrent append
+        // either commits first (and is seen here) or runs after this commit and finds the release OPEN.
+        ReleaseEntity entity = jpa.findByIdForUpdate(releaseId).orElseThrow(ReleaseNotFoundException::new);
+        if (entity.getStatus() != ReleaseStatus.FROZEN) {
+            throw new UnfreezeRejectedException(UnfreezeRejection.UNFREEZE_RELEASE_NOT_FROZEN);
+        }
+        Optional<UnfreezeRejection> blocker = ledgerBlocker(releaseId);
+        if (blocker.isPresent()) {
+            throw new UnfreezeRejectedException(blocker.get());
+        }
+        entity.setStatus(ReleaseStatus.OPEN);
+        entity.setFrozenAt(null);
+        entity.setFrozenBy(null);
+        jpa.save(entity);
+        publisher.publishEvent(new ReleaseIndexInvalidated(releaseId));
+        return load(releaseId);
+    }
+
+    @Override
+    @Transactional
+    public Release setPackagesUrl(UUID releaseId, String packagesUrl) {
+        ReleaseEntity entity = jpa.findByIdForUpdate(releaseId).orElseThrow(ReleaseNotFoundException::new);
+        // D-17-21: deliberately no status check and no items_changed_at stamp - the link is not release content.
+        entity.setPackagesUrl(packagesUrl);
+        jpa.save(entity);
+        publisher.publishEvent(new ReleaseIndexInvalidated(releaseId));
+        return load(releaseId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<UnfreezeRejection> unfreezeBlocker(UUID releaseId) {
+        return ledgerBlocker(releaseId);
+    }
+
+    private Optional<UnfreezeRejection> ledgerBlocker(UUID releaseId) {
+        if (promotionJpa.existsByReleaseId(releaseId)) {
+            return Optional.of(UnfreezeRejection.UNFREEZE_HAS_PROMOTIONS);
+        }
+        if (clientDeploymentJpa.existsByReleaseId(releaseId)) {
+            return Optional.of(UnfreezeRejection.UNFREEZE_HAS_INSTALLS);
+        }
+        return Optional.empty();
     }
 
     @Override
@@ -254,6 +323,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     public void delete(UUID releaseId) {
         lockOpen(releaseId);
         jpa.deleteById(releaseId);
+        publisher.publishEvent(new ReleaseIndexInvalidated(releaseId));
     }
 
     @Override
@@ -270,6 +340,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         manualJpa.save(entity);
         stampItemsChanged(release);
         jpa.save(release);
+        publisher.publishEvent(new ReleaseIndexInvalidated(releaseId));
         return load(releaseId);
     }
 
@@ -285,6 +356,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         manualJpa.save(entity);
         stampItemsChanged(release);
         jpa.save(release);
+        publisher.publishEvent(new ReleaseIndexInvalidated(releaseId));
         return load(releaseId);
     }
 
@@ -298,13 +370,14 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
             stampItemsChanged(release);
             jpa.save(release);
         }
+        publisher.publishEvent(new ReleaseIndexInvalidated(releaseId));
         return load(releaseId);
     }
 
     // The service checks status too, but against a snapshot read in an earlier transaction with a
     // paginated Jira call in between. This is the check that actually holds: it runs inside the
     // mutating transaction and holds the row lock until commit, so a concurrent freeze either
-    // lands before it (and is seen) or blocks until after it.
+    // lands before it (and is seen) or blocks until after it. Freeze and unfreeze take the same lock.
     private ReleaseEntity lockOpen(UUID releaseId) {
         ReleaseEntity entity = jpa.findByIdForUpdate(releaseId).orElseThrow(ReleaseNotFoundException::new);
         if (entity.getStatus() == ReleaseStatus.FROZEN) {
@@ -395,6 +468,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
         entity.setFrozenAt(release.frozenAt());
         entity.setFrozenBy(release.frozenBy());
         entity.setLastRefreshedAt(release.lastRefreshedAt());
+        entity.setPackagesUrl(release.packagesUrl());
         // The initial item set is established at creation time, so it counts as "changed" here too -
         // this is the "set it at create" case D-05-09 calls out, distinct from the six mutation call
         // sites above that share the stampItemsChanged helper.
@@ -416,7 +490,7 @@ public class ReleaseRepositoryAdapter implements ReleaseRepository {
     private static Release toDomain(ReleaseEntity e, List<ReleaseItem> items, List<ManualItem> manualItems) {
         return new Release(e.getId(), e.getName(), e.getVersion(), e.getStatus(), e.getJiraProjectKey(),
                 e.getCreatedAt(), e.getCreatedBy(), e.getFrozenAt(), e.getFrozenBy(), e.getLastRefreshedAt(),
-                e.getItemsChangedAt(), items, manualItems);
+                e.getItemsChangedAt(), items, manualItems, e.getPackagesUrl());
     }
 
     private static ReleaseItem toDomain(ReleaseTicketItemEntity e, CodeLinks codeLinks) {

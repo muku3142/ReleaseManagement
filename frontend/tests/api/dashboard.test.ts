@@ -1,6 +1,13 @@
+import { defaultParseSearch, defaultStringifySearch } from '@tanstack/react-router';
 import { describe, expect, it } from 'vitest';
 import {
   MAX_HISTORY_SPAN_DAYS,
+  MAX_PRODUCT_FILTER,
+  dashboardReleasesQueryKey,
+  missingDocuments,
+  outOfDateDocuments,
+  portfolioPath,
+  portfolioQueryKey,
   defaultHistoryDates,
   deploymentsPath,
   formatDuration,
@@ -58,6 +65,75 @@ describe('parseDashboardSearch', () => {
 
   it('rejects non-string inputs', () => {
     expect(parseDashboardSearch({ stage: 5, from: ['2026-09-01'], to: {} }).from).toBeUndefined();
+  });
+});
+
+const A = '3f2b8c1e-7a4d-4e6b-9c1a-2d5e8f0a1b3c';
+const B = '9a1d2c3e-1111-4222-8333-444455556666';
+
+describe('parseDashboardSearch portfolio params', () => {
+  it('keeps the portfolio tab and drops the default tab', () => {
+    expect(parseDashboardSearch({ tab: 'portfolio' }).tab).toBe('portfolio');
+    expect(parseDashboardSearch({ tab: 'releases' }).tab).toBeUndefined();
+    expect(parseDashboardSearch({ tab: 'x' }).tab).toBeUndefined();
+  });
+
+  it('parses products from arrays and comma strings, dropping junk and duplicates', () => {
+    expect(parseDashboardSearch({ products: [A, 'junk', A, B] }).products).toEqual([A, B]);
+    expect(parseDashboardSearch({ products: A }).products).toEqual([A]);
+    expect(parseDashboardSearch({ products: `${A},${B}` }).products).toEqual([A, B]);
+    expect(parseDashboardSearch({ products: [] }).products).toBeUndefined();
+  });
+
+  it('caps products at the server limit', () => {
+    const ids = Array.from({ length: MAX_PRODUCT_FILTER + 1 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`);
+    expect(parseDashboardSearch({ products: ids }).products).toEqual(ids.slice(0, MAX_PRODUCT_FILTER));
+  });
+
+  it('survives the router serializer round trip', () => {
+    const url = defaultStringifySearch({ products: [A, B] });
+    expect(parseDashboardSearch(defaultParseSearch(url)).products).toEqual([A, B]);
+  });
+
+  it('validates docs and archived', () => {
+    expect(parseDashboardSearch({ docs: 'missing' }).docs).toBe('missing');
+    expect(parseDashboardSearch({ docs: 'stale' }).docs).toBe('stale');
+    expect(parseDashboardSearch({ docs: 'all' }).docs).toBeUndefined();
+    expect(parseDashboardSearch({ archived: true }).archived).toBe(true);
+    expect(parseDashboardSearch({ archived: 'true' }).archived).toBe(true);
+    expect(parseDashboardSearch({ archived: 'yes' }).archived).toBeUndefined();
+  });
+});
+
+describe('product-aware requests', () => {
+  it('adds productIds to the deployments path only when set', () => {
+    const base = { fromIso: 'a', toIso: 'b' };
+    const params = new URLSearchParams(deploymentsPath({ ...base, productIds: [B, A] }, 0).split('?')[1]);
+    expect(params.get('productIds')).toBe(`${[A, B].sort().join(',')}`);
+    expect(deploymentsPath(base, 0)).not.toContain('productIds');
+  });
+
+  it('keys do not depend on selection order', () => {
+    expect(dashboardReleasesQueryKey(false, [B, A])).toEqual(dashboardReleasesQueryKey(false, [A, B]));
+    expect(portfolioQueryKey('matrix', [B, A], true)).toEqual(portfolioQueryKey('matrix', [A, B], true));
+    expect(portfolioQueryKey('matrix', [A], true).slice(0, 2)).toEqual(['dashboard', 'portfolio']);
+  });
+
+  it('builds the portfolio path', () => {
+    expect(portfolioPath('summary', [A], false)).toBe(`/api/dashboard/portfolio/summary?productIds=${A}&includeArchived=false`);
+    expect(portfolioPath('behind', [], true)).toBe('/api/dashboard/portfolio/behind?includeArchived=true');
+  });
+});
+
+describe('document predicates', () => {
+  const only = (state: DocumentReadinessState | undefined) => () => state;
+
+  it('classifies each state', () => {
+    expect([missingDocuments('r', only('NOT_GENERATED')), outOfDateDocuments('r', only('NOT_GENERATED'))]).toEqual([true, false]);
+    expect([missingDocuments('r', only('STALE')), outOfDateDocuments('r', only('STALE'))]).toEqual([true, true]);
+    expect([missingDocuments('r', only('UP_TO_DATE')), outOfDateDocuments('r', only('UP_TO_DATE'))]).toEqual([false, false]);
+    expect([missingDocuments('r', only('NO_TEMPLATE')), outOfDateDocuments('r', only('NO_TEMPLATE'))]).toEqual([false, false]);
+    expect(missingDocuments('r', only(undefined))).toBe(true);
   });
 });
 

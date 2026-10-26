@@ -81,6 +81,19 @@ let container: HTMLDivElement;
 let root: Root;
 let dashboardResponse: () => Response;
 let readinessResponse: () => Response;
+let productsResponse: () => Response;
+const portfolioRequests: string[] = [];
+const PORTFOLIO_SUMMARY = {
+  tiles: { clientsBehind: 0, notInstalled: 0, activeProducts: 0, activeClients: 0, installsLast30Days: 0 },
+  products: [],
+  totals: { open: 0, frozen: 0, inProduction: 0 },
+  unassigned: null,
+};
+
+const PRODUCT_LIST = [
+  { id: 'a', name: 'Core', archived: false, clientCount: 1, releaseCount: 1 },
+  { id: 'b', name: 'Billing', archived: false, clientCount: 1, releaseCount: 1 },
+];
 
 async function flush() {
   await act(async () => {
@@ -118,7 +131,9 @@ describe('DashboardRoute', () => {
     root = createRoot(container);
     searchParams = {};
     navigate.mockReset();
+    portfolioRequests.length = 0;
     dashboardResponse = () => json(200, data([row()]));
+    productsResponse = () => json(200, { products: PRODUCT_LIST });
     readinessResponse = () =>
       json(200, {
         entries: [
@@ -130,7 +145,12 @@ describe('DashboardRoute', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = typeof input === 'string' ? input : input.toString();
       if (url.startsWith('/api/dashboard/releases')) return dashboardResponse();
+      if (url.startsWith('/api/dashboard/portfolio/')) {
+        portfolioRequests.push(url);
+        return json(200, url.includes('/summary') ? PORTFOLIO_SUMMARY : url.includes('/behind') ? { behind: [], notInstalled: [] } : { products: [], clients: [], cells: [] });
+      }
       if (url.startsWith('/api/documents/readiness')) return readinessResponse();
+      if (url.startsWith('/api/products')) return productsResponse();
       if (url.startsWith('/api/dashboard/deployments')) return json(200, { entries: [], hasMore: false });
       if (url.startsWith('/api/environment-ladder')) return json(200, { stages: [] });
       return json(404, {});
@@ -149,14 +169,15 @@ describe('DashboardRoute', () => {
     const text = container.textContent!;
     expect(container.querySelector('h2')!.textContent).toBe('Dashboard');
     for (const caption of [
-      'Need paperwork',
-      'Stale',
+      'Releases missing documents',
+      'Documents out of date',
       'Median created → frozen',
       'Median frozen → production',
       'Releases per stage',
     ]) {
       expect(text).toContain(caption);
     }
+    expect(text).not.toContain('Need paperwork');
     expect(text).toContain('Over 1 visible releases.');
     expect(text).toContain('4 d');
     expect(text).toContain('QA 1');
@@ -331,7 +352,9 @@ describe('DashboardRoute', () => {
     await renderRoute();
     expect(container.textContent).toContain('In-flight releases and those shipped in the last 90 days.');
 
-    const box = container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    const box = [...container.querySelectorAll('label')]
+      .find((l) => l.textContent === 'Show all releases')!
+      .querySelector('input')!;
     await act(async () => box.click());
 
     const call = navigate.mock.calls[0][0];
@@ -369,6 +392,199 @@ describe('DashboardRoute', () => {
     expect(navigate.mock.calls[0][0].search({})).toEqual({ all: true });
   });
 
+  describe('document tiles', () => {
+    const TYPES = ['RELEASE_NOTES', 'RUNBOOK', 'APPROVAL'];
+    const entries = (releaseId: string, states: string[]) =>
+      TYPES.map((documentType, i) => ({ releaseId, documentType, state: states[i] }));
+
+    beforeEach(() => {
+      dashboardResponse = () =>
+        json(200, data([row({ id: 'r1', name: 'One' }), row({ id: 'r2', name: 'Two' }), row({ id: 'r3', name: 'Three' })]));
+      readinessResponse = () =>
+        json(200, {
+          entries: [
+            ...entries('r1', ['UP_TO_DATE', 'STALE', 'NO_TEMPLATE']),
+            ...entries('r2', ['UP_TO_DATE', 'UP_TO_DATE', 'UP_TO_DATE']),
+            ...entries('r3', ['NOT_GENERATED', 'UP_TO_DATE', 'UP_TO_DATE']),
+          ],
+        });
+    });
+
+    const tile = (id: string) => container.querySelector<HTMLButtonElement>(`button#${id}`)!;
+    const bodyRows = () => [...container.querySelectorAll('tbody tr')].map((tr) => tr.querySelector('a')!.textContent);
+    const searchOf = (call: number) => navigate.mock.calls[call][0].search;
+
+    it('shows unit lines and the help text behind the question mark', async () => {
+      await renderRoute();
+
+      expect(tile('tile-missing').textContent).toBe('2Releases missing documentsreleases');
+      expect(tile('tile-stale').textContent).toBe('1Documents out of datereleases');
+      const help = container.querySelectorAll<HTMLButtonElement>('button[aria-label="What does this count?"]');
+      await act(async () => help[0].click());
+      await act(async () => help[1].click());
+      expect(container.querySelector('#tile-missing-help')!.textContent).toContain(
+        'Document types that have no template are ignored.',
+      );
+      expect(container.querySelector('#tile-stale-help')!.textContent).toContain(
+        'A frozen release is only counted if it was unfrozen and its tickets changed.',
+      );
+    });
+
+    it('toggles docs through the URL', async () => {
+      await renderRoute();
+      await act(async () => tile('tile-missing').click());
+      expect(searchOf(0)({ stage: 'qa' })).toEqual({ stage: 'qa', docs: 'missing' });
+      expect(navigate.mock.calls[0][0].replace).toBe(true);
+
+      searchParams = { docs: 'missing' };
+      await renderRoute();
+      expect(tile('tile-missing').getAttribute('aria-pressed')).toBe('true');
+      await act(async () => tile('tile-missing').click());
+      expect(searchOf(1)({ docs: 'missing' })).toEqual({ docs: undefined });
+      await act(async () => tile('tile-stale').click());
+      expect(searchOf(2)({ docs: 'missing' })).toEqual({ docs: 'stale' });
+    });
+
+    it('filters the matrix to exactly the counted releases and keeps tile figures', async () => {
+      searchParams = { docs: 'missing' };
+      await renderRoute();
+
+      expect(bodyRows()).toEqual(['One', 'Three']);
+      expect(container.textContent).toContain('Showing: Releases missing documents · 2 of 3 releases');
+      expect(tile('tile-missing').textContent).toContain('2');
+      expect(tile('tile-stale').textContent).toContain('1');
+    });
+
+    it('filters to out-of-date releases', async () => {
+      searchParams = { docs: 'stale' };
+      await renderRoute();
+
+      expect(bodyRows()).toEqual(['One']);
+      expect(container.textContent).toContain('Showing: Documents out of date · 1 of 3 releases');
+    });
+
+    it('Clear filter clears docs and focuses the tile', async () => {
+      searchParams = { docs: 'missing' };
+      await renderRoute();
+      const clear = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Clear filter')!;
+      await act(async () => clear.click());
+
+      expect(searchOf(0)({ docs: 'missing' })).toEqual({ docs: undefined });
+      expect(document.activeElement).toBe(tile('tile-missing'));
+    });
+
+    it.each([
+      ['missing', 'Every visible release has all of its documents generated and current.'],
+      ['stale', 'Every visible release has up-to-date documents.'],
+    ])('says nothing matches for docs=%s when every release is fine', async (docs, body) => {
+      searchParams = { docs };
+      readinessResponse = () => json(200, { entries: entries('r1', ['UP_TO_DATE', 'UP_TO_DATE', 'UP_TO_DATE']) });
+      dashboardResponse = () => json(200, data([row({ id: 'r1' })]));
+      await renderRoute();
+
+      expect(container.textContent).toContain('No releases match this filter');
+      expect(container.textContent).toContain(body);
+      expect(container.querySelector('tbody')).toBeNull();
+    });
+
+    it('disables both tiles and ignores docs=missing when readiness fails', async () => {
+      searchParams = { docs: 'missing' };
+      readinessResponse = () => json(500, { status: 500, reason: 'INTERNAL_ERROR' });
+      await renderRoute();
+
+      for (const id of ['tile-missing', 'tile-stale']) {
+        expect(tile(id).textContent).toContain('—');
+        expect(tile(id).getAttribute('aria-disabled')).toBe('true');
+        expect(tile(id).getAttribute('aria-pressed')).toBe('false');
+        await act(async () => tile(id).click());
+      }
+      expect(container.textContent).toContain('Document status unavailable');
+      expect(navigate).not.toHaveBeenCalled();
+      expect(bodyRows()).toEqual(['One', 'Two', 'Three']);
+      expect(container.textContent).not.toContain('Showing:');
+    });
+  });
+
+  describe('product filter', () => {
+    const fetchedUrls = () => (fetch as unknown as { mock: { calls: string[][] } }).mock.calls.map((c) => c[0]);
+
+    it('sends the selected products and narrows the footnote to them', async () => {
+      searchParams = { products: ['a'] };
+      dashboardResponse = () => json(200, data([row(), row({ id: 'r2', name: 'Other' })]));
+      await renderRoute();
+
+      expect(fetchedUrls().some((u) => u.startsWith('/api/dashboard/releases') && u.includes('productIds=a'))).toBe(true);
+      expect(container.textContent).toContain('Over 2 visible releases in Core.');
+    });
+
+    it('counts products in the footnote beyond two', async () => {
+      searchParams = { products: ['a', 'b', 'c'] };
+      await renderRoute();
+
+      expect(container.textContent).toContain('Over 1 visible releases in 3 products.');
+    });
+
+    it('has no scope in the footnote without a filter', async () => {
+      await renderRoute();
+
+      expect(container.textContent).toContain('Over 1 visible releases.');
+    });
+
+    it('adds and clears products through the URL and announces it', async () => {
+      searchParams = { products: ['a'] };
+      await renderRoute();
+
+      const box = [...container.querySelectorAll('label')]
+        .find((l) => l.textContent === 'Billing')!
+        .querySelector('input')!;
+      await act(async () => box.click());
+      let call = navigate.mock.calls[0][0];
+      expect(call.replace).toBe(true);
+      expect(call.search({ stage: 'qa' })).toEqual({ stage: 'qa', products: ['a', 'b'] });
+      expect(container.querySelector('[role="status"]')!.textContent).toBe('Filtered to Core, Billing.');
+
+      const clear = [...container.querySelectorAll('button')].find((b) => b.textContent === 'Clear products')!;
+      await act(async () => clear.click());
+      call = navigate.mock.calls[1][0];
+      expect(call.search({ products: ['a'] })).toEqual({ products: undefined });
+      expect(container.querySelector('[role="status"]')!.textContent).toBe('Showing all products.');
+    });
+
+    it('shows the product empty state with both ways out', async () => {
+      searchParams = { products: ['a'] };
+      dashboardResponse = () => json(200, data([], 7));
+      await renderRoute();
+
+      expect(container.textContent).toContain('No releases for these products');
+      expect(container.textContent).toContain(
+        'Nothing in the selected products is open, frozen or in a stage short of Production, and nothing shipped in the last 90 days.',
+      );
+      const buttons = [...container.querySelectorAll<HTMLButtonElement>('section button')];
+      const clear = buttons.find((b) => b.textContent === 'Clear products')!;
+      const showAll = buttons.find((b) => b.textContent === 'Show all releases')!;
+      await act(async () => clear.click());
+      expect(navigate.mock.calls[0][0].search({ products: ['a'] })).toEqual({ products: undefined });
+      await act(async () => showAll.click());
+      expect(navigate.mock.calls[1][0].search({})).toEqual({ all: true });
+    });
+
+    it('keeps the plain empty state when there are no releases at all', async () => {
+      searchParams = { products: ['a'] };
+      dashboardResponse = () => json(200, data([], 0));
+      await renderRoute();
+
+      expect(container.textContent).toContain('No releases yet');
+      expect(container.textContent).not.toContain('No releases for these products');
+    });
+
+    it('hides the filter when there are no products', async () => {
+      productsResponse = () => json(200, { products: [] });
+      await renderRoute();
+
+      expect(container.querySelector('details')).toBeNull();
+    });
+  });
+
   it('shows a scoped alert with Try again when the dashboard fails, leaving history mounted', async () => {
     dashboardResponse = () => json(500, { status: 500, reason: 'INTERNAL_ERROR' });
     await renderRoute();
@@ -389,5 +605,71 @@ describe('DashboardRoute', () => {
     expect(cells[2].textContent).toBe('—');
     expect(cells[3].textContent).toBe('—');
     expect(cells[0].textContent).toContain('Sprint 42');
+  });
+  describe('tabs', () => {
+    const tab = (name: string) =>
+      [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((t) => t.textContent === name)!;
+
+    it('selects Releases by default and does not fetch portfolio data', async () => {
+      await renderRoute();
+
+      expect(container.querySelector('[role="tablist"]')!.getAttribute('aria-label')).toBe('Dashboard views');
+      expect(tab('Releases').getAttribute('aria-selected')).toBe('true');
+      expect(tab('Portfolio').getAttribute('aria-selected')).toBe('false');
+      expect(container.querySelector('section[aria-label="Summary"]')).toBeTruthy();
+      expect(portfolioRequests).toEqual([]);
+    });
+
+    it('shows the Portfolio tab instead of the release content when tab=portfolio', async () => {
+      searchParams = { tab: 'portfolio' };
+      await renderRoute();
+
+      expect(tab('Portfolio').getAttribute('aria-selected')).toBe('true');
+      expect(container.querySelector('section[aria-label="Summary"]')).toBeNull();
+      expect(container.textContent).toContain('Show archived');
+      expect(portfolioRequests.length).toBeGreaterThan(0);
+    });
+
+    it('switches with replace, keeping products and archived and clearing docs', async () => {
+      searchParams = { products: ['a'], archived: true, docs: 'missing' };
+      await renderRoute();
+
+      await act(async () => tab('Portfolio').click());
+      const call = navigate.mock.calls[0][0];
+      expect(call.replace).toBe(true);
+      expect(call.search({ products: ['a'], archived: true, docs: 'missing' })).toEqual({
+        products: ['a'],
+        archived: true,
+        tab: 'portfolio',
+        docs: undefined,
+      });
+    });
+
+    it('drops the tab param when going back to Releases', async () => {
+      searchParams = { tab: 'portfolio' };
+      await renderRoute();
+
+      await act(async () => tab('Releases').click());
+      expect(navigate.mock.calls[0][0].search({ tab: 'portfolio' }).tab).toBeUndefined();
+    });
+
+    it('moves selection and focus with the arrow keys', async () => {
+      await renderRoute();
+
+      await act(async () => {
+        tab('Releases').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+      });
+      expect(navigate.mock.calls[0][0].search({}).tab).toBe('portfolio');
+      expect(document.activeElement).toBe(tab('Portfolio'));
+    });
+
+    it('sets archived from the Portfolio checkbox', async () => {
+      searchParams = { tab: 'portfolio' };
+      await renderRoute();
+
+      const box = [...container.querySelectorAll('label')].find((l) => l.textContent === 'Show archived')!.querySelector('input')!;
+      await act(async () => box.click());
+      expect(navigate.mock.calls[0][0].search({ tab: 'portfolio' })).toEqual({ tab: 'portfolio', archived: true });
+    });
   });
 });

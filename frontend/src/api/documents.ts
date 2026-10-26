@@ -8,12 +8,17 @@ export type DocumentReadinessState = 'NO_TEMPLATE' | 'NOT_GENERATED' | 'STALE' |
 export type ReadinessEntry = { releaseId: string; documentType: DocumentType; state: DocumentReadinessState };
 export type ReadinessResponse = { entries: ReadinessEntry[] };
 
+export type AiMode = 'CLEAN_UP' | 'SUMMARIZE' | 'CUSTOM';
+
 export type DocumentRevision = {
   revision: number;
   latest: boolean;
   generatedAt: string;
   generatedBy: string;
   templateName: string;
+  aiAssisted: boolean;
+  aiMode: AiMode | null;
+  aiInstruction: string | null;
 };
 export type DocumentRevisionListResponse = { revisions: DocumentRevision[] };
 
@@ -32,6 +37,9 @@ export type GeneratedDocument = {
   chrome: ChromeFields;
   generatedAt: string;
   generatedBy: string;
+  aiAssisted: boolean;
+  aiMode: AiMode | null;
+  aiInstruction: string | null;
 };
 
 export type ExportFormat = 'pdf' | 'docx';

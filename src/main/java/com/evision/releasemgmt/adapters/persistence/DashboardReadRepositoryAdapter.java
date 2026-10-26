@@ -19,10 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
 public class DashboardReadRepositoryAdapter implements DashboardReadRepository {
+
+    private static final UUID NO_PRODUCT = new UUID(0, 0);
 
     private final DashboardJpaRepository jpa;
     private final EnvironmentStageJpaRepository stageJpa;
@@ -67,8 +70,20 @@ public class DashboardReadRepositoryAdapter implements DashboardReadRepository {
 
     @Override
     @Transactional(readOnly = true)
-    public List<DeploymentRow> findDeployments(UUID stageId, Instant from, Instant to, int limit, int offset) {
-        return jpa.deployments(stageId, from, to, limit, offset).stream()
+    public Set<UUID> releaseIdsCoveringAny(Collection<UUID> productIds) {
+        if (productIds.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(jpa.releaseIdsCoveringAny(productIds));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DeploymentRow> findDeployments(UUID stageId, Instant from, Instant to, int limit, int offset,
+                                               Set<UUID> productIds) {
+        // Hibernate renders an empty IN list as invalid SQL, so the unfiltered case binds a placeholder the predicate ignores.
+        Collection<UUID> bound = productIds.isEmpty() ? List.of(NO_PRODUCT) : productIds;
+        return jpa.deployments(stageId, from, to, limit, offset, !productIds.isEmpty(), bound).stream()
                 .map(r -> new DeploymentRow(r.getId(), r.getReleaseId(), r.getReleaseName(), r.getReleaseVersion(),
                         r.getStageId(), r.getStageName(), r.getStageRetiredAt() != null,
                         PromotionOutcome.valueOf(r.getOutcome()), r.getDeployedAt(), r.getRecordedBy(), r.getNote(),

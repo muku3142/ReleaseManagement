@@ -4,6 +4,7 @@ import com.evision.releasemgmt.domain.template.view.CommentView;
 import com.evision.releasemgmt.domain.template.view.CommitView;
 import com.evision.releasemgmt.domain.template.view.GroupView;
 import com.evision.releasemgmt.domain.template.view.ItemView;
+import com.evision.releasemgmt.domain.template.view.ProductView;
 import com.evision.releasemgmt.domain.template.view.PullRequestView;
 import com.evision.releasemgmt.domain.template.view.ReleaseView;
 
@@ -23,6 +24,7 @@ public final class RenderContextMapper {
         root.put("release", releaseMap(view));
         root.put("items", view.items().stream().map(RenderContextMapper::itemMap).toList());
         root.put("groups", view.groups().stream().map(RenderContextMapper::groupMap).toList());
+        root.put("products", view.products().stream().map(RenderContextMapper::productMap).toList());
         return root;
     }
 
@@ -62,6 +64,10 @@ public final class RenderContextMapper {
         map.put("groupName", nullToEmpty(group.groupName()));
         map.put("items", group.items().stream().map(RenderContextMapper::itemMap).toList());
         return map;
+    }
+
+    private static Map<String, Object> productMap(ProductView product) {
+        return Map.of("name", nullToEmpty(product.name()));
     }
 
     private static Map<String, Object> commentMap(CommentView comment) {

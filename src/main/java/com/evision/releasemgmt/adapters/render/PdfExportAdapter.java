@@ -40,6 +40,9 @@ public class PdfExportAdapter implements PdfExportPort {
             builder.useFastMode();
             // T-05-23: base URI is null, so a relative src/href in chrome/body text cannot resolve
             // against the local filesystem or network - this is a security control, not an omission.
+            // Remote resources are refused (data: only): document text (Jira text, AI output) is untrusted
+            // and must not make the server issue outbound requests.
+            builder.useUriResolver((base, uri) -> uri != null && uri.startsWith("data:") ? uri : null);
             builder.withHtmlContent(xhtml, null);
             builder.toStream(out);
             builder.run();

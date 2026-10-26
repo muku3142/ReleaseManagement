@@ -10,7 +10,7 @@ type ReadinessPillProps = {
 
 // DOC-09/D-05-08: the one four-state pill reused verbatim on /releases and release detail's
 // Documents section. No "frozen" decoration is added here - the release's own Status column
-// already carries that fact, and D-05-09 already makes green either way (open or frozen).
+// already carries that fact, and the server computes the state for open and frozen releases alike (D-15.1-05).
 // UP_TO_DATE and STALE link to the document viewer route (05-12); the other two states link
 // elsewhere (release detail's Documents section, or /templates).
 export function ReadinessPill({ state, releaseId, documentType }: ReadinessPillProps) {

@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.application;
 
+import com.evision.releasemgmt.domain.document.AiMode;
 import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
 import com.evision.releasemgmt.domain.document.ExportFailedException;
@@ -11,6 +12,7 @@ import com.evision.releasemgmt.ports.DocumentSnapshotRepository;
 import com.evision.releasemgmt.ports.DocxExportPort;
 import com.evision.releasemgmt.ports.PdfExportPort;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -73,6 +75,32 @@ class DocumentExportServiceTest {
 
         verify(pdfExportPort).toPdf("# Revision one", revisionOne.chrome(), null);
         verify(snapshotRepository, never()).findLatest(any(), any());
+    }
+
+    // D-14-06: exports are deliberately unstamped; the viewer banner and history carry the AI marking.
+    @Test
+    void latestAiRevisionIsExportedUnstamped() {
+        ChromeFields chrome = new ChromeFields(true, "Cover", "Sub", "Header", "Footer", true, 40);
+        DocumentSnapshot generated = snapshot(3, "# Generated", chrome);
+        DocumentSnapshot ai = DocumentSnapshot.createAiRevision(generated, 4, "# AI text", AiMode.CLEAN_UP,
+                "AI instruction text", "actor-1", Instant.now());
+        when(snapshotRepository.findLatest(releaseId, TemplateDocumentType.RELEASE_NOTES))
+                .thenReturn(Optional.of(ai));
+        when(snapshotRepository.findLogo(ai.id())).thenReturn(Optional.empty());
+        when(pdfExportPort.toPdf(any(), any(), any())).thenReturn(new byte[]{1});
+        when(docxExportPort.toDocx(any(), any(), any())).thenReturn(new byte[]{1});
+
+        service.toPdf(releaseId, TemplateDocumentType.RELEASE_NOTES, null);
+        service.toDocx(releaseId, TemplateDocumentType.RELEASE_NOTES, null);
+
+        ArgumentCaptor<String> markdown = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<ChromeFields> chromes = ArgumentCaptor.forClass(ChromeFields.class);
+        verify(pdfExportPort).toPdf(markdown.capture(), chromes.capture(), any());
+        verify(docxExportPort).toDocx(markdown.capture(), chromes.capture(), any());
+        assertThat(markdown.getAllValues()).containsOnly("# AI text");
+        assertThat(chromes.getAllValues()).containsOnly(chrome);
+        assertThat(markdown.getAllValues().toString() + chromes.getAllValues())
+                .doesNotContain("AI-assisted", "Verify steps", "AI instruction");
     }
 
     @Test
@@ -141,6 +169,6 @@ class DocumentExportServiceTest {
 
     private DocumentSnapshot snapshot(int revision, String markdown, ChromeFields chrome) {
         return new DocumentSnapshot(UUID.randomUUID(), releaseId, TemplateDocumentType.RELEASE_NOTES, revision,
-                markdown, UUID.randomUUID(), "Standard notes", "Body", chrome, Instant.now(), "actor-1");
+                markdown, UUID.randomUUID(), "Standard notes", "Body", chrome, Instant.now(), "actor-1", null);
     }
 }

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import { useReleases } from '../api/releases';
 import { readinessIndex, useDocumentReadiness } from '../api/documents';
 import { DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS } from '../api/templates';
 import { ReadinessPill } from '../components/ReadinessPill';
+import { PRODUCT_CHIP } from '../components/ProductsEditor';
 
 export function ReleasesRoute() {
   const [search, setSearch] = useState('');
@@ -101,6 +102,9 @@ export function ReleasesRoute() {
                   Version
                 </th>
                 <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
+                  Products
+                </th>
+                <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
                   Status
                 </th>
                 <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
@@ -132,6 +136,22 @@ export function ReleasesRoute() {
                     </Link>
                   </td>
                   <td className="whitespace-nowrap px-4 py-2 text-gray-700">{r.version}</td>
+                  <td className="whitespace-nowrap px-4 py-2" title={r.products.map((p) => p.name).join(', ')}>
+                    {r.products.length === 0 ? (
+                      <span className="text-gray-500">Unassigned</span>
+                    ) : (
+                      <span className="flex items-center gap-1">
+                        {r.products.slice(0, 2).map((p) => (
+                          <span key={p.id} className={PRODUCT_CHIP}>
+                            {p.name}
+                          </span>
+                        ))}
+                        {r.products.length > 2 && (
+                          <small className="text-xs text-gray-600">+{r.products.length - 2}</small>
+                        )}
+                      </span>
+                    )}
+                  </td>
                   <td className="whitespace-nowrap px-4 py-2">
                     {r.status === 'FROZEN' ? (
                       <span className="rounded-full bg-gray-800 px-2 py-0.5 text-sm text-white">Frozen</span>

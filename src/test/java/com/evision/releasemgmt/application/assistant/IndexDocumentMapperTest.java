@@ -2,6 +2,7 @@ package com.evision.releasemgmt.application.assistant;
 
 import com.evision.releasemgmt.domain.assistant.IndexCollection;
 import com.evision.releasemgmt.domain.assistant.IndexDocument;
+import com.evision.releasemgmt.domain.document.AiMode;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
 import com.evision.releasemgmt.domain.enrichment.CodeLinks;
 import com.evision.releasemgmt.domain.enrichment.EnrichmentStatus;
@@ -91,6 +92,25 @@ class IndexDocumentMapperTest {
                 .containsEntry("generated_at", NOW.toString());
     }
 
+    // D-14-01/D-12-11: an AI revision is just the latest revision; no ai_* metadata is added.
+    @Test
+    void latestAiRevisionIsIndexedAsTheCurrentDocumentWithoutAiMetadata() {
+        DocumentSnapshot generated = snapshot(3, "# Generated");
+        DocumentSnapshot ai = DocumentSnapshot.createAiRevision(generated, 4, "# AI text", AiMode.CLEAN_UP,
+                "instr", "u", NOW.plusSeconds(60));
+
+        List<IndexDocument> documents = IndexDocumentMapper.map(release("PAY"), List.of(generated, ai));
+
+        List<IndexDocument> indexed = documents.stream()
+                .filter(d -> d.collection() == IndexCollection.DOCUMENTS).toList();
+        assertThat(indexed).hasSize(1);
+        IndexDocument document = indexed.get(0);
+        assertThat(document.id()).isEqualTo("document:" + RELEASE_ID + ":RELEASE_NOTES");
+        assertThat(document.text()).isEqualTo("# AI text");
+        assertThat(document.metadata()).containsEntry("revision", 4);
+        assertThat(document.metadata().keySet()).noneMatch(key -> key.startsWith("ai_"));
+    }
+
     @Test
     void codeLinksListPullRequestsAndCommitsAndSkipTicketsWithoutThem() {
         List<IndexDocument> documents = IndexDocumentMapper.map(release("PAY"), List.of());
@@ -107,13 +127,28 @@ class IndexDocumentMapperTest {
         TicketDetail dirty = ticket("PAY-9", "Sum\u0000mary", "Bro\u0000ken", List.of());
         Release withDirty = new Release(release.id(), release.name(), release.version(), release.status(),
                 release.jiraProjectKey(), NOW, "u", null, null, null, null,
-                List.of(new ReleaseItem(dirty, NOW, null)), List.of());
+                List.of(new ReleaseItem(dirty, NOW, null)), List.of(), null);
 
         List<IndexDocument> first = IndexDocumentMapper.map(withDirty, List.of());
 
         assertThat(first.get(0).title()).doesNotContain("\u0000");
         assertThat(first.get(0).text()).doesNotContain("\u0000");
         assertThat(IndexDocumentMapper.map(withDirty, List.of())).isEqualTo(first);
+    }
+
+    @Test
+    void packagesLinkIsIndexedAsAReleaseDocumentOnlyWhenSet() {
+        Release base = release("PAY");
+        String url = "https://contoso.sharepoint.com/x";
+        Release withLink = new Release(base.id(), base.name(), base.version(), base.status(), base.jiraProjectKey(),
+                NOW, "u", null, null, null, null, base.items(), base.manualItems(), url);
+
+        IndexDocument document = byId(IndexDocumentMapper.map(withLink, List.of()), "release:" + RELEASE_ID);
+
+        assertThat(document.collection()).isEqualTo(IndexCollection.DOCUMENTS);
+        assertThat(document.text()).contains("Packages: " + url);
+        assertThat(IndexDocumentMapper.map(base, List.of())).extracting(IndexDocument::id)
+                .noneMatch(id -> id.startsWith("release:"));
     }
 
     private static IndexDocument byId(List<IndexDocument> documents, String id) {
@@ -127,7 +162,7 @@ class IndexDocumentMapperTest {
         return new Release(RELEASE_ID, "Spring", "1.0", ReleaseStatus.OPEN, projectKey, NOW, "u", null, null, null, null,
                 List.of(new ReleaseItem(ticket("PAY-1", "Fix payment", "Broken", List.of("first", "second")), NOW, links),
                         new ReleaseItem(ticket("PAY-2", "Other", null, List.of()), NOW, CodeLinks.notAttempted())),
-                List.of(new ManualItem(MANUAL_ID, "Run script", "Do it", ManualItemCategory.OTHER, NOW)));
+                List.of(new ManualItem(MANUAL_ID, "Run script", "Do it", ManualItemCategory.OTHER, NOW)), null);
     }
 
     private static TicketDetail ticket(String key, String summary, String description, List<String> comments) {
@@ -137,6 +172,6 @@ class IndexDocumentMapperTest {
 
     private static DocumentSnapshot snapshot(int revision, String markdown) {
         return new DocumentSnapshot(UUID.randomUUID(), RELEASE_ID, TemplateDocumentType.RELEASE_NOTES, revision,
-                markdown, null, null, null, null, NOW, "u");
+                markdown, null, null, null, null, NOW, "u", null);
     }
 }

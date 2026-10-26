@@ -40,7 +40,7 @@ public interface ReleaseJpaRepository extends JpaRepository<ReleaseEntity, UUID>
             """, nativeQuery = true)
     List<ReleaseSummaryRow> search(@Param("query") String query);
 
-    // SELECT ... FOR UPDATE. D-03-10: freeze is a one-way door, so every mutation re-reads the
+    // SELECT ... FOR UPDATE. every mutation, freeze and unfreeze re-reads the
     // status under a row lock inside its own transaction. Without the lock a freeze committed
     // between the read and the write would still slip past the check.
     @Lock(LockModeType.PESSIMISTIC_WRITE)

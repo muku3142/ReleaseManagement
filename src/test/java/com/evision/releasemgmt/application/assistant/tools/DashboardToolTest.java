@@ -15,6 +15,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
@@ -39,7 +40,7 @@ class DashboardToolTest {
     void summaryKeepsNullMediansAndStageCounts() {
         Stage qa = new Stage(UUID.randomUUID(), "QA", 1, false, null);
         Summary summary = new Summary(30, 40, null, 0, null, 0, Map.of(qa.id(), 30L), 0);
-        when(dashboardService.releases(false)).thenReturn(new DashboardView(List.of(qa), summary,
+        when(dashboardService.releases(false, Set.of())).thenReturn(new DashboardView(List.of(qa), summary,
                 IntStream.range(0, 30).mapToObj(i -> row(i, qa.id())).toList()));
         when(ladderService.ladder()).thenReturn(List.of(qa));
 
@@ -56,7 +57,7 @@ class DashboardToolTest {
     @Test
     void scopeAllIsPassedThroughAndOtherValuesRejected() {
         Summary summary = new Summary(0, 0, null, 0, null, 0, Map.of(), 0);
-        when(dashboardService.releases(true)).thenReturn(new DashboardView(List.of(), summary, List.of()));
+        when(dashboardService.releases(true, Set.of())).thenReturn(new DashboardView(List.of(), summary, List.of()));
         assertThat(tool.call(Map.of("scope", "all")).sourceId()).isEqualTo("dashboard:all");
         assertThatThrownBy(() -> tool.call(Map.of("scope", "everything"))).isInstanceOf(ToolArgumentException.class);
     }

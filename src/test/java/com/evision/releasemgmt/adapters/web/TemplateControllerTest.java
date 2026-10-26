@@ -9,6 +9,7 @@ import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
+import com.evision.releasemgmt.ports.ReleaseProductRepository;
 import com.evision.releasemgmt.domain.template.ChromeFields;
 import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.RenderBoundExceededException;
@@ -68,6 +69,9 @@ class TemplateControllerTest {
 
     @MockitoBean
     private ActorResolutionService actorResolution;
+
+    @MockitoBean
+    private ReleaseProductRepository releaseProducts;
 
     private static RequestPostProcessor authenticated() {
         return jwt().jwt(b -> b.subject("557058:abc-123").claim("token_type", "access"));

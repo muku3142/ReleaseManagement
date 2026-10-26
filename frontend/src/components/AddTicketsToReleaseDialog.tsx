@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import { useAddTicketsToRelease, type ReleaseAddResult } from '../api/releases';
 import { TicketBrowser } from './TicketBrowser';
 
