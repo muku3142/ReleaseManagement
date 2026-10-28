@@ -77,7 +77,7 @@ export function LogoUpload(props: { templateId: string; logo: LogoMetadata | nul
           <img
             src={`/api/templates/${templateId}/logo?v=${logo.uploadedAt}`}
             alt="Template logo"
-            className="max-h-40 max-w-full rounded border border-gray-200 bg-white object-contain p-2"
+            className="paper max-h-40 max-w-full rounded border border-gray-200 bg-white object-contain p-2"
           />
           <p className="mt-2 text-sm text-gray-600">
             {logo.filename} · {logo.width}×{logo.height}px · {Math.round(logo.byteSize / 1024)}KB

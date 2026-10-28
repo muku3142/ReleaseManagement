@@ -1,5 +1,7 @@
-import { createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
+import { createRootRoute, createRoute, createRouter, Outlet, redirect } from '@tanstack/react-router';
 import { AppShell } from './components/AppShell';
+import { Toaster } from './components/ui/sonner';
+import { TooltipProvider } from './components/ui/tooltip';
 import { DashboardRoute } from './routes/DashboardRoute';
 import { SettingsRoute } from './routes/SettingsRoute';
 import { TicketsRoute } from './routes/TicketsRoute';
@@ -8,13 +10,28 @@ import { ReleaseDetailRoute } from './routes/ReleaseDetailRoute';
 import { TemplatesRoute } from './routes/TemplatesRoute';
 import { TemplateDetailRoute } from './routes/TemplateDetailRoute';
 import { DocumentViewerRoute } from './routes/DocumentViewerRoute';
+import { PortfolioRoute } from './routes/PortfolioRoute';
+import { RoadmapRoute } from './routes/RoadmapRoute';
+import { BriefingsRoute } from './routes/BriefingsRoute';
 import { LoginRoute } from './routes/LoginRoute';
+import { AssistantRoute } from './routes/AssistantRoute';
+import { assistantStatusQueryOptions } from './api/assistant';
 import { fetchSessionOrNull } from './api/auth';
-import { parseDashboardSearch } from './api/dashboard';
+import { parseDashboardSearch, parseProducts } from './api/dashboard';
+import { parseRoadmapSearch } from './api/roadmap';
 import { queryClient } from './api/queryClient';
 import { safeRedirectTarget } from './safeRedirect';
 
-const rootRoute = createRootRoute({ component: AppShell });
+function RootLayout() {
+  return (
+    <TooltipProvider>
+      <Outlet />
+      <Toaster position="bottom-right" visibleToasts={3} closeButton duration={5000} />
+    </TooltipProvider>
+  );
+}
+
+const rootRoute = createRootRoute({ component: RootLayout });
 
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -36,6 +53,7 @@ const authenticatedRoute = createRoute({
       throw redirect({ to: '/login', search: { redirect: location.href } });
     }
   },
+  component: AppShell,
 });
 
 const dashboardRoute = createRoute({
@@ -54,12 +72,17 @@ const settingsRoute = createRoute({
 const ticketsRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/tickets',
+  validateSearch: (search: Record<string, unknown>): { product?: string; new?: true } => ({
+    product: typeof search.product === 'string' ? search.product : undefined,
+    new: search.new === true || search.new === 'true' ? true : undefined,
+  }),
   component: TicketsRoute,
 });
 
 const releasesRoute = createRoute({
   getParentRoute: () => authenticatedRoute,
   path: '/releases',
+  staticData: { themed: true },
   component: ReleasesRoute,
 });
 
@@ -74,6 +97,42 @@ const releaseDetailRoute = createRoute({
     notFound: typeof search.notFound === 'number' ? search.notFound : undefined,
   }),
   component: ReleaseDetailRoute,
+});
+
+const portfolioRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/portfolio',
+  validateSearch: (search: Record<string, unknown>): { tab?: 'products' | 'clients'; client?: string } => ({
+    tab: search.tab === 'clients' ? 'clients' : search.tab === 'products' ? 'products' : undefined,
+    client: typeof search.client === 'string' ? search.client : undefined,
+  }),
+  component: PortfolioRoute,
+});
+
+const roadmapRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/roadmap',
+  validateSearch: parseRoadmapSearch,
+  component: RoadmapRoute,
+});
+
+const briefingsRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/briefings',
+  validateSearch: (search: Record<string, unknown>): { products?: string[] } => ({
+    products: parseProducts(search.products),
+  }),
+  component: BriefingsRoute,
+});
+
+const assistantRoute = createRoute({
+  getParentRoute: () => authenticatedRoute,
+  path: '/assistant',
+  beforeLoad: async () => {
+    const status = await queryClient.ensureQueryData(assistantStatusQueryOptions);
+    if (!status.enabled) throw redirect({ to: '/' });
+  },
+  component: AssistantRoute,
 });
 
 const templatesRoute = createRoute({
@@ -105,6 +164,10 @@ const routeTree = rootRoute.addChildren([
     ticketsRoute,
     releasesRoute,
     releaseDetailRoute,
+    portfolioRoute,
+    roadmapRoute,
+    briefingsRoute,
+    assistantRoute,
     templatesRoute,
     templateDetailRoute,
     documentViewerRoute,
@@ -118,5 +181,9 @@ export const router = createRouter({ routeTree });
 declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router;
+  }
+  // D-23-05 interim .paper island; deleted by the last 23.1 plan.
+  interface StaticDataRouteOption {
+    themed?: boolean;
   }
 }

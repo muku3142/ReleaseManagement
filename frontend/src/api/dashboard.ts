@@ -6,6 +6,8 @@ import { DOCUMENT_TYPES } from './templates';
 
 // Must equal DashboardController.MAX_HISTORY_SPAN_DAYS (DashboardSpanContractTest reads this line).
 export const MAX_HISTORY_SPAN_DAYS = 366;
+// Must equal DashboardController.MAX_PRODUCT_FILTER (DashboardSpanContractTest reads this line).
+export const MAX_PRODUCT_FILTER = 50;
 export const DEFAULT_HISTORY_DAYS = 30;
 export const HISTORY_PAGE_SIZE = 50;
 
@@ -85,9 +87,76 @@ export type DeploymentEntry = {
 
 export type DeploymentPage = { entries: DeploymentEntry[]; hasMore: boolean };
 
-export type DashboardSearch = { stage?: string; from?: string; to?: string; all?: boolean };
+export type DashboardDocsFilter = 'missing' | 'stale';
 
-export type DeploymentFilter = { stageId?: string; fromIso: string; toIso: string };
+export type DashboardSearch = {
+  stage?: string;
+  from?: string;
+  to?: string;
+  all?: boolean;
+  tab?: 'portfolio';
+  products?: string[];
+  docs?: DashboardDocsFilter;
+  archived?: true;
+};
+
+export type DeploymentFilter = { stageId?: string; fromIso: string; toIso: string; productIds?: string[] };
+
+export type ReleaseBrief = { releaseId: string; name: string; version: string; frozenAt: string };
+export type RunBrief = { releaseId: string; name: string; version: string; installedAt: string; inProduction: boolean };
+export type StatusCounts = { open: number; frozen: number; inProduction: number };
+export type PortfolioProductRow = {
+  id: string;
+  name: string;
+  archived: boolean;
+  releases: StatusCounts;
+  newestFrozen: ReleaseBrief | null;
+  linkedClients: number;
+  clientsOnNewest: number;
+};
+export type PortfolioTiles = {
+  clientsBehind: number;
+  notInstalled: number;
+  activeProducts: number;
+  activeClients: number;
+  installsLast30Days: number;
+};
+export type PortfolioSummary = {
+  tiles: PortfolioTiles;
+  products: PortfolioProductRow[];
+  totals: StatusCounts;
+  unassigned: StatusCounts | null;
+};
+export type BehindRow = {
+  clientId: string;
+  clientName: string;
+  clientArchived: boolean;
+  productId: string;
+  productName: string;
+  runs: RunBrief;
+  releasesBehind: number;
+  newest: ReleaseBrief;
+};
+export type NotInstalledRow = {
+  clientId: string;
+  clientName: string;
+  clientArchived: boolean;
+  productId: string;
+  productName: string;
+  newest: ReleaseBrief | null;
+};
+export type PortfolioBehind = { behind: BehindRow[]; notInstalled: NotInstalledRow[] };
+export type MatrixColumn = { id: string; name: string; archived: boolean };
+export type MatrixCell = {
+  clientId: string;
+  productId: string;
+  run: RunBrief | null;
+  releasesBehind: number | null;
+  newest: ReleaseBrief | null;
+  upToDate: boolean;
+};
+export type PortfolioMatrix = { products: MatrixColumn[]; clients: MatrixColumn[]; cells: MatrixCell[] };
+export type PortfolioSection = 'summary' | 'behind' | 'matrix';
 
 export type HistoryRange = { ok: true; fromIso: string; toIso: string } | { ok: false; message: string };
 
@@ -101,10 +170,20 @@ function parseDay(value: unknown): Date | undefined {
   return roundTrips ? date : undefined;
 }
 
+export function parseProducts(value: unknown): string[] | undefined {
+  const candidates = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
+  const ids = [...new Set(candidates.filter((id): id is string => typeof id === 'string' && UUID.test(id)))];
+  return ids.length > 0 ? ids.slice(0, MAX_PRODUCT_FILTER) : undefined;
+}
+
 // URL params are attacker-controllable; anything malformed falls back to the default instead of erroring.
 export function parseDashboardSearch(search: Record<string, unknown>): DashboardSearch {
-  const { stage, from, to, all } = search;
+  const { stage, from, to, all, tab, products, docs, archived } = search;
   return {
+    tab: tab === 'portfolio' ? 'portfolio' : undefined,
+    products: parseProducts(products),
+    docs: docs === 'missing' || docs === 'stale' ? docs : undefined,
+    archived: archived === true || archived === 'true' ? true : undefined,
     stage: typeof stage === 'string' && UUID.test(stage) ? stage : undefined,
     from: parseDay(from) ? (from as string) : undefined,
     to: parseDay(to) ? (to as string) : undefined,
@@ -145,16 +224,24 @@ export function formatDuration(seconds: number | null): string {
   return hours >= 24 ? `${roundedValue(hours / 24)} d` : `${roundedValue(hours)} h`;
 }
 
-// Counts server-computed states and never re-derives staleness (T-05-55).
+function documentStates(releaseId: string, stateOf: ReadinessLookup) {
+  return DOCUMENT_TYPES.map((type) => stateOf(releaseId, type) ?? 'NOT_GENERATED');
+}
+
+// Server-computed states are only counted, never re-derived (T-05-55); NO_TEMPLATE is never counted.
+export function missingDocuments(releaseId: string, stateOf: ReadinessLookup): boolean {
+  return documentStates(releaseId, stateOf).some((s) => s === 'NOT_GENERATED' || s === 'STALE');
+}
+
+export function outOfDateDocuments(releaseId: string, stateOf: ReadinessLookup): boolean {
+  return documentStates(releaseId, stateOf).some((s) => s === 'STALE');
+}
+
 export function paperworkCounts(releaseIds: string[], stateOf: ReadinessLookup): { needPaperwork: number; stale: number } {
-  let needPaperwork = 0;
-  let stale = 0;
-  for (const id of releaseIds) {
-    const states = DOCUMENT_TYPES.map((type) => stateOf(id, type) ?? 'NOT_GENERATED');
-    if (states.some((s) => s === 'NOT_GENERATED' || s === 'STALE')) needPaperwork += 1;
-    if (states.some((s) => s === 'STALE')) stale += 1;
-  }
-  return { needPaperwork, stale };
+  return {
+    needPaperwork: releaseIds.filter((id) => missingDocuments(id, stateOf)).length,
+    stale: releaseIds.filter((id) => outOfDateDocuments(id, stateOf)).length,
+  };
 }
 
 export function deploymentsPath(filter: DeploymentFilter, offset: number): string {
@@ -164,6 +251,7 @@ export function deploymentsPath(filter: DeploymentFilter, offset: number): strin
   params.set('to', filter.toIso);
   params.set('limit', String(HISTORY_PAGE_SIZE));
   params.set('offset', String(offset));
+  if (filter.productIds?.length) params.set('productIds', sortedIds(filter.productIds));
   return `/api/dashboard/deployments?${params.toString()}`;
 }
 
@@ -179,14 +267,51 @@ export function nextDeploymentOffset(lastPage: DeploymentPage, pages: Deployment
   return lastPage.hasMore ? pages.reduce((total, page) => total + page.entries.length, 0) : undefined;
 }
 
-export const dashboardReleasesQueryKey = (all: boolean) => ['dashboard', 'releases', all ? 'all' : 'active'] as const;
-export const deploymentsQueryKey = (filter: DeploymentFilter) =>
-  ['dashboard', 'deployments', filter.stageId ?? 'all', filter.fromIso, filter.toIso] as const;
+// Selection order must not change the cache key or the request.
+export const sortedIds = (ids?: string[]) => [...(ids ?? [])].sort().join(',');
 
-export function useDashboardReleases(all: boolean) {
+export const dashboardReleasesQueryKey = (all: boolean, productIds: string[]) =>
+  ['dashboard', 'releases', all ? 'all' : 'active', sortedIds(productIds)] as const;
+export const deploymentsQueryKey = (filter: DeploymentFilter) =>
+  ['dashboard', 'deployments', filter.stageId ?? 'all', filter.fromIso, filter.toIso, sortedIds(filter.productIds)] as const;
+export const portfolioQueryKey = (section: PortfolioSection, productIds: string[], includeArchived: boolean) =>
+  ['dashboard', 'portfolio', section, sortedIds(productIds), includeArchived ? 'archived' : 'active'] as const;
+
+export function portfolioPath(section: PortfolioSection, productIds: string[], includeArchived: boolean): string {
+  const params = new URLSearchParams();
+  if (productIds.length > 0) params.set('productIds', sortedIds(productIds));
+  params.set('includeArchived', String(includeArchived));
+  return `/api/dashboard/portfolio/${section}?${params.toString()}`;
+}
+
+export function useDashboardReleases(all: boolean, productIds: string[]) {
+  const params = new URLSearchParams({ scope: all ? 'all' : 'active' });
+  if (productIds.length > 0) params.set('productIds', sortedIds(productIds));
   return useQuery({
-    queryKey: dashboardReleasesQueryKey(all),
-    queryFn: () => apiFetch<DashboardData>(`/api/dashboard/releases?scope=${all ? 'all' : 'active'}`),
+    queryKey: dashboardReleasesQueryKey(all, productIds),
+    queryFn: () => apiFetch<DashboardData>(`/api/dashboard/releases?${params.toString()}`),
+  });
+}
+
+// One query per section so a failing section blanks only itself.
+export function usePortfolioSummary(productIds: string[], includeArchived: boolean) {
+  return useQuery({
+    queryKey: portfolioQueryKey('summary', productIds, includeArchived),
+    queryFn: () => apiFetch<PortfolioSummary>(portfolioPath('summary', productIds, includeArchived)),
+  });
+}
+
+export function usePortfolioBehind(productIds: string[], includeArchived: boolean) {
+  return useQuery({
+    queryKey: portfolioQueryKey('behind', productIds, includeArchived),
+    queryFn: () => apiFetch<PortfolioBehind>(portfolioPath('behind', productIds, includeArchived)),
+  });
+}
+
+export function usePortfolioMatrix(productIds: string[], includeArchived: boolean) {
+  return useQuery({
+    queryKey: portfolioQueryKey('matrix', productIds, includeArchived),
+    queryFn: () => apiFetch<PortfolioMatrix>(portfolioPath('matrix', productIds, includeArchived)),
   });
 }
 

@@ -9,6 +9,7 @@ import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.application.TemplateService;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
+import com.evision.releasemgmt.ports.ReleaseProductRepository;
 import com.evision.releasemgmt.domain.template.ChromeFields;
 import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.RenderBoundExceededException;
@@ -68,6 +69,9 @@ class TemplateControllerTest {
 
     @MockitoBean
     private ActorResolutionService actorResolution;
+
+    @MockitoBean
+    private ReleaseProductRepository releaseProducts;
 
     private static RequestPostProcessor authenticated() {
         return jwt().jwt(b -> b.subject("557058:abc-123").claim("token_type", "access"));
@@ -363,5 +367,28 @@ class TemplateControllerTest {
         ArgumentCaptor<ChromeFields> chrome = ArgumentCaptor.forClass(ChromeFields.class);
         verify(templateService).saveContent(any(), any(), chrome.capture(), any(), any());
         assertThat(chrome.getValue().logoRenderHeightMm()).isEqualTo(30);
+    }
+
+    // D-17.2-07: BUNDLE is a selectable grouping dimension.
+    @Test
+    void saveContentAcceptsTheBundleGroupingDimension() throws Exception {
+        UUID id = UUID.randomUUID();
+        Template base = template(id, false);
+        Template bundled = new Template(id, base.name(), base.documentType(), base.body(), base.active(),
+                base.chrome(), GroupingDimension.BUNDLE, base.logo(), base.warnings(), base.createdAt(),
+                base.createdBy(), base.updatedAt(), base.updatedBy());
+        when(templateService.saveContent(any(), any(), any(), any(), any())).thenReturn(bundled);
+        stubActors();
+
+        mockMvc.perform(put("/api/templates/{id}/content", id).with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"body\":\"Release notes\",\"chrome\":{\"coverEnabled\":false,"
+                                + "\"coverTitle\":\"\",\"coverSubtitle\":\"\",\"headerText\":\"\","
+                                + "\"footerText\":\"\",\"pageNumbersEnabled\":false},"
+                                + "\"groupingDimension\":\"BUNDLE\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.groupingDimension").value("BUNDLE"));
+
+        verify(templateService).saveContent(any(), any(), any(), eq(GroupingDimension.BUNDLE), any());
     }
 }

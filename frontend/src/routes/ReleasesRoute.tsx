@@ -1,11 +1,24 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { createColumnHelper } from '@tanstack/react-table';
+import { Lock, Plus } from 'lucide-react';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
-import { useReleases } from '../api/releases';
+import { messageForReason } from '../api/reasonMessages';
+import { useReleases, type ReleaseSummary } from '../api/releases';
 import { readinessIndex, useDocumentReadiness } from '../api/documents';
 import { DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS } from '../api/templates';
 import { ReadinessPill } from '../components/ReadinessPill';
+import { PageContainer } from '@/components/layout/PageContainer';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { DataTable } from '@/components/data-table/DataTable';
+import { DataTableColumnHeader } from '@/components/data-table/DataTableColumnHeader';
+import type { DataTableFeatures } from '@/components/data-table/features';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty';
+import { Input } from '@/components/ui/input';
+
+const helper = createColumnHelper<DataTableFeatures, ReleaseSummary>();
 
 export function ReleasesRoute() {
   const [search, setSearch] = useState('');
@@ -18,151 +31,177 @@ export function ReleasesRoute() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  const navigate = useNavigate();
   const releases = useReleases(query);
   const problem = releases.isError && releases.error instanceof ApiError ? releases.error.problem : undefined;
   // DOC-09: independent of the releases query on purpose - a readiness failure must not blank the
-  // whole release table (T-05-60), so its own isError branch only affects the three new cells below.
+  // whole release table (T-05-60), so its own isError branch only affects the three readiness cells below.
   const readiness = useDocumentReadiness();
   const stateOf = useMemo(() => readinessIndex(readiness.data?.entries), [readiness.data]);
 
-  return (
-    <div className="w-full">
-      <div className="bg-white p-6">
-        <h2 className="text-base font-semibold text-gray-900">Releases</h2>
+  const columns = useMemo(
+    () =>
+      helper.columns([
+        helper.accessor((r) => `${r.name} ${r.version}`, {
+          id: 'release',
+          header: ({ column }) => <DataTableColumnHeader column={column} title="Release" />,
+          sortFn: 'alphanumeric',
+          enableHiding: false,
+          meta: { label: 'Release' },
+          cell: ({ row: { original: r } }) => (
+            <Link
+              to="/releases/$releaseId"
+              params={{ releaseId: r.id }}
+              className="font-semibold whitespace-nowrap text-primary link-underline"
+            >
+              {r.name} {r.version}
+            </Link>
+          ),
+        }),
+        helper.display({
+          id: 'products',
+          header: 'Products',
+          meta: { label: 'Products' },
+          cell: ({ row: { original: r } }) =>
+            r.products.length === 0 ? (
+              <span className="text-muted-foreground">Unassigned</span>
+            ) : (
+              <span className="flex items-center gap-1" title={r.products.map((p) => p.name).join(', ')}>
+                {r.products.slice(0, 2).map((p) => (
+                  <Badge key={p.id} variant="outline">
+                    {p.name}
+                  </Badge>
+                ))}
+                {r.products.length > 2 && (
+                  <small className="text-xs text-muted-foreground">+{r.products.length - 2}</small>
+                )}
+              </span>
+            ),
+        }),
+        helper.accessor('status', {
+          header: ({ column }) => <DataTableColumnHeader column={column} title="Status" />,
+          filterFn: 'arrHas',
+          meta: { label: 'Status' },
+          cell: ({ getValue }) =>
+            getValue() === 'FROZEN' ? (
+              <Badge variant="neutral">
+                <Lock aria-hidden="true" />
+                Frozen
+              </Badge>
+            ) : (
+              <Badge variant="outline">Open</Badge>
+            ),
+        }),
+        helper.accessor((r) => r.jiraProjectKey ?? '', {
+          id: 'jiraProjectKey',
+          header: ({ column }) => <DataTableColumnHeader column={column} title="Jira project" />,
+          sortFn: 'text',
+          meta: { label: 'Jira project' },
+          cell: ({ getValue }) => getValue() || '—',
+        }),
+        helper.accessor('itemCount', {
+          header: ({ column }) => <DataTableColumnHeader column={column} title="Items" />,
+          meta: { label: 'Items', headerClassName: 'text-right', cellClassName: 'text-right tabular-nums' },
+        }),
+        helper.accessor((r) => r.lastRefreshedAt ?? '', {
+          id: 'lastRefreshedAt',
+          header: ({ column }) => <DataTableColumnHeader column={column} title="Last refreshed" />,
+          sortFn: 'text',
+          meta: { label: 'Last refreshed', cellClassName: 'whitespace-nowrap' },
+          cell: ({ getValue }) => (getValue() ? new Date(getValue()).toLocaleString() : '—'),
+        }),
+        ...DOCUMENT_TYPES.map((type) =>
+          helper.display({
+            id: type,
+            header: DOCUMENT_TYPE_LABELS[type],
+            meta: { label: DOCUMENT_TYPE_LABELS[type] },
+            cell: ({ row: { original: r } }) =>
+              readiness.isError ? (
+                <span className="text-muted-foreground" aria-label="Readiness unavailable">
+                  —
+                </span>
+              ) : (
+                <ReadinessPill state={stateOf(r.id, type) ?? 'NOT_GENERATED'} releaseId={r.id} documentType={type} />
+              ),
+          }),
+        ),
+      ]),
+    [readiness.isError, stateOf],
+  );
 
-        <div className="mt-4 flex flex-wrap items-end gap-3">
-          <input
+  const emptyState = (
+    <Empty>
+      {query === '' ? (
+        <EmptyHeader>
+          <EmptyTitle>No releases yet</EmptyTitle>
+          <EmptyDescription>Choose New release, pick a product and select its tickets.</EmptyDescription>
+        </EmptyHeader>
+      ) : (
+        <EmptyHeader>
+          <EmptyTitle>No releases match &apos;{query}&apos;</EmptyTitle>
+          <EmptyDescription>Try a different name or version.</EmptyDescription>
+        </EmptyHeader>
+      )}
+    </Empty>
+  );
+
+  return (
+    <PageContainer>
+      <PageHeader
+        title="Releases"
+        description="Every release, its status and its documents."
+        actions={
+          <Button asChild>
+            <Link to="/tickets" search={{ new: true }}>
+              <Plus aria-hidden="true" />
+              New release
+            </Link>
+          </Button>
+        }
+      />
+
+      {problem && (
+        <div className="mb-4">
+          <p role="alert" data-reason={problem.reason} className="text-sm text-destructive">
+            {messageForReason(problem)}
+          </p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => releases.refetch()}>
+            Try again
+          </Button>
+        </div>
+      )}
+
+      <DataTable
+        caption="Releases"
+        noun="releases"
+        columns={columns}
+        data={releases.data?.releases ?? []}
+        getRowId={(r) => r.id}
+        onRowClick={(r) => navigate({ to: '/releases/$releaseId', params: { releaseId: r.id } })}
+        stickyFirstColumn
+        isLoading={releases.isPending}
+        facetedFilters={[
+          {
+            columnId: 'status',
+            title: 'Status',
+            options: [
+              { value: 'OPEN', label: 'Open' },
+              { value: 'FROZEN', label: 'Frozen', icon: Lock },
+            ],
+          },
+        ]}
+        toolbar={
+          <Input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search by name or version…"
             aria-label="Search releases"
-            className="rounded border border-gray-300 px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-blue-600"
+            className="h-8 w-64"
           />
-        </div>
-      </div>
-
-      {releases.isPending && (
-        <div className="mt-6 flex items-center gap-3">
-          <span
-            className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"
-            aria-hidden="true"
-          />
-          <p className="text-sm text-gray-600">Loading releases…</p>
-        </div>
-      )}
-
-      {problem && (
-        <div className="mt-6">
-          <p role="alert" data-reason={problem.reason} className="text-sm text-red-600">
-            {messageForReason(problem)}
-          </p>
-          <button
-            type="button"
-            onClick={() => releases.refetch()}
-            className="mt-2 rounded border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-700"
-          >
-            Try again
-          </button>
-        </div>
-      )}
-
-      {!releases.isPending && !problem && releases.data && releases.data.releases.length === 0 && (
-        <div className="mt-6 rounded bg-gray-50 p-6 text-center">
-          {query === '' ? (
-            <>
-              <p className="text-base font-semibold text-gray-900">No releases yet</p>
-              <p className="mt-2 text-sm text-gray-600">
-                Releases are created from the ticket browser. Browse tickets, select the ones you
-                want, and choose &apos;Add to release&apos; → &apos;New release…&apos;.{' '}
-                <Link to="/tickets" className="text-blue-600 underline">
-                  Browse tickets
-                </Link>
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-base font-semibold text-gray-900">No releases match &apos;{query}&apos;</p>
-              <p className="mt-2 text-sm text-gray-600">Try a different name or version.</p>
-            </>
-          )}
-        </div>
-      )}
-
-      {!releases.isPending && !problem && releases.data && releases.data.releases.length > 0 && (
-        <div className="mt-6 overflow-x-auto rounded border border-gray-200 bg-white">
-          <table className="min-w-full text-sm">
-            <thead className="border-b border-gray-200">
-              <tr>
-                <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
-                  Name
-                </th>
-                <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
-                  Version
-                </th>
-                <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
-                  Status
-                </th>
-                <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
-                  Project
-                </th>
-                <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
-                  Items
-                </th>
-                <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
-                  Last refreshed
-                </th>
-                {DOCUMENT_TYPES.map((type) => (
-                  <th key={type} scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
-                    {DOCUMENT_TYPE_LABELS[type]}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {releases.data.releases.map((r) => (
-                <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="whitespace-nowrap px-4 py-2">
-                    <Link
-                      to="/releases/$releaseId"
-                      params={{ releaseId: r.id }}
-                      className="font-semibold text-blue-600 hover:underline"
-                    >
-                      {r.name}
-                    </Link>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-2 text-gray-700">{r.version}</td>
-                  <td className="whitespace-nowrap px-4 py-2">
-                    {r.status === 'FROZEN' ? (
-                      <span className="rounded-full bg-gray-800 px-2 py-0.5 text-sm text-white">Frozen</span>
-                    ) : (
-                      <span className="rounded-full bg-gray-100 px-2 py-0.5 text-sm text-gray-700">Open</span>
-                    )}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-2 text-gray-700">{r.jiraProjectKey ?? '—'}</td>
-                  <td className="whitespace-nowrap px-4 py-2 text-gray-700">{r.itemCount}</td>
-                  <td className="whitespace-nowrap px-4 py-2 text-gray-700">
-                    {r.lastRefreshedAt ? new Date(r.lastRefreshedAt).toLocaleString() : '—'}
-                  </td>
-                  {DOCUMENT_TYPES.map((type) => (
-                    <td key={type} className="whitespace-nowrap px-4 py-2">
-                      {readiness.isError ? (
-                        <span className="text-gray-400">—</span>
-                      ) : (
-                        <ReadinessPill
-                          state={stateOf(r.id, type) ?? 'NOT_GENERATED'}
-                          releaseId={r.id}
-                          documentType={type}
-                        />
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
+        }
+        emptyState={problem ? undefined : emptyState}
+      />
+    </PageContainer>
   );
 }

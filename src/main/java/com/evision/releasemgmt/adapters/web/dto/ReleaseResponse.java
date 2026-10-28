@@ -8,5 +8,8 @@ public record ReleaseResponse(UUID id, String name, String version, String statu
                               String jiraProjectKey, Instant createdAt, String createdBy,
                               Instant frozenAt, String frozenBy, Instant lastRefreshedAt,
                               List<ReleaseItemResponse> items,
-                              List<ManualItemResponse> manualItems) {
+                              List<ManualItemResponse> manualItems,
+                              List<ReleaseProductResponse> products,
+                              String unfreezeBlockedReason,
+                              String packagesUrl) {
 }

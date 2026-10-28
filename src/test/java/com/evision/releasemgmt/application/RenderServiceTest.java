@@ -5,6 +5,7 @@ import com.evision.releasemgmt.domain.template.RenderBoundExceededException;
 import com.evision.releasemgmt.domain.template.TemplateMalformedException;
 import com.evision.releasemgmt.domain.template.view.CommentView;
 import com.evision.releasemgmt.domain.template.view.ItemView;
+import com.evision.releasemgmt.domain.template.view.ProductView;
 import com.evision.releasemgmt.domain.template.view.ReleaseView;
 import com.evision.releasemgmt.domain.template.view.SampleReleaseView;
 import com.evision.releasemgmt.ports.RenderEnginePort;
@@ -69,7 +70,7 @@ class RenderServiceTest {
         ItemView item = new ItemView("Title", false, "KEY-1", "Bug", "Open", "", "", "", "", "", "",
                 comments, List.of(), List.of());
         ReleaseView view = new ReleaseView("R", "1.0", "OPEN", "", "", "", "",
-                List.of(item), List.of());
+                List.of(item), List.of(), List.of());
         assertThatThrownBy(() -> capped.render("{{release.name}}", view, "Body"))
                 .isInstanceOf(RenderBoundExceededException.class);
     }
@@ -165,7 +166,7 @@ class RenderServiceTest {
             items.add(new ItemView("Title " + i, false, "KEY-" + i, "Bug", "Open", "", "", "", "", "", "",
                     List.of(), List.of(), List.of()));
         }
-        return new ReleaseView("R", "1.0", "OPEN", "", "", "", "", items, List.of());
+        return new ReleaseView("R", "1.0", "OPEN", "", "", "", "", items, List.of(), List.of());
     }
 
     private static void assertOnlyPlainData(Object value) {
@@ -179,5 +180,43 @@ class RenderServiceTest {
             throw new AssertionError("Context contains a non-plain-data leaf: "
                     + (value == null ? "null" : value.getClass()));
         }
+    }
+
+    private static ReleaseView releaseViewWithProducts(String... names) {
+        List<ProductView> products = new ArrayList<>();
+        for (String name : names) {
+            products.add(new ProductView(name));
+        }
+        return new ReleaseView("R", "1.0", "OPEN", "", "", "", "", List.of(), List.of(), products);
+    }
+
+    @Test
+    void productsSectionPrintsEveryProductNameInGivenOrder() {
+        String output = service.resolveText("{{#products}}- {{name}}\n{{/products}}",
+                releaseViewWithProducts("Billing", "Core"), "Body").output();
+        assertThat(output).isEqualTo("- Billing\n- Core\n");
+    }
+
+    @Test
+    void productsSectionIsEmptyWhenTheReleaseHasNoProducts() {
+        String output = service.resolveText("{{#products}}- {{name}}\n{{/products}}",
+                releaseViewWithProducts(), "Body").output();
+        assertThat(output).isEmpty();
+    }
+
+    @Test
+    void productNameIsInertTextNotTemplateSource() {
+        String hostile = "{{release.name}} <script>alert(1)</script> **bold**";
+        String output = service.resolveText("{{#products}}{{name}}{{/products}}",
+                releaseViewWithProducts(hostile), "Body").output();
+        assertThat(output).startsWith("{{release.name}}").doesNotStartWith("R ");
+    }
+
+    @Test
+    void tooManyProductsTripsTheCollectionCap() {
+        RenderService capped = new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 3, 64);
+        ReleaseView view = releaseViewWithProducts("a", "b", "c", "d");
+        assertThatThrownBy(() -> capped.render("{{release.name}}", view, "Body"))
+                .isInstanceOf(RenderBoundExceededException.class);
     }
 }

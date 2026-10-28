@@ -1,10 +1,12 @@
 /// <reference types="vitest/config" />
+import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   build: { outDir: 'dist', emptyOutDir: true },
   server: {
     port: 5173,
@@ -15,5 +17,5 @@ export default defineConfig({
   },
   // Tests live under tests/ rather than beside the modules they cover, so src/ stays
   // production-only and the build never has to exclude test files.
-  test: { environment: 'jsdom', include: ['tests/**/*.test.ts?(x)'] },
+  test: { environment: 'jsdom', include: ['tests/**/*.test.ts?(x)'], setupFiles: ['./tests/setup.ts'] },
 });

@@ -1,5 +1,6 @@
 package com.evision.releasemgmt.application;
 
+import com.evision.releasemgmt.domain.briefing.BriefingFieldIds;
 import com.evision.releasemgmt.domain.auth.JiraAccessContext;
 import com.evision.releasemgmt.domain.jira.JiraField;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
@@ -217,6 +218,16 @@ class FieldMetadataServiceTest {
     }
 
     @Test
+    void briefingFieldIdsMapsTheFieldsThisSiteHasAndLeavesTheRestNull() {
+        when(fieldMetadataPort.fetchAllFields(any())).thenReturn(List.of(
+                new JiraField("customfield_10016", "Story Points", true),
+                new JiraField("customfield_10020", "Sprint", true)));
+
+        assertThat(service.briefingFieldIds(null))
+                .isEqualTo(new BriefingFieldIds("customfield_10016", null, "customfield_10020", null));
+    }
+
+    @Test
     void storyPointsOverrideIsUsedVerbatimWithoutFetchingMetadata() {
         FieldMetadataService pinned = new FieldMetadataService(accessContextService, fieldMetadataPort, " customfield_99999 ");
 
@@ -238,5 +249,34 @@ class FieldMetadataServiceTest {
                 .isInstanceOf(JiraTicketReadException.class);
         // One refresh attempt per missing name, then a single throw — not ten separate calls.
         verify(fieldMetadataPort, times(8)).fetchAllFields(any());
+    }
+
+    private static final List<JiraField> BRIEFING_SITE_FIELDS = List.of(
+            new JiraField("customfield_10020", "Sprint", true),
+            new JiraField("customfield_10021", "Flagged", true),
+            new JiraField("customfield_10016", "Story Points", true),
+            new JiraField("customfield_10017", "Story Points", true));
+
+    @Test
+    void resolveOptionalReturnsOnlyWhatTheSiteHasUsingThePassedContext() {
+        JiraAccessContext access = new JiraAccessContext("https://example.atlassian.net", "acct-1", "rm@acme.com", "tok-123");
+        when(fieldMetadataPort.fetchAllFields(access)).thenReturn(BRIEFING_SITE_FIELDS);
+
+        Map<String, String> resolved = service.resolveOptional(access, FieldMetadataService.BRIEFING_FIELD_NAMES);
+
+        assertThat(resolved).containsOnly(
+                Map.entry("sprint", "customfield_10020"), Map.entry("flagged", "customfield_10021"));
+        verify(accessContextService, never()).currentContext();
+    }
+
+    @Test
+    void resolveOptionalHonoursTheStoryPointsOverride() {
+        JiraAccessContext access = new JiraAccessContext("https://example.atlassian.net", "acct-1", "rm@acme.com", "tok-123");
+        when(fieldMetadataPort.fetchAllFields(access)).thenReturn(BRIEFING_SITE_FIELDS);
+        FieldMetadataService pinned = new FieldMetadataService(accessContextService, fieldMetadataPort, "customfield_10016");
+
+        Map<String, String> resolved = pinned.resolveOptional(access, FieldMetadataService.BRIEFING_FIELD_NAMES);
+
+        assertThat(resolved).containsEntry("story points", "customfield_10016");
     }
 }

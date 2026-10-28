@@ -123,7 +123,18 @@ public class ReleaseTicketItemEntity {
     @Column(name = "reopen_count")
     private Integer reopenCount;
 
+    @Column(name = "bundle")
+    private String bundle;
+
     public ReleaseTicketItemEntity() {
+    }
+
+    public String getBundle() {
+        return bundle;
+    }
+
+    public void setBundle(String bundle) {
+        this.bundle = bundle;
     }
 
     public String getJiraIssueId() {

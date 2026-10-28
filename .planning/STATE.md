@@ -1,50 +1,40 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Release Assistant
+milestone: v1.2
+milestone_name: Portfolio & Planning
 status: executing
-stopped_at: Phase 10 context gathered
-last_updated: "2026-10-13T13:40:09.728Z"
-last_activity: 2026-10-13 -- Phase 10 execution started
+stopped_at: Phase 17 closed; 17.1-16 walk-through pending; Phase 18 discuss starting
+last_updated: "2026-10-26T11:30:00.000Z"
+last_activity: 2026-10-26 -- Phase 17 closed (user approved), Phase 18 discuss started
 progress:
-  total_phases: 18
-  completed_phases: 8
-  total_plans: 109
-  completed_plans: 95
-  percent: 87
+  total_phases: 12
+  completed_phases: 4
+  total_plans: 58
+  completed_plans: 57
+  percent: 98
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-10-13)
+See: .planning/PROJECT.md (updated 2026-10-20)
 
 **Core value:** Given a set of Jira tickets, produce accurate and consistent release documentation plus a tracked deployment record — without anyone doing manual release bookkeeping in Jira.
-**Current focus:** Phase 10 — RAG Chat & Citations
+**Current focus:** Phase 17.1 — product-briefings-scheduler
 
 ## Current Position
 
-Phase: 10 (RAG Chat & Citations) — BLOCKED on a user decision
-Plan: 9 of 9 (10-01..10-08 done; 10-09 live run stopped at the golden run)
-Status: Paused — chat model choice deferred by the user (see Blockers)
-Last activity: 2026-10-15 — Phase 11 11-01..11-03 merged (rag 294 green); 11-04..11-09 wait for Phase 10; Phase 12 waves 1-2 merged (7/11, backend 1020 green); wave 3 next; Phase 10 dev model = qwen2.5-coder:7b (be562cd), T03 decision pending
-
-**v1 (Phases 1-8) is still open — not archived, phase directories kept on purpose.** Code for every v1 phase is
-merged (backend 946, frontend 340 tests green). Four blocking human checks remain, each with no SUMMARY yet:
-
-- 05.4-07 — template selection hand check
-- 06-10 — live Jira/ADO tenant check of code links and the ADO credential
-- 07-07 — promotion ladder / corrections / VOIDED walk-through
-- 08-08 — release insights dashboard walk-through
-
-Close v1 with `/gsd-complete-milestone` once all four are approved.
+Phase: 17.1 (product-briefings-scheduler) — EXECUTING
+Plan: 16 of 16 (15 complete; 17.1-16 live checkpoint pending, needs Docker)
+Status: Executing Phase 17.1
+Last activity: 2026-10-25 -- Phase 17.1 execution started
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 19
+- Total plans completed: 37
 - Average duration: - min
 - Total execution time: 0.0 hours
 
@@ -53,6 +43,8 @@ Close v1 with `/gsd-complete-milestone` once all four are approved.
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 09 | 11 | - | - |
+| 10 | 9 | - | - |
+| 11 | 9 | - | - |
 
 **Recent Trend:**
 
@@ -72,6 +64,8 @@ Close v1 with `/gsd-complete-milestone` once all four are approved.
 
 ### Roadmap Evolution
 
+- Phase 15.1 (Unfreeze and Flexible Promotion) inserted after Phase 15 on 2026-10-22 (user request): unfreeze an undeployed frozen release to change tickets, and promote straight to any later stage (reverses D-07-07; D-07-06 kept). Runs before Phase 16 executes.
+- Phase 23 (UI Enhancement & Logo) inserted before publishing on 2026-10-22 at the user request; GitHub Publishing renumbered to 24.
 - Phase 05.1 inserted after Phase 05 on 2026-08-11 (URGENT) — per-template logo sizing and the DOCX
   cover-logo parity defect. Found after Phase 05 was verified and closed, while answering a question
   about controlling logo size: `DocxExportAdapter.java:204-205` applies no clamp to the logo, unlike
@@ -147,17 +141,24 @@ None yet.
   - B: keep the thinking model and raise the deadline (breaks D-10-12; T03 still leaked).
 
   After the choice: resume `/gsd-debug continue transform-deadline-qwen3`, re-measure G07/G09 (both 0/3) and harden prompts if still needed, rerun golden, then finish 10-09 steps 5-9 and the user review. Evidence: `.planning/phases/10-rag-chat-citations/10-09-SUMMARY.md`, `.planning/debug/transform-deadline-qwen3.md`.
+
 - Resolved: Jira→ADO link-discovery spike — GO for discovery via dev-status, but commit lists are incomplete (only key-referencing commits); Phase 6 needs the ADO API for full commits. See 02-DEVSTATUS-SPIKE.md.
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
+| 261026-kyg | Phase 17.1 quick fix: every roadmap item has a product (V20); Jira/release imports derive it from the key's project; list filtered in SQL | 2026-10-26 | 4e6c420 | [261026-kyg-roadmap-product-required-and-filter-in-t](./quick/261026-kyg-roadmap-product-required-and-filter-in-t/) |
+| 261026-l31 | Phase 17.1 quick fix: Reach from clients running the product, Impact from Jira priority, Confidence from readiness; overrides with a reason and reset (V21) | 2026-10-27 | f7dd0ae | [261026-l31-roadmap-rice-reach-impact-confidence-cal](./quick/261026-l31-roadmap-rice-reach-impact-confidence-cal/) |
+| 261022-iv7 | Allow saving a timed-out Clean up/Custom result (server restores unprocessed sections; on live/phase15-chunking, not main) | 2026-10-22 | 40843dc | [261022-iv7-allow-saving-timed-out-assist-results](./quick/261022-iv7-allow-saving-timed-out-assist-results/) |
 | 260810-wc3 | Fix AdfFlattener heading and code-block newline defects | 2026-08-10 | 1396ffc | [260810-wc3-fix-adfflattener-heading-and-code-block-](./quick/260810-wc3-fix-adfflattener-heading-and-code-block-/) |
 | 261012-nqd | On-demand "Show linked commits" in the ticket browser (GET /api/tickets/{key}/code-links, read-only) | 2026-10-12 | c44f3e5 | [261012-nqd-ticket-browser-show-linked-commits](./quick/261012-nqd-ticket-browser-show-linked-commits/) |
 | fast | Ticket browser: click anywhere on a row to expand it (checkbox, controls and text selection excluded) | 2026-10-12 | 2518d44 | - |
 | fast | Release page: click anywhere on a ticket row to expand it (chip, Retry, Remove and text selection excluded) | 2026-10-13 | 22a1564 | - |
 | 261014-l33 | Add release story point totals to dashboard (INSIGHT-04) | 2026-10-14 | fd32cea | [261014-l33-add-release-story-point-totals-to-dashbo](./quick/261014-l33-add-release-story-point-totals-to-dashbo/) |
+| 261020-i8c | Assistant shows clarifications and tool errors instead of the generic refusal; compose dev model corrected | 2026-10-20 | 0bcab23 | [261020-i8c-assistant-answers-unclear-questions-with](./quick/261020-i8c-assistant-answers-unclear-questions-with/) |
+| fast | Relabel AI result save button to Accept and save as revision N+1 | 2026-10-18 | 1ca6519 | - |
+| 261018-iii | Allow saving Summarize results as an AI-assisted revision (D-14-13, V13) | 2026-10-18 | e617d59 | [261018-iii-allow-saving-summaries](./quick/261018-iii-allow-saving-summaries/) |
 
 ## Deferred Items
 
@@ -165,10 +166,19 @@ Items acknowledged and carried forward from previous milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none — first milestone)* | | | |
+| uat | 01-08-UAT-RESULTS (was partial) | closed on user approval | 2026-10-20 |
+| verification | 05.2-VERIFICATION (was human_needed) | closed on user approval | 2026-10-20 |
+| quick_task | 260810-wc3 (status missing) | complete | 2026-10-20 |
+| quick_task | 261012-nqd (status missing) | complete | 2026-10-20 |
+| quick_task | 261014-l33 (status missing) | complete | 2026-10-20 |
+| quick_task | 261018-iii (status missing) | complete | 2026-10-20 |
+| unrun_step | 12-11 T2 (`AssistantLiveCheck` never written) and T4 (push / rag-down / catch-up / log hygiene proof) | open, closed on user word | 2026-10-20 |
+| unrun_step | 13-13 T3: no dev quality-gate report (SAFE-04 has no measured numbers) | open | 2026-10-20 |
+| unrun_step | 14-15 T3: no first live doc-assist report | open | 2026-10-20 |
+| unrun_step | 13-14 / 14-16 production-host gate runs asserted passed, no report | open | 2026-10-20 |
 
 ## Session Continuity
 
-Last session: 2026-10-13T12:33:13.702Z
-Stopped at: Phase 10 context gathered
-Resume file: .planning/phases/10-rag-chat-citations/10-CONTEXT.md
+Last session: 2026-10-25T08:48:13.554Z
+Stopped at: Phase 17 closed; 17.1-16 walk-through pending; Phase 18 discuss starting
+Resume file: .planning/phases/17-rice-roadmap/17-UI-SPEC.md

@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import {
   readinessIndex,
   useDocumentReadiness,
@@ -55,6 +55,29 @@ export function DocumentsSection({ releaseId, releaseName, version }: DocumentsS
 
 const GENERATING_LABEL = 'Generating…';
 
+function AiBadge() {
+  return (
+    <span className="ml-2 rounded border border-gray-300 bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+      AI-assisted
+    </span>
+  );
+}
+
+function aiInstructionText(revision: DocumentRevision): string {
+  switch (revision.aiMode) {
+    case 'CUSTOM':
+      return `AI instruction: "${revision.aiInstruction ?? ''}"`;
+    case 'SUMMARIZE':
+      return 'AI instruction: Summarize';
+    default:
+      return 'AI instruction: Clean up';
+  }
+}
+
+function savedOrGenerated(revision: DocumentRevision): string {
+  return revision.aiAssisted ? 'saved' : 'generated';
+}
+
 function templateOptionLabel(t: TemplateSummary): string {
   const tags = [t.myDefault && 'my default', t.active && 'active'].filter(Boolean);
   return tags.length > 0 ? `${t.name} (${tags.join(', ')})` : t.name;
@@ -95,6 +118,8 @@ function DocumentRow({ releaseId, releaseName, version, documentType, readinessS
     generateMutation.isError && generateMutation.error instanceof ApiError ? generateMutation.error.problem : undefined;
 
   const generateBusy = generateMutation.isPending;
+  const regenerateNoticeId = `regenerate-notice-${documentType}`;
+  const showRegenerateNotice = latest?.aiAssisted === true && readinessState !== 'NO_TEMPLATE';
 
   return (
     <div className="border-b border-gray-100 py-3 last:border-b-0">
@@ -115,12 +140,14 @@ function DocumentRow({ releaseId, releaseName, version, documentType, readinessS
         {readinessState === 'NOT_GENERATED' && "This document hasn't been generated yet."}
         {readinessState === 'STALE' && latest && (
           <>
-            {`Revision ${latest.revision} of ${total} · generated ${new Date(latest.generatedAt).toLocaleString()} by ${latest.generatedBy}. The release has changed since this was generated.`}
+            {`Revision ${latest.revision} of ${total} · ${savedOrGenerated(latest)} ${new Date(latest.generatedAt).toLocaleString()} by ${latest.generatedBy}. The release has changed since this was generated.`}
+            {latest.aiAssisted && <AiBadge />}
           </>
         )}
         {readinessState === 'UP_TO_DATE' && latest && (
           <>
-            {`Revision ${latest.revision} of ${total} · generated ${new Date(latest.generatedAt).toLocaleString()} by ${latest.generatedBy}.`}
+            {`Revision ${latest.revision} of ${total} · ${savedOrGenerated(latest)} ${new Date(latest.generatedAt).toLocaleString()} by ${latest.generatedBy}.`}
+            {latest.aiAssisted && <AiBadge />}
           </>
         )}
       </p>
@@ -156,6 +183,7 @@ function DocumentRow({ releaseId, releaseName, version, documentType, readinessS
               type="button"
               onClick={() => generateMutation.mutate({ releaseId, documentType, templateId: selectedId })}
               disabled={generateBusy || mustPick}
+              aria-describedby={showRegenerateNotice ? regenerateNoticeId : undefined}
               className={
                 hasRevisions
                   ? readinessState === 'STALE'
@@ -183,6 +211,12 @@ function DocumentRow({ releaseId, releaseName, version, documentType, readinessS
           </>
         )}
       </div>
+
+      {showRegenerateNotice && (
+        <p id={regenerateNoticeId} className="mt-1 text-xs text-amber-700">
+          The latest revision was AI-assisted; regenerating replaces it as current.
+        </p>
+      )}
 
       {generateProblem && (
         <p role="alert" data-reason={generateProblem.reason} className="mt-2 text-sm text-red-600">
@@ -268,8 +302,14 @@ function RevisionRow({ releaseId, releaseName, version, documentType, revision, 
       <p>
         {`Revision ${revision.revision} `}
         {revision.latest ? '(latest)' : '(superseded)'}
-        {` · generated ${new Date(revision.generatedAt).toLocaleString()} by ${revision.generatedBy} · template ${revision.templateName}`}
+        {revision.aiAssisted && <AiBadge />}
+        {` · ${savedOrGenerated(revision)} ${new Date(revision.generatedAt).toLocaleString()} by ${revision.generatedBy} · template ${revision.templateName}`}
       </p>
+      {revision.aiAssisted && (
+        <p className="mt-0.5 truncate text-xs text-gray-600" title={aiInstructionText(revision)}>
+          {aiInstructionText(revision)}
+        </p>
+      )}
       <div className="mt-1 flex flex-wrap items-center gap-2">
         <DocumentViewLink
           releaseId={releaseId}

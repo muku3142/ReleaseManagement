@@ -5,6 +5,7 @@ import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
 import com.evision.releasemgmt.domain.document.NoTemplateException;
 import com.evision.releasemgmt.domain.document.TemplateTypeMismatchException;
+import com.evision.releasemgmt.domain.portfolio.ReleaseProduct;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.template.ChromeFields;
@@ -13,6 +14,7 @@ import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import com.evision.releasemgmt.domain.template.view.ReleaseView;
 import com.evision.releasemgmt.ports.DocumentSnapshotRepository;
+import com.evision.releasemgmt.ports.ReleaseProductRepository;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import com.evision.releasemgmt.ports.TemplateRepository;
 import org.springframework.stereotype.Service;
@@ -33,29 +35,34 @@ public class DocumentGenerationService {
     private final DocumentSnapshotRepository snapshotRepository;
     private final ReleaseViewAssembler assembler;
     private final RenderService renderService;
+    private final ReleaseProductRepository releaseProducts;
 
     public DocumentGenerationService(ReleaseRepository releaseRepository,
                                      TemplateRepository templateRepository,
                                      DocumentSnapshotRepository snapshotRepository,
-                                     ReleaseViewAssembler assembler, RenderService renderService) {
+                                     ReleaseViewAssembler assembler, RenderService renderService,
+                                     ReleaseProductRepository releaseProducts) {
         this.releaseRepository = releaseRepository;
         this.templateRepository = templateRepository;
         this.snapshotRepository = snapshotRepository;
         this.assembler = assembler;
         this.renderService = renderService;
+        this.releaseProducts = releaseProducts;
     }
 
     public DocumentSnapshot generate(UUID releaseId, TemplateDocumentType documentType, UUID templateIdOrNull,
                                      String actor) {
         // Deliberately no lifecycle guard here: generating final paperwork right after freezing is a
-        // normal sequence (05-UI-SPEC screen 1), and D-05-09 makes "frozen + generated" the terminal
-        // satisfied state. No Jira call happens here either - D-03-06 already materialised every
+        // normal sequence (05-UI-SPEC screen 1), and a document generated after the freeze stays
+        // current unless the release is unfrozen and its tickets change (D-15.1-05). No Jira call happens here either - D-03-06 already materialised every
         // ticket, so this reads only the locally stored release.
         Release release = releaseRepository.findById(releaseId).orElseThrow(ReleaseNotFoundException::new);
         Template template = resolveTemplate(documentType, templateIdOrNull, actor);
         // D-05-04/D-05-53: grouped by the dimension of the template that produced this document, so
         // the snapshot's grouping always stays self-consistent with its copied templateBody.
-        ReleaseView view = assembler.assemble(release, template.groupingDimension());
+        ReleaseView view = assembler.assemble(release,
+                releaseProducts.productsOf(release.id()).stream().map(ReleaseProduct::name).toList(),
+                template.groupingDimension());
 
         // The single bounded render entry point (D-04-11) - do not inline a call to the low-level
         // render engine port or build a second bounded path.

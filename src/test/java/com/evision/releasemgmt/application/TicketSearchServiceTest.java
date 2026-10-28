@@ -7,7 +7,12 @@ import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.jira.TicketField;
 import com.evision.releasemgmt.domain.jira.TicketSearchCriteria;
+import com.evision.releasemgmt.domain.portfolio.PortfolioEditRejectedException;
+import com.evision.releasemgmt.domain.portfolio.PortfolioEditRejection;
+import com.evision.releasemgmt.domain.portfolio.Product;
+import com.evision.releasemgmt.domain.portfolio.ProductNotFoundException;
 import com.evision.releasemgmt.ports.JiraTicketPort;
+import com.evision.releasemgmt.ports.ProductRepository;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,6 +37,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,12 +69,15 @@ class TicketSearchServiceTest {
     @Mock
     private ReleaseRepository releaseRepository;
 
+    @Mock
+    private ProductRepository productRepository;
+
     private TicketSearchService service;
 
     @BeforeEach
     void setUp() {
         service = new TicketSearchService(accessContextService, fieldMetadataService, ticketPort,
-                releaseRepository);
+                releaseRepository, productRepository);
     }
 
     @Test
@@ -161,7 +170,7 @@ class TicketSearchServiceTest {
         when(releaseRepository.findTicketKeys(releaseId)).thenReturn(List.of("CNV-2"));
 
         List<TicketDetail> result =
-                service.search(TicketSearchCriteria.byProject("10023", "10891", null), releaseId);
+                service.search(TicketSearchCriteria.byProject("10023", "10891", null), releaseId, false);
 
         assertThat(result).extracting(TicketDetail::key).containsExactly("CNV-1", "CNV-3");
     }
@@ -176,7 +185,7 @@ class TicketSearchServiceTest {
         when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(fromPort);
         when(releaseRepository.findTicketKeys(releaseId)).thenReturn(List.of("CNV-2"));
 
-        List<TicketDetail> scoped = service.search(criteria, releaseId);
+        List<TicketDetail> scoped = service.search(criteria, releaseId, false);
         List<TicketDetail> unscoped = service.search(criteria);
 
         assertThat(scoped).extracting(TicketDetail::key).containsExactly("CNV-1");
@@ -210,7 +219,7 @@ class TicketSearchServiceTest {
         when(releaseRepository.findTicketKeys(releaseId)).thenReturn(List.of());
 
         List<TicketDetail> result =
-                service.search(TicketSearchCriteria.byProject("10023", "10891", null), releaseId);
+                service.search(TicketSearchCriteria.byProject("10023", "10891", null), releaseId, false);
 
         assertThat(result).extracting(TicketDetail::key).containsExactly("CNV-1", "CNV-2", "CNV-3");
     }
@@ -228,7 +237,7 @@ class TicketSearchServiceTest {
         when(releaseRepository.findTicketKeys(releaseId)).thenReturn(List.of("OLD-1"));
 
         List<TicketDetail> result =
-                service.search(TicketSearchCriteria.byProject("10023", "10891", null), releaseId);
+                service.search(TicketSearchCriteria.byProject("10023", "10891", null), releaseId, false);
 
         assertThat(result).extracting(TicketDetail::key).containsExactly("NEW-5");
     }
@@ -251,9 +260,138 @@ class TicketSearchServiceTest {
         when(releaseRepository.findTicketKeys(releaseB)).thenReturn(List.of());
 
         List<TicketDetail> result =
-                service.search(TicketSearchCriteria.byProject("10023", "10891", null), releaseB);
+                service.search(TicketSearchCriteria.byProject("10023", "10891", null), releaseB, false);
 
         assertThat(result).extracting(TicketDetail::key).containsExactly("CNV-2");
+    }
+
+    @Test
+    void productSearchQueriesEveryMappedJiraProjectInOneQuotedClause() {
+        UUID productId = UUID.randomUUID();
+        when(productRepository.findById(productId)).thenReturn(Optional.of(new Product(productId, "Core", null)));
+        when(productRepository.jiraProjectKeys()).thenReturn(Map.of(productId, List.of("ABC", "CNV")));
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(List.of());
+
+        service.searchProduct(productId, null, null, false);
+
+        verify(ticketPort).searchAll(eq(ACCESS),
+                eq("project in (\"ABC\", \"CNV\") AND statusCategory IN (\"Done\") ORDER BY key ASC"),
+                eq(FIELD_IDS));
+    }
+
+    @Test
+    void productWithoutAJiraProjectIsRejectedBeforeAnyJiraCall() {
+        UUID productId = UUID.randomUUID();
+        when(productRepository.findById(productId)).thenReturn(Optional.of(new Product(productId, "Core", null)));
+        when(productRepository.jiraProjectKeys()).thenReturn(Map.of());
+
+        assertThatThrownBy(() -> service.searchProduct(productId, null, null, false))
+                .isInstanceOf(PortfolioEditRejectedException.class)
+                .hasMessage(PortfolioEditRejection.PRODUCT_NO_JIRA_PROJECT.name());
+
+        verifyNoInteractions(ticketPort, accessContextService);
+    }
+
+    @Test
+    void unknownProductIsNotFoundBeforeAnyJiraCall() {
+        UUID productId = UUID.randomUUID();
+        when(productRepository.findById(productId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.searchProduct(productId, null, null, false))
+                .isInstanceOf(ProductNotFoundException.class);
+
+        verifyNoInteractions(ticketPort);
+    }
+
+    @Test
+    void productSearchHidesTicketsAlreadyOnTheTargetRelease() {
+        UUID productId = UUID.randomUUID();
+        UUID releaseId = UUID.randomUUID();
+        when(productRepository.findById(productId)).thenReturn(Optional.of(new Product(productId, "Core", null)));
+        when(productRepository.jiraProjectKeys()).thenReturn(Map.of(productId, List.of("ABC")));
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any()))
+                .thenReturn(List.of(ticket("ABC-1"), ticket("ABC-2")));
+        when(releaseRepository.findTicketKeys(releaseId)).thenReturn(List.of("ABC-2"));
+
+        List<TicketDetail> result = service.searchProduct(productId, Set.of(), releaseId, false);
+
+        assertThat(result).extracting(TicketDetail::key).containsExactly("ABC-1");
+    }
+
+    @Test
+    void hideAlreadyInReleaseDropsTicketsOnAnyRelease() {
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any()))
+                .thenReturn(List.of(ticket("ABC-1"), ticket("ABC-2"), ticket("ABC-3")));
+        when(releaseRepository.ticketKeysInAnyRelease(List.of("ABC-1", "ABC-2", "ABC-3")))
+                .thenReturn(Set.of("ABC-1", "ABC-3"));
+
+        List<TicketDetail> result = service.search(TicketSearchCriteria.byJql("project = ABC"), null, true);
+
+        assertThat(result).extracting(TicketDetail::key).containsExactly("ABC-2");
+        verify(releaseRepository, never()).findTicketKeys(any());
+    }
+
+    @Test
+    void hideAlreadyInReleaseWithAScopeHidesTheUnionOfBoth() {
+        UUID releaseId = UUID.randomUUID();
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any()))
+                .thenReturn(List.of(ticket("ABC-1"), ticket("ABC-2"), ticket("ABC-3")));
+        when(releaseRepository.findTicketKeys(releaseId)).thenReturn(List.of("ABC-1"));
+        when(releaseRepository.ticketKeysInAnyRelease(any())).thenReturn(Set.of("ABC-3"));
+
+        List<TicketDetail> result = service.search(TicketSearchCriteria.byJql("project = ABC"), releaseId, true);
+
+        assertThat(result).extracting(TicketDetail::key).containsExactly("ABC-2");
+    }
+
+    @Test
+    void withoutTheFlagAnyReleaseMembershipIsNeverQueried() {
+        List<TicketDetail> fromPort = List.of(ticket("ABC-1"), ticket("ABC-2"));
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any())).thenReturn(fromPort);
+
+        List<TicketDetail> result = service.search(TicketSearchCriteria.byJql("project = ABC"), null, false);
+
+        assertThat(result).containsExactlyElementsOf(fromPort);
+        verify(releaseRepository, never()).ticketKeysInAnyRelease(any());
+    }
+
+    @Test
+    void productSearchHidesTicketsOnAnyReleaseWhenAsked() {
+        UUID productId = UUID.randomUUID();
+        when(productRepository.findById(productId)).thenReturn(Optional.of(new Product(productId, "Core", null)));
+        when(productRepository.jiraProjectKeys()).thenReturn(Map.of(productId, List.of("ABC")));
+        when(accessContextService.currentContext()).thenReturn(ACCESS);
+        when(fieldMetadataService.resolve(any())).thenReturn(FIELD_IDS);
+        when(ticketPort.searchAll(any(), anyString(), any()))
+                .thenReturn(List.of(ticket("ABC-1"), ticket("ABC-2")));
+        when(releaseRepository.ticketKeysInAnyRelease(any())).thenReturn(Set.of("ABC-1"));
+
+        List<TicketDetail> result = service.searchProduct(productId, null, null, true);
+
+        assertThat(result).extracting(TicketDetail::key).containsExactly("ABC-2");
+    }
+
+    @Test
+    void anUnmappedProductFailsBeforeAnyLookupEvenWithTheFlag() {
+        UUID productId = UUID.randomUUID();
+        when(productRepository.findById(productId)).thenReturn(Optional.of(new Product(productId, "Core", null)));
+        when(productRepository.jiraProjectKeys()).thenReturn(Map.of());
+
+        assertThatThrownBy(() -> service.searchProduct(productId, null, null, true))
+                .isInstanceOf(PortfolioEditRejectedException.class)
+                .hasMessage(PortfolioEditRejection.PRODUCT_NO_JIRA_PROJECT.name());
+
+        verifyNoInteractions(ticketPort, accessContextService, releaseRepository);
     }
 
     private static TicketDetail ticket(String key) {

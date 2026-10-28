@@ -19,6 +19,8 @@ export const MANUAL_ITEM_CATEGORY_LABELS: Record<ManualItemCategory, string> = {
   OTHER: 'Other',
 };
 
+export type ReleaseProduct = { id: string; name: string; archived: boolean; hasInstalls: boolean };
+
 export type ReleaseSummary = {
   id: string;
   name: string;
@@ -31,6 +33,8 @@ export type ReleaseSummary = {
   frozenBy: string | null;
   lastRefreshedAt: string | null;
   itemCount: number;
+  // Never empty in practice (D-15-17, D-15-18); [] is displayed defensively as "Unassigned".
+  products: ReleaseProduct[];
 };
 
 export type EnrichmentStatus = 'NOT_ATTEMPTED' | 'NO_LINK' | 'LINKED' | 'FAILED';
@@ -90,6 +94,8 @@ export type ReleaseItem = {
   addedAt: string;
   codeLinks: CodeLinks;
   churn: ItemChurn | null;
+  // Tickets added together under a name (D-17.2-07); null when ungrouped.
+  bundle: string | null;
 };
 
 export type ManualItem = {
@@ -100,9 +106,13 @@ export type ManualItem = {
   addedAt: string;
 };
 
+export type UnfreezeBlockedReason = 'UNFREEZE_HAS_PROMOTIONS' | 'UNFREEZE_HAS_INSTALLS';
+
 export type Release = Omit<ReleaseSummary, 'itemCount'> & {
   items: ReleaseItem[];
   manualItems: ManualItem[];
+  unfreezeBlockedReason: UnfreezeBlockedReason | null;
+  packagesUrl: string | null;
 };
 
 export type ReleaseSearchResponse = { releases: ReleaseSummary[] };
@@ -116,17 +126,23 @@ export function releaseSearchPath(query: string): string {
   return query === '' ? '/api/releases' : `/api/releases?query=${encodeURIComponent(query)}`;
 }
 
-export function useReleases(query: string) {
+// `enabled` lets the command palette defer this list until it first opens (D-23-09); mounted in the
+// shell, it would otherwise fire four list requests on every page load.
+export function useReleases(query: string, enabled = true) {
   return useQuery({
     queryKey: releasesQueryKey(query),
     queryFn: () => apiFetch<ReleaseSearchResponse>(releaseSearchPath(query)),
+    enabled,
   });
 }
 
-export function useRelease(releaseId: string) {
+// `enabled` lets an always-mounted dialog read the release only while open; an enabled observer
+// would keep a just-deleted release's query active and refetch it (see useDeleteRelease).
+export function useRelease(releaseId: string, enabled = true) {
   return useQuery({
     queryKey: releaseQueryKey(releaseId),
     queryFn: () => apiFetch<Release>(`/api/releases/${releaseId}`),
+    enabled,
     // A 404 is a permanent answer for a fixed id - retrying it three times only delays the
     // RELEASE_NOT_FOUND message the UI spec requires.
     retry: false,
@@ -142,50 +158,96 @@ export type ReleaseAddResult = {
   notFound: number;
 };
 
+// One ungrouped selection (no bundle) or one product bundle's tickets, sent as one request.
+export type TicketGroup = { ticketKeys: string[]; bundle?: string };
+
+export function groupKeys(groups: TicketGroup[]): string[] {
+  return groups.flatMap((group) => group.ticketKeys);
+}
+
 export type CreateReleaseInput = {
   name: string;
   version: string;
-  jiraProjectKey: string | null;
-  ticketKeys: string[];
+  // D-17.2-02: exactly one product; the server derives the release's Jira project from it.
+  productId: string;
+  groups: TicketGroup[];
 };
 
-// D-03-02: one request creates the release and adds the selection, so a failed add can never
-// leave an orphan empty release behind. There is deliberately no create-then-add client path.
-export function useCreateRelease() {
+// A blank bundle is left out of the body, so an ungrouped add sends exactly what it did before bundles.
+function bundleField(bundle: string | undefined): { bundle?: string } {
+  const trimmed = bundle?.trim();
+  return trimmed ? { bundle: trimmed } : {};
+}
+
+export function releaseBundles(items: Pick<ReleaseItem, 'bundle'>[]): string[] {
+  // Truthiness rather than !== null: a server older than 17.2-08 omits the field entirely.
+  const names = new Set(items.flatMap((item) => (item.bundle ? [item.bundle] : [])));
+  return [...names].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+}
+
+function addGroup(releaseId: string, group: TicketGroup) {
+  return apiFetch<ReleaseAddResult>(`/api/releases/${releaseId}/items`, {
+    method: 'POST',
+    body: JSON.stringify({ ticketKeys: group.ticketKeys, ...bundleField(group.bundle) }),
+  });
+}
+
+function mergeResults(previous: ReleaseAddResult, next: ReleaseAddResult): ReleaseAddResult {
+  return {
+    release: next.release,
+    added: previous.added + next.added,
+    alreadyPresent: previous.alreadyPresent + next.alreadyPresent,
+    notFound: previous.notFound + next.notFound,
+  };
+}
+
+// Groups go one request each, in order. Tickets already on the release come back as alreadyPresent,
+// so re-adding the same selection after a partial failure is safe.
+async function addGroups(releaseId: string, groups: TicketGroup[], first?: ReleaseAddResult) {
+  let result = first;
+  for (const group of groups) {
+    const next = await addGroup(releaseId, group);
+    result = result ? mergeResults(result, next) : next;
+  }
+  return result!;
+}
+
+function useReleaseAddMutation<TVars>(request: (vars: TVars) => Promise<ReleaseAddResult>) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateReleaseInput) =>
-      apiFetch<ReleaseAddResult>('/api/releases', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: input.name,
-          version: input.version,
-          ...(input.jiraProjectKey ? { jiraProjectKey: input.jiraProjectKey } : {}),
-          ticketKeys: input.ticketKeys,
-        }),
-      }),
+    mutationFn: request,
     onSuccess: (result) => {
       queryClient.setQueryData(releaseQueryKey(result.release.id), result.release);
-      queryClient.invalidateQueries({ queryKey: ['releases'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
+    // Also on failure: a create whose follow-up group failed has still made the release.
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ['releases'] }),
+  });
+}
+
+// D-03-02: the create request carries the first group, so a release is never created empty and a
+// failed add cannot leave an orphan; the remaining groups follow as adds to the new release.
+export function useCreateRelease() {
+  return useReleaseAddMutation(async (input: CreateReleaseInput) => {
+    const [first, ...rest] = input.groups;
+    const created = await apiFetch<ReleaseAddResult>('/api/releases', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: input.name,
+        version: input.version,
+        ticketKeys: first.ticketKeys,
+        productId: input.productId,
+        ...bundleField(first.bundle),
+      }),
+    });
+    return addGroups(created.release.id, rest, created);
   });
 }
 
 export function useAddTicketsToRelease() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: { releaseId: string; ticketKeys: string[] }) =>
-      apiFetch<ReleaseAddResult>(`/api/releases/${vars.releaseId}/items`, {
-        method: 'POST',
-        body: JSON.stringify({ ticketKeys: vars.ticketKeys }),
-      }),
-    onSuccess: (result) => {
-      queryClient.setQueryData(releaseQueryKey(result.release.id), result.release);
-      queryClient.invalidateQueries({ queryKey: ['releases'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-    },
-  });
+  return useReleaseAddMutation((vars: { releaseId: string; groups: TicketGroup[] }) =>
+    addGroups(vars.releaseId, vars.groups),
+  );
 }
 
 // D-03-02: a frozen release is not a valid target. The server returns releases newest-first, so
@@ -209,6 +271,39 @@ function useReleaseMutation<TVars>(request: (vars: TVars) => Promise<Release>) {
   });
 }
 
+export function useSetReleaseProduct(releaseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (productId: string) =>
+      apiFetch<Release>(`/api/releases/${releaseId}/product`, {
+        method: 'PUT',
+        body: JSON.stringify({ productId }),
+      }),
+    onSuccess: (release) => {
+      queryClient.setQueryData(releaseQueryKey(releaseId), release);
+      queryClient.invalidateQueries({ queryKey: ['releases'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['installs', releaseId] });
+      queryClient.invalidateQueries({ queryKey: ['documents', 'readiness'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+}
+
+// D-17-21: the packages link is not release content, so documents, readiness and the dashboard are
+// deliberately not invalidated.
+export function useSetPackagesUrl(releaseId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string | null) =>
+      apiFetch<Release>(`/api/releases/${releaseId}/packages-url`, {
+        method: 'PUT',
+        body: JSON.stringify({ url }),
+      }),
+    onSuccess: (release) => queryClient.setQueryData(releaseQueryKey(releaseId), release),
+  });
+}
+
 export function useRefreshRelease() {
   return useReleaseMutation((releaseId: string) =>
     apiFetch<Release>(`/api/releases/${releaseId}/refresh`, { method: 'POST' }),
@@ -226,18 +321,37 @@ export function useRefreshCodeLinks() {
   );
 }
 
-// D-03-10: freeze is one-way. No reverse mutation exists or should be added here.
+// D-15.1-01: a frozen release can be unfrozen while it has no promotion or install; the server decides.
 export function useFreezeRelease() {
   return useReleaseMutation((releaseId: string) =>
     apiFetch<Release>(`/api/releases/${releaseId}/freeze`, { method: 'POST' }),
   );
 }
 
+export function useUnfreezeRelease() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (releaseId: string) => apiFetch<Release>(`/api/releases/${releaseId}/unfreeze`, { method: 'POST' }),
+    onSuccess: (release) => {
+      queryClient.setQueryData(releaseQueryKey(release.id), release);
+      queryClient.invalidateQueries({ queryKey: ['releases'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['promotions', release.id] });
+      queryClient.invalidateQueries({ queryKey: ['installs', release.id] });
+      queryClient.invalidateQueries({ queryKey: ['documents', 'readiness'] });
+    },
+    // A rejection means the page was stale (a promotion or install landed elsewhere): reload so the button reflects it.
+    onError: (_error, releaseId) => queryClient.invalidateQueries({ queryKey: releaseQueryKey(releaseId) }),
+  });
+}
+
 export function useRemoveTicketItem() {
-  return useReleaseMutation((vars: { releaseId: string; ticketKey: string }) =>
-    apiFetch<Release>(`/api/releases/${vars.releaseId}/items/${encodeURIComponent(vars.ticketKey)}`, {
-      method: 'DELETE',
-    }),
+  return useReleaseMutation((vars: { releaseId: string; ticketKey: string; withBundle?: boolean }) =>
+    apiFetch<Release>(
+      `/api/releases/${vars.releaseId}/items/${encodeURIComponent(vars.ticketKey)}` +
+        (vars.withBundle ? '?withBundle=true' : ''),
+      { method: 'DELETE' },
+    ),
   );
 }
 

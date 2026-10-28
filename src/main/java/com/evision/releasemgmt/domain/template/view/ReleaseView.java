@@ -7,5 +7,5 @@ import java.util.List;
 // about the PDF, not a fact about the release. Phase 5 records that on the document snapshot.
 public record ReleaseView(String name, String version, String status, String jiraProjectKey,
                           String createdAt, String frozenAt, String lastRefreshedAt,
-                          List<ItemView> items, List<GroupView> groups) {
+                          List<ItemView> items, List<GroupView> groups, List<ProductView> products) {
 }

@@ -196,15 +196,29 @@ describe('DeploymentHistory', () => {
     expect(deploymentUrls()).toHaveLength(0);
   });
 
-  it('shows the empty state and clears filters keeping only the show-all toggle', async () => {
+  it('shows the empty state and clears stage and dates, keeping the other URL state', async () => {
     deployments = () => json(200, { entries: [], hasMore: false });
     const onChange = vi.fn();
-    await renderSection({ all: true, stage: 'qa' }, onChange);
+    await renderSection({ all: true, stage: 'qa', from: '2026-10-01', products: ['a'], archived: true }, onChange);
 
     expect(container.textContent).toContain('No promotions match these filters');
     const clear = [...container.querySelectorAll('button')].filter((b) => b.textContent === 'Clear filters');
     await act(async () => clear[clear.length - 1].click());
-    expect(onChange).toHaveBeenCalledWith({ all: true });
+    expect(onChange.mock.calls[0][0]).toEqual({
+      all: true,
+      stage: undefined,
+      from: undefined,
+      to: undefined,
+      products: ['a'],
+      archived: true,
+    });
+  });
+
+  it('sends the selected products with the request', async () => {
+    deployments = () => json(200, { entries: [], hasMore: false });
+    await renderSection({ products: ['a'] });
+
+    expect(deploymentUrls()[0].searchParams.getAll('productIds')).toEqual(['a']);
   });
 
   it('scopes a failed request to the section with a retry', async () => {

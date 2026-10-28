@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import { useAddTicketsToRelease, type ReleaseAddResult } from '../api/releases';
+import { useProducts } from '../api/products';
+import { NoJiraProjectNotice } from './NoJiraProjectNotice';
 import { TicketBrowser } from './TicketBrowser';
 
 // D-05.2-07: the mirror image of AddToReleaseDialog - here the release is fixed and the tickets
@@ -12,11 +14,15 @@ export function AddTicketsToReleaseDialog(props: {
   releaseId: string;
   releaseName: string;
   version: string;
+  // The release's product (products[0]); undefined only for a legacy release with none.
+  productId: string | undefined;
   onAdded: (result: ReleaseAddResult) => void;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const addTickets = useAddTicketsToRelease();
+  const products = useProducts(props.open && props.productId !== undefined);
+  const product = products.data?.products.find((p) => p.id === props.productId);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -45,22 +51,40 @@ export function AddTicketsToReleaseDialog(props: {
           mounted so showModal()/close() have something to act on - so a permanently mounted browser
           would reopen still listing the tickets the previous visit just added. */}
       <div className="mt-4 max-h-[70vh] overflow-y-auto">
-        {props.open && (
-          <TicketBrowser
-            releaseId={props.releaseId}
-            actionLabel="Add to this release"
-            onAction={(ticketKeys) =>
-              addTickets.mutate(
-                { releaseId: props.releaseId, ticketKeys },
-                {
-                  onSuccess: (result) => {
-                    props.onAdded(result);
-                    props.onClose();
+        {props.open && products.isPending && props.productId !== undefined && (
+          <p role="status" className="text-sm text-muted-foreground">Loading product…</p>
+        )}
+        {props.open && products.isError && (
+          <p role="alert" className="text-sm text-destructive">
+            {products.error instanceof ApiError ? messageForReason(products.error.problem) : 'Could not load the product.'}
+          </p>
+        )}
+        {props.open && props.productId === undefined && (
+          <p className="text-sm text-muted-foreground">Choose a product for this release first.</p>
+        )}
+        {props.open && product !== undefined && product.jiraProjectKeys.length === 0 && (
+          <NoJiraProjectNotice productName={product.name} />
+        )}
+        {props.open && product !== undefined && product.jiraProjectKeys.length > 0 && (
+          <>
+            <TicketBrowser
+              productId={product.id}
+              releaseId={props.releaseId}
+              offerHideReleased
+              actionLabel="Add to this release"
+              onAction={(_, groups) =>
+                addTickets.mutate(
+                  { releaseId: props.releaseId, groups },
+                  {
+                    onSuccess: (result) => {
+                      props.onAdded(result);
+                      props.onClose();
+                    },
                   },
-                },
-              )
-            }
-          />
+                )
+              }
+            />
+          </>
         )}
       </div>
 

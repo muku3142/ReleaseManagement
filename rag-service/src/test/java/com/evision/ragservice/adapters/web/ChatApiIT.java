@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.evision.ragservice.FakeOllamaServer;
 import com.evision.ragservice.PgVectorImage;
 import com.evision.ragservice.SseEvents;
+import com.evision.ragservice.adapters.web.dto.ChatRequest;
 import com.evision.ragservice.application.ClientService;
 import com.evision.ragservice.application.CollectionService;
 import com.evision.ragservice.application.GenerationGate;
@@ -53,6 +54,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -193,6 +195,7 @@ class ChatApiIT {
         JsonNode first = data(events, "citations").get("items").get(0);
         assertThat(first.get("documentId").asString()).isEqualTo("doc-e0");
         assertThat(first.get("collection").asString()).isEqualTo("docs");
+        assertThat(first.get("kind").asString()).isEqualTo("PASSAGE");
         assertThat(data(events, "done").get("refusal").asBoolean()).isFalse();
         assertThat(gate.anyInFlight()).isFalse();
     }
@@ -304,6 +307,131 @@ class ChatApiIT {
         assertThat(data(events, "done").get("refusalLayer").asString()).isEqualTo("GATE");
         ollama.verify(0, postRequestedFor(urlEqualTo("/api/chat")));
         assertThat(gate.anyInFlight()).isFalse();
+    }
+
+    private static final String TOOLS = "[{\"name\":\"get_release_status\",\"description\":\"Status of a release\","
+            + "\"parameters\":{\"type\":\"object\",\"properties\":{\"version\":{\"type\":\"string\"}},"
+            + "\"required\":[\"version\"]}}]";
+    private static final String RESULTS = "[{\"callId\":\"call_1\",\"content\":\"{\\\"stage\\\":\\\"UAT\\\"}\","
+            + "\"isError\":false,\"source\":{\"id\":\"rel-2.4.0\",\"title\":\"Release 2.4.0\","
+            + "\"url\":\"https://x.invalid/r/2.4.0\"}}]";
+
+    private static String toolRequest(String toolTurns) {
+        return "{\"collections\":[\"docs\"],\"question\":\"release?\",\"tools\":" + TOOLS
+                + (toolTurns == null ? "" : ",\"toolTurns\":" + toolTurns) + "}";
+    }
+
+    private static void stubToolRound() {
+        stubReady();
+        stubShow(200, "{\"capabilities\":[\"completion\",\"tools\"]}");
+        stubEmbed(0);
+        stubChat(FakeOllamaServer.toolCalls(FakeOllamaServer.toolCallLine("call_1", "get_release_status",
+                "{\"version\":\"2.4.0\"}")).toArray(String[]::new));
+    }
+
+    private ObjectNode firstRound() throws Exception {
+        stubToolRound();
+        return (ObjectNode) data(stream(toolRequest(null)), "tool_call");
+    }
+
+    private static String withResults(ObjectNode turn, String results) {
+        return "[" + turn.deepCopy().set("results", JSON.readTree(results)) + "]";
+    }
+
+    private void assertToolProblem(String body, int status, String reason) throws Exception {
+        ollama.resetRequests();
+        chat(keyA, body).andExpect(status().is(status)).andExpect(jsonPath("$.reason").value(reason));
+        ollama.verify(0, WireMock.anyRequestedFor(WireMock.anyUrl()));
+        assertThat(gate.anyInFlight()).isFalse();
+    }
+
+    @Test
+    void toolRoundStreamsASignedToolCallThenResumesToACitedAnswer() throws Exception {
+        stubToolRound();
+        List<SseEvents.Event> first = stream(toolRequest(null));
+
+        assertThat(names(first)).containsExactly("status", "status", "tool_call", "done");
+        JsonNode call = data(first, "tool_call");
+        assertThat(call.get("round").asInt()).isEqualTo(1);
+        assertThat(call.get("questionId").asString()).isNotBlank();
+        assertThat(call.get("signature").asString()).isNotBlank();
+        assertThat(call.get("calls").get(0).get("id").asString()).isEqualTo("call_1");
+        assertThat(call.get("calls").get(0).get("name").asString()).isEqualTo("get_release_status");
+        assertThat(call.get("calls").get(0).get("arguments").get("version").asString()).isEqualTo("2.4.0");
+        assertThat(data(first, "done").get("finishReason").asString()).isEqualTo("tool_calls");
+        assertThat(gate.anyInFlight()).isFalse();
+
+        ollama.stubFor(WireMock.post(urlEqualTo("/api/chat")).atPriority(1)
+                .withRequestBody(matchingJsonPath("$.messages[?(@.role == 'tool')]"))
+                .willReturn(aResponse().withStatus(200).withHeader("Content-Type", "application/x-ndjson")
+                        .withBody(String.join("\n", FakeOllamaServer.answer("UAT ", "[2].")) + "\n")));
+        List<SseEvents.Event> resumed = stream(toolRequest(withResults((ObjectNode) call, RESULTS)));
+
+        assertThat(names(resumed)).contains("citations").endsWith("done");
+        JsonNode items = data(resumed, "citations").get("items");
+        JsonNode tool = null;
+        for (JsonNode item : items) {
+            if ("TOOL".equals(item.get("kind").asString())) {
+                tool = item;
+            }
+        }
+        assertThat(tool).isNotNull();
+        assertThat(tool.get("documentId").asString()).isEqualTo("rel-2.4.0");
+        assertThat(data(resumed, "done").get("finishReason").asString()).isEqualTo("stop");
+    }
+
+    @Test
+    void tamperedInventedOrOverlongTurnsAreRejectedWithoutOllamaTraffic() throws Exception {
+        ObjectNode turn = firstRound();
+
+        ObjectNode tampered = turn.deepCopy();
+        ((ObjectNode) tampered.get("calls").get(0).get("arguments")).put("version", "9.9.9");
+        assertToolProblem(toolRequest(withResults(tampered, RESULTS)), 400, "TOOL_TURN_INVALID");
+
+        ObjectNode invented = turn.deepCopy();
+        invented.put("signature", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+        assertToolProblem(toolRequest(withResults(invented, RESULTS)), 400, "TOOL_TURN_INVALID");
+
+        String five = IntStream.range(0, 5).mapToObj(i -> withResults(turn, RESULTS).substring(1,
+                withResults(turn, RESULTS).length() - 1)).collect(Collectors.joining(",", "[", "]"));
+        assertToolProblem(toolRequest(five), 400, "TOOL_TURN_INVALID");
+    }
+
+    @Test
+    void anOversizedToolResultIsPayloadTooLarge() throws Exception {
+        ObjectNode turn = firstRound();
+        String big = "[{\"callId\":\"call_1\",\"content\":\"" + "x".repeat(8001) + "\",\"isError\":false}]";
+
+        assertToolProblem(toolRequest(withResults(turn, big)), 413, "TOOL_RESULT_TOO_LARGE");
+    }
+
+    @Test
+    void malformedToolInputIsRejectedBeforeAnyWork() throws Exception {
+        stubReady();
+        String nested = "[{\"name\":\"t\",\"parameters\":{\"type\":\"object\",\"properties\":{\"a\":"
+                + "{\"type\":\"object\"}}}}]";
+        chat(keyA, "{\"collections\":[\"docs\"],\"question\":\"q\",\"tools\":" + nested + "}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.reason").value("INVALID_CONTENT"));
+        chat(keyA, "{\"collections\":[\"docs\"],\"question\":\"q\",\"tools\":[{\"name\":\"bad-name\","
+                + "\"parameters\":{}}]}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
+        ObjectNode turn = firstRound();
+        String badUrl = RESULTS.replace("https://x.invalid/r/2.4.0", "javascript:alert(1)");
+        chat(keyA, toolRequest(withResults(turn, badUrl)))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
+    }
+
+    @Test
+    void requestToStringNeverPrintsToolContent() {
+        String canary = "CANARY-7731";
+        var source = new ChatRequest.Source(canary, canary, "https://x.invalid/" + canary);
+        var result = new ChatRequest.Result(canary, canary, false, source);
+        var call = new ChatRequest.Call(canary, canary, Map.of(canary, canary));
+        var turn = new ChatRequest.ToolTurnDto(1, canary, List.of(call), canary, List.of(result));
+        var tool = new ChatRequest.Tool("t", canary, Map.of(canary, canary));
+        var request = new ChatRequest(List.of("docs"), "q", null, null, null, List.of(tool), List.of(turn));
+
+        assertThat(request.toString() + tool + turn + call + result + source).doesNotContain(canary);
     }
 
     @Test

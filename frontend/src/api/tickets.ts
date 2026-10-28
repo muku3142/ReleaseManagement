@@ -39,6 +39,7 @@ export type TicketSearchCriteria =
       sprintId: string | null;
       statusCategories: StatusCategory[];
     }
+  | { mode: 'product'; productId: string; statusCategories: StatusCategory[] }
   | { mode: 'jql'; jql: string };
 
 export type TicketSearchResponse = { tickets: Ticket[] };
@@ -51,12 +52,20 @@ export type TicketSearchResponse = { tickets: Ticket[] };
 export function toSearchBody(
   criteria: TicketSearchCriteria,
   releaseId?: string,
+  hideAlreadyInRelease = false,
 ): Record<string, unknown> {
   // Present means "hide what this release already holds"; absent is the unfiltered browse screen.
   // The server does the filtering, so the count the UI shows is the count of what it is showing.
-  const scope = releaseId ? { releaseId } : {};
+  // D-17.2-06: hideAlreadyInRelease is sent only when true, so an absent field keeps today's results.
+  const scope = {
+    ...(releaseId ? { releaseId } : {}),
+    ...(hideAlreadyInRelease ? { hideAlreadyInRelease: true } : {}),
+  };
   if (criteria.mode === 'jql') {
     return { jql: criteria.jql, ...scope };
+  }
+  if (criteria.mode === 'product') {
+    return { productId: criteria.productId, statusCategories: criteria.statusCategories, ...scope };
   }
   return {
     projectId: criteria.projectId,
@@ -68,10 +77,19 @@ export function toSearchBody(
 
 export function useTicketSearch(releaseId?: string) {
   return useMutation({
-    mutationFn: (criteria: TicketSearchCriteria) =>
+    mutationFn: ({
+      criteria,
+      hideAlreadyInRelease,
+      hiddenReleaseId,
+    }: {
+      criteria: TicketSearchCriteria;
+      hideAlreadyInRelease: boolean;
+      // A release the user picked to leave out; the dialog's own releaseId takes its place there.
+      hiddenReleaseId?: string;
+    }) =>
       apiFetch<TicketSearchResponse>('/api/tickets/search', {
         method: 'POST',
-        body: JSON.stringify(toSearchBody(criteria, releaseId)),
+        body: JSON.stringify(toSearchBody(criteria, hiddenReleaseId ?? releaseId, hideAlreadyInRelease)),
       }),
   });
 }

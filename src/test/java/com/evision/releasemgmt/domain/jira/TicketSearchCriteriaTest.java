@@ -3,6 +3,7 @@ package com.evision.releasemgmt.domain.jira;
 import org.junit.jupiter.api.Test;
 
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -73,6 +74,28 @@ class TicketSearchCriteriaTest {
         String composed = TicketSearchCriteria.byProject("10023", null, Set.of()).toJql();
 
         assertThat(composed).isEqualTo("project = 10023 ORDER BY key ASC");
+    }
+
+    @Test
+    void productKeysComposeAQuotedProjectInClause() {
+        String composed = TicketSearchCriteria
+                .byProjectKeys(List.of("ABC", "CNV"), EnumSet.of(StatusCategory.DONE))
+                .toJql();
+
+        assertThat(composed)
+                .isEqualTo("project in (\"ABC\", \"CNV\") AND statusCategory IN (\"Done\") ORDER BY key ASC");
+    }
+
+    @Test
+    void aSingleProductKeyStillUsesTheInClause() {
+        assertThat(TicketSearchCriteria.byProjectKeys(List.of("ABC"), null).toJql())
+                .isEqualTo("project in (\"ABC\") AND statusCategory IN (\"Done\") ORDER BY key ASC");
+    }
+
+    @Test
+    void aReservedWordProjectKeyIsQuoted() {
+        assertThat(TicketSearchCriteria.byProjectKeys(List.of("IN", "OR"), Set.of()).toJql())
+                .isEqualTo("project in (\"IN\", \"OR\") ORDER BY key ASC");
     }
 
     @Test

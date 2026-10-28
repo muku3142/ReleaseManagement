@@ -1,6 +1,8 @@
 package com.evision.releasemgmt.application;
 
+import com.evision.releasemgmt.domain.auth.JiraAccessContext;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
+import com.evision.releasemgmt.domain.briefing.BriefingFieldIds;
 import com.evision.releasemgmt.domain.jira.JiraField;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
 import com.evision.releasemgmt.domain.jira.TicketField;
@@ -11,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -22,6 +25,8 @@ import java.util.Set;
 public class FieldMetadataService {
 
     private static final Logger log = LoggerFactory.getLogger(FieldMetadataService.class);
+
+    public static final List<String> BRIEFING_FIELD_NAMES = List.of("Story Points", "Flagged", "Sprint", "Acceptance Criteria");
 
     private final JiraAccessContextService accessContextService;
     private final JiraFieldMetadataPort fieldMetadataPort;
@@ -44,7 +49,7 @@ public class FieldMetadataService {
         // No cache refresh on a miss: a site without the field would otherwise re-fetch metadata on every search.
         List<JiraField> candidates = currentCache()
                 .get(TicketField.STORY_POINTS.displayName().toLowerCase(Locale.ROOT).trim());
-        String id = candidates == null ? null : disambiguate(TicketField.STORY_POINTS, candidates);
+        String id = candidates == null ? null : disambiguate(TicketField.STORY_POINTS.displayName(), candidates);
         if (id == null) {
             log.warn("Story points field not resolved (candidates: {}); set RM_JIRA_STORY_POINTS_FIELD_ID to pin one",
                     candidates == null ? List.of() : candidates.stream().map(JiraField::id).toList());
@@ -70,7 +75,7 @@ public class FieldMetadataService {
                 failures.add("'" + field.displayName() + "': no field with that name");
                 continue;
             }
-            String id = disambiguate(field, candidates);
+            String id = disambiguate(field.displayName(), candidates);
             if (id == null) {
                 failures.add("'" + field.displayName() + "': ambiguous between "
                         + candidates.stream().map(JiraField::id).toList() + " with no system field");
@@ -92,12 +97,12 @@ public class FieldMetadataService {
     // the name — so it wins. Guessing between multiple *custom* fields is still refused: that is
     // where the silent-wrong-field risk actually lives, and what Phase 5 depends on.
     // Returns null when the choice is genuinely undecidable.
-    private String disambiguate(TicketField field, List<JiraField> candidates) {
+    private String disambiguate(String displayName, List<JiraField> candidates) {
         List<JiraField> systemFields = candidates.stream().filter(candidate -> !candidate.custom()).toList();
         if (systemFields.size() == 1) {
             if (candidates.size() > 1) {
                 log.debug("Jira field name '{}' is shadowed by {} custom field(s); using system field '{}'",
-                        field.displayName(), candidates.size() - 1, systemFields.get(0).id());
+                        displayName, candidates.size() - 1, systemFields.get(0).id());
             }
             return systemFields.get(0).id();
         }
@@ -105,6 +110,38 @@ public class FieldMetadataService {
             return candidates.get(0).id();
         }
         return null;
+    }
+
+    /** Name -> id for the names this site has (system field wins, ambiguous customs omitted); one /field call, no shared cache. */
+    public Map<String, String> resolveOptional(JiraAccessContext access, Collection<String> names) {
+        Map<String, List<JiraField>> byName = new LinkedHashMap<>();
+        for (JiraField field : fieldMetadataPort.fetchAllFields(access)) {
+            byName.computeIfAbsent(field.name().toLowerCase(Locale.ROOT).trim(), key -> new ArrayList<>()).add(field);
+        }
+        Map<String, String> resolved = new LinkedHashMap<>();
+        for (String name : names) {
+            String lookupKey = name.toLowerCase(Locale.ROOT).trim();
+            if (lookupKey.equals(TicketField.STORY_POINTS.displayName().toLowerCase(Locale.ROOT))
+                    && !storyPointsFieldIdOverride.isEmpty()) {
+                resolved.put(lookupKey, storyPointsFieldIdOverride);
+                continue;
+            }
+            List<JiraField> candidates = byName.get(lookupKey);
+            String id = candidates == null ? null : disambiguate(name, candidates);
+            if (id == null) {
+                log.debug("Optional Jira field '{}' not resolved on this site", name);
+                continue;
+            }
+            resolved.put(lookupKey, id);
+        }
+        return resolved;
+    }
+
+    /** The briefing field ids this site has; a field the site lacks is null. */
+    public BriefingFieldIds briefingFieldIds(JiraAccessContext access) {
+        Map<String, String> ids = resolveOptional(access, BRIEFING_FIELD_NAMES);
+        return new BriefingFieldIds(ids.get("story points"), ids.get("flagged"), ids.get("sprint"),
+                ids.get("acceptance criteria"));
     }
 
     public void invalidate() {

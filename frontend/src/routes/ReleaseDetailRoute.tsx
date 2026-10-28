@@ -1,7 +1,17 @@
-import { Fragment, useState } from 'react';
-import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
+import { Fragment, useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams, useSearch } from '@tanstack/react-router';
+import { useAssistantStatus } from '../api/assistant';
+import { chatActions } from '../assistant/chatStore';
+import { ReleaseAssistantDrawer } from '../assistant/ReleaseAssistantDrawer';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
+import { useDocumentReadiness } from '../api/documents';
+import { ProductsEditor } from '../components/ProductsEditor';
+import { PackagesLink } from '../components/PackagesLink';
+import { SMALL_BUTTON } from '../components/EnvironmentLadderSection';
+import { Spinner } from '../components/ExportButtons';
+import { useAddFromRelease, type RoadmapAddResult as RoadmapAddResultData } from '../api/roadmap';
+import { RoadmapAddResult } from '../roadmap/RoadmapAddResult';
 import {
   MANUAL_ITEM_CATEGORIES,
   MANUAL_ITEM_CATEGORY_LABELS,
@@ -9,10 +19,12 @@ import {
   useDeleteRelease,
   useFreezeRelease,
   useRefreshCodeLinks,
+  releaseBundles,
   useRefreshRelease,
   useRelease,
   useRemoveManualItem,
   useRemoveTicketItem,
+  useUnfreezeRelease,
   useUpdateManualItem,
   type ManualItemCategory,
   type ReleaseAddResult,
@@ -22,6 +34,7 @@ import { CodeLinksChip, CodeLinksDetail } from '../components/CodeLinks';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DocumentsSection } from '../components/DocumentsSection';
 import { ItemChurn } from '../components/ItemChurn';
+import { ClientInstallsSection } from '../components/ClientInstallsSection';
 import { PromotionSection } from '../components/PromotionSection';
 
 // D-03-13: idempotent add, honest feedback - never phrased as a warning, because a duplicate
@@ -53,6 +66,39 @@ export function ReleaseDetailRoute() {
   const navigate = useNavigate();
   const release = useRelease(releaseId);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  const assistant = useAssistantStatus(true);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const assistantToggle = useRef<HTMLButtonElement>(null);
+  const hash = useLocation({ select: (l) => l.hash });
+
+  useEffect(() => {
+    setAssistantOpen(false);
+    setUnfrozenThisVisit(false);
+  }, [releaseId]);
+
+  const addTicketsButton = useRef<HTMLButtonElement>(null);
+  const [focusAddTickets, setFocusAddTickets] = useState(false);
+  const [announcement, setAnnouncement] = useState('');
+  const [unfrozenThisVisit, setUnfrozenThisVisit] = useState(false);
+  const releaseStatus = release.data?.status;
+  const readiness = useDocumentReadiness();
+
+  useEffect(() => {
+    if (focusAddTickets && releaseStatus === 'OPEN') {
+      addTicketsButton.current?.focus();
+      setFocusAddTickets(false);
+    }
+  }, [focusAddTickets, releaseStatus]);
+
+  // The hash is user-controlled: it is only ever compared against loaded ticket keys, never used as a selector.
+  const loadedItems = release.data?.items;
+  useEffect(() => {
+    const fragment = hash.replace(/^#/, '');
+    const key = fragment.startsWith('ticket-') ? fragment.slice('ticket-'.length) : null;
+    if (key === null || !loadedItems?.some((item) => item.key === key)) return;
+    setExpandedKey(key);
+    document.getElementById(`ticket-${key}`)?.scrollIntoView({ block: 'center' });
+  }, [hash, loadedItems]);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const showBanner = !bannerDismissed && added !== undefined && alreadyPresent !== undefined;
   const [addOpen, setAddOpen] = useState(false);
@@ -61,11 +107,18 @@ export function ReleaseDetailRoute() {
   const refresh = useRefreshRelease();
   const refreshCodeLinks = useRefreshCodeLinks();
   const freeze = useFreezeRelease();
+  const unfreeze = useUnfreezeRelease();
   const remove = useDeleteRelease();
-  const [confirming, setConfirming] = useState<'freeze' | 'delete' | null>(null);
-  const busy = refresh.isPending || refreshCodeLinks.isPending || freeze.isPending || remove.isPending;
+  const [confirming, setConfirming] = useState<'freeze' | 'unfreeze' | 'delete' | null>(null);
+  const busy =
+    refresh.isPending ||
+    refreshCodeLinks.isPending ||
+    freeze.isPending ||
+    unfreeze.isPending ||
+    remove.isPending;
 
   const removeTicket = useRemoveTicketItem();
+  const [bundleRemoval, setBundleRemoval] = useState<{ key: string; bundle: string } | null>(null);
   const addManualItem = useAddManualItem();
   const updateManualItem = useUpdateManualItem();
   const removeManualItem = useRemoveManualItem();
@@ -75,10 +128,47 @@ export function ReleaseDetailRoute() {
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<ManualItemCategory>('OTHER');
 
+  const addToRoadmap = useAddFromRelease();
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [roadmapResult, setRoadmapResult] = useState<RoadmapAddResultData | null>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  const itemCount = release.data?.items.length ?? 0;
+  const allSelected = itemCount > 0 && selected.size === itemCount;
+  const someSelected = selected.size > 0 && !allSelected;
+  const roadmapProblem =
+    addToRoadmap.isError && addToRoadmap.error instanceof ApiError ? addToRoadmap.error.problem : undefined;
+
+  // indeterminate is a DOM property, not an HTML attribute, so it cannot be set as a JSX prop.
+  useEffect(() => {
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected;
+  }, [someSelected]);
+
+  function toggleSelected(key: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  }
+
+  function sendToRoadmap(releaseId: string) {
+    setRoadmapResult(null);
+    addToRoadmap.mutate(
+      { releaseId, ticketKeys: [...selected] },
+      {
+        onSuccess: (result) => {
+          setRoadmapResult(result);
+          setSelected(new Set());
+        },
+      },
+    );
+  }
+
   const actionProblem =
     (refresh.isError && refresh.error instanceof ApiError && refresh.error.problem) ||
     (refreshCodeLinks.isError && refreshCodeLinks.error instanceof ApiError && refreshCodeLinks.error.problem) ||
     (freeze.isError && freeze.error instanceof ApiError && freeze.error.problem) ||
+    (unfreeze.isError && unfreeze.error instanceof ApiError && unfreeze.error.problem) ||
     (remove.isError && remove.error instanceof ApiError && remove.error.problem) ||
     (removeTicket.isError && removeTicket.error instanceof ApiError && removeTicket.error.problem) ||
     (addManualItem.isError && addManualItem.error instanceof ApiError && addManualItem.error.problem) ||
@@ -135,7 +225,23 @@ export function ReleaseDetailRoute() {
 
   const isFrozen = data.status === 'FROZEN';
   const isOpen = data.status === 'OPEN';
+  const blocked = data.unfreezeBlockedReason !== null;
+  const hasStaleDocument =
+    readiness.data?.entries?.some((e) => e.releaseId === data.id && e.state === 'STALE') ?? false;
   const noItems = data.items.length === 0 && data.manualItems.length === 0;
+  const bundles = releaseBundles(data.items);
+  const ungrouped = data.items.filter((item) => !item.bundle);
+  const ticketGroups =
+    bundles.length === 0
+      ? [{ key: 'all', label: null, items: data.items }]
+      : [
+          ...bundles.map((name) => ({
+            key: `bundle:${name}`,
+            label: name,
+            items: data.items.filter((item) => item.bundle === name),
+          })),
+          ...(ungrouped.length > 0 ? [{ key: 'ungrouped', label: 'Ungrouped', items: ungrouped }] : []),
+        ];
   const uncheckedCount = data.items.filter(
     (i) => i.codeLinks.status === 'FAILED' || i.codeLinks.status === 'NOT_ATTEMPTED',
   ).length;
@@ -182,15 +288,48 @@ export function ReleaseDetailRoute() {
   }
 
   return (
-    <div className="w-full">
+    <div className="relative w-full">
+      {assistantOpen && assistant.data?.enabled && (
+        <ReleaseAssistantDrawer
+          releaseId={data.id}
+          label={`${data.name} ${data.version}`}
+          starters={assistant.data.starters.release}
+          onClose={() => {
+            setAssistantOpen(false);
+            assistantToggle.current?.focus();
+          }}
+        />
+      )}
       <div className="bg-white p-6">
-        <div>
+        <div className="flex items-center">
           <h2 className="text-base font-semibold text-gray-900 inline">{data.name}</h2>
           <span className="ml-2 text-sm text-gray-600">{data.version}</span>
           {isFrozen ? (
             <span className="ml-3 rounded-full bg-gray-800 px-2 py-0.5 text-sm text-white">Frozen</span>
           ) : (
             <span className="ml-3 rounded-full bg-gray-100 px-2 py-0.5 text-sm text-gray-700">Open</span>
+          )}
+          <span className="grow" />
+          <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+            {announcement}
+          </p>
+          {assistant.data?.enabled && (
+            <button
+              type="button"
+              ref={assistantToggle}
+              aria-expanded={assistantOpen}
+              aria-controls="assistant-drawer"
+              onClick={() => {
+                if (assistantOpen) {
+                  chatActions.stop(`drawer:${data.id}`);
+                  assistantToggle.current?.focus();
+                }
+                setAssistantOpen(!assistantOpen);
+              }}
+              className="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 focus-visible:ring-2 focus-visible:ring-blue-600"
+            >
+              Ask about this release
+            </button>
           )}
         </div>
 
@@ -209,10 +348,15 @@ export function ReleaseDetailRoute() {
           )}
         </div>
 
+        <ProductsEditor release={data} />
+
+        <PackagesLink release={data} />
+
         {isOpen && (
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"
+              ref={addTicketsButton}
               onClick={() => setAddOpen(true)}
               disabled={busy}
               className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
@@ -272,6 +416,44 @@ export function ReleaseDetailRoute() {
           </div>
         )}
 
+        {isFrozen && (
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (!blocked) setConfirming('unfreeze');
+              }}
+              disabled={busy}
+              aria-disabled={blocked ? 'true' : undefined}
+              aria-describedby={blocked ? 'unfreeze-blocked-reason' : undefined}
+              className={`rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 focus-visible:ring-2 focus-visible:ring-blue-600 disabled:opacity-50${blocked ? ' cursor-not-allowed opacity-50' : ''}`}
+            >
+              Unfreeze release
+            </button>
+            {unfreeze.isPending && (
+              <span className="flex items-center gap-2 text-sm text-gray-600">
+                <span
+                  className="h-4 w-4 animate-spin motion-reduce:animate-none rounded-full border-2 border-gray-300 border-t-blue-600"
+                  aria-hidden="true"
+                />
+                Unfreezing…
+              </span>
+            )}
+          </div>
+        )}
+        {data.unfreezeBlockedReason !== null && (
+          <p id="unfreeze-blocked-reason" className="mt-2 text-xs text-amber-700">
+            {messageForReason({ status: 409, reason: data.unfreezeBlockedReason })}
+          </p>
+        )}
+
+        {isOpen && unfrozenThisVisit && hasStaleDocument && (
+          <p className="mt-2 text-xs text-amber-700">
+            This release was unfrozen. Its existing documents are out of date and will need regenerating after you
+            freeze it again.
+          </p>
+        )}
+
         {actionProblem && (
           <p role="alert" data-reason={actionProblem.reason} className="mt-2 text-sm text-red-600">
             {messageForReason(actionProblem)}
@@ -280,7 +462,9 @@ export function ReleaseDetailRoute() {
 
         {isFrozen && (
           <p className="mt-4 rounded bg-gray-100 p-3 text-sm text-gray-700">
-            This release is frozen. Its ticket set is locked and cannot be changed.
+            {blocked
+              ? 'This release is frozen. Its ticket set is locked and cannot be changed.'
+              : 'This release is frozen. Its ticket set is locked. Unfreeze it to change tickets, if nothing has been deployed or installed yet.'}
           </p>
         )}
       </div>
@@ -288,7 +472,7 @@ export function ReleaseDetailRoute() {
       <ConfirmDialog
         open={confirming === 'freeze'}
         title={`Freeze ${data.name} ${data.version}?`}
-        body="Freezing locks the ticket set and manual items exactly as they are now. You cannot add, remove, or refresh items afterward, and there is no way to unfreeze. If scope changes later, create a new release."
+        body="Freezing locks the ticket set and manual items exactly as they are now. You cannot add, remove, or refresh items while it is frozen. You can unfreeze it again until a promotion or client install is recorded; after that, create a new release if scope changes."
         confirmLabel="Freeze release"
         confirmClassName="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
         pending={freeze.isPending}
@@ -318,6 +502,27 @@ export function ReleaseDetailRoute() {
       </ConfirmDialog>
 
       <ConfirmDialog
+        open={confirming === 'unfreeze'}
+        title={`Unfreeze ${data.name} ${data.version}?`}
+        body="Unfreezing reopens this release so you can add, remove, or refresh tickets. Nothing has been deployed or installed, so no history is affected. Documents generated so far will be marked out of date once you change the tickets, until you regenerate them. Freeze the release again when the ticket set is final."
+        confirmLabel="Unfreeze release"
+        confirmClassName="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        pending={unfreeze.isPending}
+        // onSettled closes the dialog for the same reason as freeze: a rejection must be readable.
+        onConfirm={() =>
+          unfreeze.mutate(data.id, {
+            onSuccess: () => {
+              setFocusAddTickets(true);
+              setUnfrozenThisVisit(true);
+              setAnnouncement(`${data.name} ${data.version} unfrozen. Tickets can be edited.`);
+            },
+            onSettled: () => setConfirming(null),
+          })
+        }
+        onCancel={() => setConfirming(null)}
+      />
+
+      <ConfirmDialog
         open={confirming === 'delete'}
         title={`Delete ${data.name} ${data.version}?`}
         body="This permanently deletes the release and its items. This cannot be undone."
@@ -333,11 +538,44 @@ export function ReleaseDetailRoute() {
         onCancel={() => setConfirming(null)}
       />
 
+      <ConfirmDialog
+        open={bundleRemoval !== null}
+        title={`Remove ${bundleRemoval?.key ?? ''}?`}
+        body={`${bundleRemoval?.key} is in the bundle "${bundleRemoval?.bundle}". Remove the whole bundle, or only this ticket? The rest of the bundle stays if you remove only this ticket.`}
+        confirmLabel="Remove whole bundle"
+        confirmClassName="rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+        pending={removeTicket.isPending}
+        onConfirm={() =>
+          bundleRemoval &&
+          removeTicket.mutate(
+            { releaseId: data.id, ticketKey: bundleRemoval.key, withBundle: true },
+            { onSettled: () => setBundleRemoval(null) },
+          )
+        }
+        onCancel={() => setBundleRemoval(null)}
+      >
+        <button
+          type="button"
+          onClick={() =>
+            bundleRemoval &&
+            removeTicket.mutate(
+              { releaseId: data.id, ticketKey: bundleRemoval.key },
+              { onSettled: () => setBundleRemoval(null) },
+            )
+          }
+          disabled={removeTicket.isPending}
+          className="mt-3 rounded border border-gray-300 px-4 py-2 text-sm text-gray-700 disabled:opacity-50"
+        >
+          Remove only {bundleRemoval?.key}
+        </button>
+      </ConfirmDialog>
+
       <AddTicketsToReleaseDialog
         open={addOpen}
         releaseId={data.id}
         releaseName={data.name}
         version={data.version}
+        productId={data.products[0]?.id}
         onAdded={setAddOutcome}
         onClose={() => setAddOpen(false)}
       />
@@ -400,10 +638,57 @@ export function ReleaseDetailRoute() {
       ) : (
         <>
           <h3 className="mt-6 text-base font-semibold text-gray-900">Tickets ({data.items.length})</h3>
+          {selected.size > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm">
+              <span role="status" aria-live="polite" className="text-gray-700">
+                {selected.size} selected
+              </span>
+              <button
+                type="button"
+                className={SMALL_BUTTON}
+                onClick={() => setSelected(new Set(data.items.map((item) => item.key)))}
+              >
+                Select all
+              </button>
+              <button type="button" className={SMALL_BUTTON} onClick={() => setSelected(new Set())}>
+                Clear
+              </button>
+              <button
+                type="button"
+                disabled={addToRoadmap.isPending}
+                onClick={() => sendToRoadmap(data.id)}
+                className="flex items-center gap-2 rounded border border-gray-300 px-3 py-1.5 text-sm font-semibold text-gray-700 disabled:opacity-50"
+              >
+                {addToRoadmap.isPending && <Spinner />}
+                {addToRoadmap.isPending ? 'Adding…' : 'Add to roadmap'}
+              </button>
+            </div>
+          )}
+          {roadmapResult && (
+            <div className="mt-2 text-sm text-gray-700">
+              <RoadmapAddResult result={roadmapResult} showRoadmapLink />
+            </div>
+          )}
+          {roadmapProblem && (
+            <p role="alert" data-reason={roadmapProblem.reason} className="mt-2 text-sm text-red-600">
+              Couldn&apos;t add to the roadmap — {messageForReason(roadmapProblem)} Try again.
+            </p>
+          )}
           <div className="mt-4 overflow-x-auto rounded border border-gray-200 bg-white">
             <table className="min-w-full text-sm">
               <thead className="border-b border-gray-200">
                 <tr>
+                  <th scope="col" className="px-4 py-2">
+                    <input
+                      type="checkbox"
+                      ref={selectAllRef}
+                      aria-label="Select all tickets"
+                      checked={allSelected}
+                      onChange={() =>
+                        setSelected(allSelected ? new Set() : new Set(data.items.map((item) => item.key)))
+                      }
+                    />
+                  </th>
                   <th scope="col" className="px-4 py-2 text-left font-semibold text-gray-700">
                     Key
                   </th>
@@ -436,101 +721,129 @@ export function ReleaseDetailRoute() {
                 </tr>
               </thead>
               <tbody>
-                {data.items.map((item) => (
-                  <Fragment key={item.key}>
-                    {/* Same row-click behaviour as TicketBrowser: the arrow stays for keyboard users, and
-                        controls inside the row (chip, Retry, Remove) and text selection don't toggle. */}
-                    <tr
-                      className="cursor-pointer border-b border-gray-100 hover:bg-gray-50"
-                      onClick={(event) => {
-                        if ((event.target as HTMLElement).closest('button, a, input, label')) return;
-                        if (window.getSelection()?.toString()) return;
-                        setExpandedKey(expandedKey === item.key ? null : item.key);
-                      }}
-                    >
-                      <td className="whitespace-nowrap px-4 py-2 font-semibold text-gray-900">{item.key}</td>
-                      <td className="min-w-[18rem] px-4 py-2 text-gray-700">{item.summary}</td>
-                      <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.issueType}</td>
-                      <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.status}</td>
-                      <td className="px-4 py-2">
-                        <CodeLinksChip
-                          links={item.codeLinks}
-                          onRetry={
-                            isOpen
-                              ? () => refreshCodeLinks.mutate({ releaseId: data.id, ticketKey: item.key })
-                              : undefined
-                          }
-                          retryDisabled={busy}
-                        />
-                      </td>
-                      <td className="px-4 py-2">
-                        <ItemChurn churn={item.churn} />
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.resolution ?? '—'}</td>
-                      <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.assignee ?? '—'}</td>
-                      <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.reporter ?? '—'}</td>
-                      <td className="px-4 py-2">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedKey(expandedKey === item.key ? null : item.key)}
-                          aria-expanded={expandedKey === item.key}
-                          aria-label={
-                            expandedKey === item.key ? 'Collapse ticket details' : 'Expand ticket details'
-                          }
-                          className="rounded px-2 text-sm text-gray-600 hover:text-gray-900 focus-visible:ring-2 focus-visible:ring-blue-600"
-                        >
-                          {expandedKey === item.key ? '▾' : '▸'}
-                        </button>
-                      </td>
-                      {isOpen && (
-                        <td className="px-4 py-2">
-                          <button
-                            type="button"
-                            onClick={() => removeTicket.mutate({ releaseId: data.id, ticketKey: item.key })}
-                            disabled={removeTicket.isPending}
-                            aria-label={`Remove ticket ${item.key}`}
-                            className="text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
-                          >
-                            Remove
-                          </button>
-                        </td>
-                      )}
-                    </tr>
-                    {expandedKey === item.key && (
+                {ticketGroups.map((group) => (
+                  <Fragment key={group.key}>
+                    {group.label !== null && (
                       <tr>
-                        <td colSpan={isOpen ? 11 : 10} className="px-4 pb-4">
-                          <div className="max-h-80 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-4">
-                            <h3 className="text-sm font-semibold text-gray-900">Description</h3>
-                            <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
-                              {item.description || 'No description.'}
-                            </p>
-
-                            <h3 className="mt-4 text-sm font-semibold text-gray-900">
-                              Comments
-                              {item.commentTotal > item.comments.length
-                                ? ` (showing ${item.comments.length} of ${item.commentTotal})`
-                                : ''}
-                            </h3>
-                            {item.comments.length === 0 ? (
-                              <p className="mt-2 text-sm text-gray-600">No comments.</p>
-                            ) : (
-                              <ul className="mt-2 space-y-3">
-                                {item.comments.map((comment, index) => (
-                                  <li
-                                    key={index}
-                                    className="whitespace-pre-wrap border-l-2 border-gray-200 pl-3 text-sm text-gray-700"
-                                  >
-                                    {comment}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-
-                            <CodeLinksDetail links={item.codeLinks} />
-                          </div>
-                        </td>
+                        <th
+                          scope="rowgroup"
+                          colSpan={isOpen ? 12 : 11}
+                          className="bg-muted px-4 py-2 text-left text-sm font-semibold text-foreground"
+                        >
+                          {group.label} ({group.items.length})
+                        </th>
                       </tr>
                     )}
+                    {group.items.map((item) => (
+                      <Fragment key={item.key}>
+                        {/* Same row-click behaviour as TicketBrowser: the arrow stays for keyboard users, and
+                            controls inside the row (chip, Retry, Remove) and text selection don't toggle. */}
+                        <tr
+                          id={`ticket-${item.key}`}
+                          className="cursor-pointer border-b border-gray-100 hover:bg-gray-50"
+                          onClick={(event) => {
+                            if ((event.target as HTMLElement).closest('button, a, input, label')) return;
+                            if (window.getSelection()?.toString()) return;
+                            setExpandedKey(expandedKey === item.key ? null : item.key);
+                          }}
+                        >
+                          <td className="px-4 py-2">
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${item.key}`}
+                              checked={selected.has(item.key)}
+                              onChange={() => toggleSelected(item.key)}
+                            />
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2 font-semibold text-gray-900">{item.key}</td>
+                          <td className="min-w-[18rem] px-4 py-2 text-gray-700">{item.summary}</td>
+                          <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.issueType}</td>
+                          <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.status}</td>
+                          <td className="px-4 py-2">
+                            <CodeLinksChip
+                              links={item.codeLinks}
+                              onRetry={
+                                isOpen
+                                  ? () => refreshCodeLinks.mutate({ releaseId: data.id, ticketKey: item.key })
+                                  : undefined
+                              }
+                              retryDisabled={busy}
+                            />
+                          </td>
+                          <td className="px-4 py-2">
+                            <ItemChurn churn={item.churn} />
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.resolution ?? '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.assignee ?? '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-2 text-gray-700">{item.reporter ?? '—'}</td>
+                          <td className="px-4 py-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedKey(expandedKey === item.key ? null : item.key)}
+                              aria-expanded={expandedKey === item.key}
+                              aria-label={
+                                expandedKey === item.key ? 'Collapse ticket details' : 'Expand ticket details'
+                              }
+                              className="rounded px-2 text-sm text-gray-600 hover:text-gray-900 focus-visible:ring-2 focus-visible:ring-blue-600"
+                            >
+                              {expandedKey === item.key ? '▾' : '▸'}
+                            </button>
+                          </td>
+                          {isOpen && (
+                            <td className="px-4 py-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  item.bundle
+                                    ? setBundleRemoval({ key: item.key, bundle: item.bundle })
+                                    : removeTicket.mutate({ releaseId: data.id, ticketKey: item.key })
+                                }
+                                disabled={removeTicket.isPending}
+                                aria-label={`Remove ticket ${item.key}`}
+                                className="text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                              >
+                                Remove
+                              </button>
+                            </td>
+                          )}
+                        </tr>
+                        {expandedKey === item.key && (
+                          <tr>
+                            <td colSpan={isOpen ? 12 : 11}className="px-4 pb-4">
+                              <div className="max-h-80 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-4">
+                                <h3 className="text-sm font-semibold text-gray-900">Description</h3>
+                                <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">
+                                  {item.description || 'No description.'}
+                                </p>
+
+                                <h3 className="mt-4 text-sm font-semibold text-gray-900">
+                                  Comments
+                                  {item.commentTotal > item.comments.length
+                                    ? ` (showing ${item.comments.length} of ${item.commentTotal})`
+                                    : ''}
+                                </h3>
+                                {item.comments.length === 0 ? (
+                                  <p className="mt-2 text-sm text-gray-600">No comments.</p>
+                                ) : (
+                                  <ul className="mt-2 space-y-3">
+                                    {item.comments.map((comment, index) => (
+                                      <li
+                                        key={index}
+                                        className="whitespace-pre-wrap border-l-2 border-gray-200 pl-3 text-sm text-gray-700"
+                                      >
+                                        {comment}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+
+                                <CodeLinksDetail links={item.codeLinks} />
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    ))}
                   </Fragment>
                 ))}
               </tbody>
@@ -673,6 +986,7 @@ export function ReleaseDetailRoute() {
       )}
 
       <PromotionSection releaseId={data.id} isFrozen={isFrozen} />
+      <ClientInstallsSection releaseId={data.id} isFrozen={isFrozen} />
       <DocumentsSection releaseId={data.id} releaseName={data.name} version={data.version} />
     </div>
   );

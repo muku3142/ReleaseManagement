@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "jira": {
+    "site": "https://evisionegypt.atlassian.net",
+    "cloudId": "0f11e50f-b5e1-41f3-af5c-8da235438ffc",
+    "projects": ["CNV"],
+    "includeOtherProjectsWhereIAmInvolved": true,
+    "lookbackDays": 30
+  },
+  "workWeek": {
+    "days": ["Sun", "Mon", "Tue", "Wed", "Thu"],
+    "timezone": "Africa/Cairo"
+  },
+  "output": {
+    "dataDir": "briefings/data",
+    "keepRuns": 60,
+    "alsoUpdateClaudeDashboard": true
+  },
+  "tasks": {
+    "jira_digest": {
+      "enabled": true,
+      "projects": null,
+      "staleAfterWorkingDays": 3,
+      "dueSoonDays": 5
+    },
+    "sprint_check": {
+      "enabled": true,
+      "projects": null,
+      "backlogItemsWhenNoFutureSprint": 15
+    },
+    "weekly_status": {
+      "enabled": true,
+      "projects": null
+    },
+    "reg_watch": {
+      "enabled": true,
+      "lookbackDays": 7,
+      "deadlineHorizonDays": 90,
+      "topics": ["ISO 20022 / CBPR+ / HVPS+", "Swift Standards Release", "Buna", "Central Bank of Egypt", "SAMA", "CBUAE", "FATF R.16"]
+    },
+    "gulf_invest": {
+      "enabled": true,
+      "lookbackDays": 7,
+      "countries": ["Saudi Arabia", "UAE", "Qatar", "Kuwait", "Bahrain", "Oman"]
+    }
+  }
+}

@@ -33,7 +33,8 @@ public final class SampleReleaseView {
             List.of(TICKET_NO_LINKED_CODE, TICKET_UNRESOLVED, MANUAL_ITEM),
             List.of(new GroupView("Bug", List.of(TICKET_NO_LINKED_CODE)),
                     new GroupView("Story", List.of(TICKET_UNRESOLVED)),
-                    new GroupView("Database script", List.of(MANUAL_ITEM))));
+                    new GroupView("Database script", List.of(MANUAL_ITEM))),
+            List.of(new ProductView("Core Banking"), new ProductView("Mobile App")));
 
     private SampleReleaseView() {
     }

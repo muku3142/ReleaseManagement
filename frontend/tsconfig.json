@@ -10,7 +10,8 @@
     "noUnusedParameters": true,
     "noEmit": true,
     "verbatimModuleSyntax": true,
-    "noImplicitAny": false
+    "noImplicitAny": false,
+    "paths": { "@/*": ["./src/*"] }
   },
   "include": ["src", "tests"],
   "references": [{ "path": "./tsconfig.node.json" }]

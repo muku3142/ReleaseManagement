@@ -1,109 +1,130 @@
-import { useState } from 'react';
-import { useLogin, messageForReason } from '../api/auth';
+import { useEffect, useRef, useState } from 'react';
+import { ExternalLink } from 'lucide-react';
+import { useLogin, useSession } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import { useJiraSite } from '../api/jiraSite';
 import { ApiError } from '../api/client';
 import { safeRedirectTarget } from '../safeRedirect';
+import { ProductOpsLogo } from '@/components/brand/ProductOpsLogo';
+import { PRODUCT_NAME } from '@/components/brand/brand';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Spinner } from '@/components/ui/spinner';
+
+const LOGIN_GLOW = 'radial-gradient(120% 80% at 50% 0%, color-mix(in oklch, var(--brand-from) 14%, transparent), transparent 60%)';
+
+function redirectTarget() {
+  return safeRedirectTarget(new URLSearchParams(window.location.search).get('redirect'));
+}
 
 export function LoginRoute() {
   const [email, setEmail] = useState('');
   const [apiToken, setApiToken] = useState('');
   const login = useLogin();
   const jiraSite = useJiraSite();
+  const session = useSession();
+  const errorRef = useRef<HTMLDivElement>(null);
 
   const siteNotConfigured =
     jiraSite.isError && jiraSite.error instanceof ApiError && jiraSite.error.problem.reason === 'SITE_NOT_CONFIGURED';
+  const problem = login.error instanceof ApiError ? login.error.problem : undefined;
+
+  useEffect(() => {
+    if (session.data) window.location.replace(redirectTarget());
+  }, [session.data]);
+
+  useEffect(() => {
+    if (problem) errorRef.current?.focus();
+  }, [problem]);
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    login.mutate(
-      { email, apiToken },
-      {
-        onSuccess: () => {
-          const search = new URLSearchParams(window.location.search);
-          window.location.assign(safeRedirectTarget(search.get('redirect')));
-        },
-      },
-    );
+    login.mutate({ email, apiToken }, { onSuccess: () => window.location.assign(redirectTarget()) });
   }
 
-  const problem = login.error instanceof ApiError ? login.error.problem : undefined;
-
   return (
-    <div className="mx-auto mt-16 max-w-sm">
-      <h1 className="text-lg font-semibold text-gray-900">Sign in</h1>
-
-      {jiraSite.data && (
-        <p className="mt-2 text-sm text-gray-600">
-          Signing in against <span className="font-medium">{jiraSite.data.baseUrl}</span>.
-        </p>
-      )}
-
-      {siteNotConfigured && jiraSite.error instanceof ApiError && (
-        <p role="alert" data-reason={jiraSite.error.problem.reason} className="mt-2 text-sm text-red-600">
-          {messageForReason(jiraSite.error.problem)}{' '}
-          <a href="/settings" className="underline">
-            Go to Settings
-          </a>
-        </p>
-      )}
-
-      {!siteNotConfigured && (
-        <form onSubmit={handleSubmit} className="mt-4 space-y-3">
+    <div className="relative grid min-h-dvh place-items-center bg-background px-6 py-12">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: LOGIN_GLOW }} />
+      <div className="relative w-full max-w-sm animate-in fade-in slide-in-from-bottom-1 duration-200 ease-out">
+        <ProductOpsLogo variant="login" className="mb-8" animate />
+        <Card className="gap-6 rounded-xl p-8 shadow-md">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Jira email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              required
-              autoComplete="username"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            />
+            <h1 className="text-base font-semibold text-foreground">Sign in</h1>
+            {jiraSite.data && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Signing in to <span className="font-semibold text-foreground">{jiraSite.data.baseUrl}</span>.
+              </p>
+            )}
           </div>
-          <div>
-            <label htmlFor="apiToken" className="block text-sm font-medium text-gray-700">
-              Jira API token
-            </label>
-            <input
-              id="apiToken"
-              name="apiToken"
-              type="password"
-              required
-              autoComplete="off"
-              value={apiToken}
-              onChange={(event) => setApiToken(event.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-            />
-          </div>
-          <p className="text-sm text-gray-600">
-            Need a token?{' '}
-            <a
-              href="https://id.atlassian.com/manage-profile/security/api-tokens"
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
-              Create one on Atlassian's site.
-            </a>
-          </p>
-          <button
-            type="submit"
-            disabled={login.isPending}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            Sign in
-          </button>
-          {problem && (
-            <p role="alert" data-reason={problem.reason} className="text-sm text-red-600">
-              {messageForReason(problem)}
-            </p>
+
+          {siteNotConfigured ? (
+            <Alert variant="warning" role="alert" data-reason="SITE_NOT_CONFIGURED">
+              <AlertTitle>No Jira site is set up yet</AlertTitle>
+              <AlertDescription>
+                {PRODUCT_NAME} takes its Jira Cloud site from the RM_JIRA_DEFAULT_BASE_URL setting the first time it
+                starts. Ask whoever runs {PRODUCT_NAME} to set it and restart the app, then reload this page.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Jira email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  autoComplete="username"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="apiToken">Jira API token</Label>
+                <Input
+                  id="apiToken"
+                  name="apiToken"
+                  type="password"
+                  required
+                  autoComplete="off"
+                  value={apiToken}
+                  onChange={(event) => setApiToken(event.target.value)}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Need a token?{' '}
+                <a
+                  href="https://id.atlassian.com/manage-profile/security/api-tokens"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-primary underline-offset-4 hover:underline"
+                >
+                  Create one on Atlassian's site
+                  <ExternalLink className="size-3" aria-hidden="true" />
+                </a>
+              </p>
+              <Button type="submit" className="w-full" disabled={login.isPending}>
+                {login.isPending ? (
+                  <>
+                    <Spinner />
+                    Signing in…
+                  </>
+                ) : (
+                  'Sign in'
+                )}
+              </Button>
+              {problem && (
+                <Alert variant="destructive" role="alert" data-reason={problem.reason} tabIndex={-1} ref={errorRef}>
+                  <AlertDescription>{messageForReason(problem)}</AlertDescription>
+                </Alert>
+              )}
+            </form>
           )}
-        </form>
-      )}
+        </Card>
+      </div>
     </div>
   );
 }

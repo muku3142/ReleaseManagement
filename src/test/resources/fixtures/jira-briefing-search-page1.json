@@ -1,0 +1,72 @@
+{
+  "issues": [
+    {
+      "id": "20001",
+      "key": "CNV-1",
+      "fields": {
+        "summary": "Export the quarterly report",
+        "issuetype": { "name": "Story" },
+        "status": { "name": "In Progress", "statusCategory": { "key": "indeterminate" } },
+        "priority": { "name": "Highest" },
+        "assignee": { "displayName": "Sample Person" },
+        "created": "2026-10-01T09:00:00.000+0300",
+        "updated": "2026-10-20T10:30:00.000+0300",
+        "resolutiondate": null,
+        "duedate": "2026-10-28",
+        "parent": { "key": "CNV-100" },
+        "subtasks": [ { "key": "CNV-11" }, { "key": "CNV-12" } ],
+        "description": {
+          "type": "doc", "version": 1,
+          "content": [ { "type": "paragraph", "content": [ { "type": "text", "text": "Users export the report as CSV." } ] } ]
+        },
+        "customfield_10016": 5,
+        "customfield_10021": [ { "value": "Impediment" } ],
+        "customfield_10020": [
+          { "id": 77, "name": "Sprint 41", "state": "active", "startDate": "2026-10-18T08:00:00.000Z", "endDate": "2026-11-01T08:00:00.000Z" }
+        ],
+        "customfield_10030": {
+          "type": "doc", "version": 1,
+          "content": [ { "type": "paragraph", "content": [ { "type": "text", "text": "Given a report, when exported, then a CSV downloads." } ] } ]
+        }
+      }
+    },
+    {
+      "id": "20002",
+      "key": "CNV-2",
+      "fields": {
+        "summary": "Fix the login redirect",
+        "issuetype": { "name": "Bug" },
+        "status": { "name": "To Do", "statusCategory": { "key": "new" } },
+        "priority": { "name": "Medium" },
+        "assignee": null,
+        "created": "2026-09-20T09:00:00.000+0300",
+        "updated": "2026-10-19T10:30:00.000+0300",
+        "duedate": null,
+        "subtasks": [],
+        "description": null,
+        "customfield_10016": null,
+        "customfield_10021": [],
+        "customfield_10020": null,
+        "customfield_10030": "   "
+      }
+    },
+    {
+      "id": "20003",
+      "key": "CNV-3",
+      "fields": {
+        "summary": "Rename the settings page",
+        "issuetype": { "name": "Task" },
+        "status": { "name": "Done", "statusCategory": { "key": "done" } },
+        "priority": { "name": "Low" },
+        "created": "2026-09-01T09:00:00.000+0300",
+        "updated": "2026-10-10T10:30:00.000+0300",
+        "resolutiondate": "2026-10-10T10:30:00.000+0300",
+        "subtasks": [],
+        "description": "plain text, not a document",
+        "customfield_10030": "Acceptance criteria: the title reads Preferences."
+      }
+    }
+  ],
+  "nextPageToken": "token-page-2",
+  "isLast": false
+}

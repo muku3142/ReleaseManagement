@@ -1,6 +1,9 @@
 package com.evision.releasemgmt.application;
 
+import com.evision.releasemgmt.domain.document.AiMode;
 import com.evision.releasemgmt.domain.document.DocumentReadinessState;
+import com.evision.releasemgmt.domain.document.DocumentSnapshot;
+import com.evision.releasemgmt.domain.template.ChromeFields;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
@@ -36,45 +39,69 @@ class DocumentReadinessServiceTest {
 
     @Test
     void noTemplateWinsRegardlessOfWhetherASnapshotExists() {
-        assertThat(service.state(ReleaseStatus.OPEN, null, null, false, T0))
+        assertThat(service.state(ReleaseStatus.OPEN, null, null, null, false, T0))
                 .isEqualTo(DocumentReadinessState.NO_TEMPLATE);
-        assertThat(service.state(ReleaseStatus.OPEN, null, null, false, null))
+        assertThat(service.state(ReleaseStatus.OPEN, null, null, null, false, null))
                 .isEqualTo(DocumentReadinessState.NO_TEMPLATE);
     }
 
     @Test
     void templateWithNoSnapshotIsNotGenerated() {
-        assertThat(service.state(ReleaseStatus.OPEN, null, null, true, null))
+        assertThat(service.state(ReleaseStatus.OPEN, null, null, null, true, null))
                 .isEqualTo(DocumentReadinessState.NOT_GENERATED);
     }
 
     @Test
     void snapshotGeneratedAfterBothTimestampsIsUpToDate() {
-        assertThat(service.state(ReleaseStatus.OPEN, T0, T0, true, T1))
+        assertThat(service.state(ReleaseStatus.OPEN, null, T0, T0, true, T1))
                 .isEqualTo(DocumentReadinessState.UP_TO_DATE);
     }
 
     @Test
     void snapshotGeneratedBeforeLastRefreshedAtIsStale() {
-        assertThat(service.state(ReleaseStatus.OPEN, T2, T0, true, T1))
+        assertThat(service.state(ReleaseStatus.OPEN, null, T2, T0, true, T1))
                 .isEqualTo(DocumentReadinessState.STALE);
     }
 
     @Test
     void snapshotGeneratedBeforeItemsChangedAtIsStale() {
-        assertThat(service.state(ReleaseStatus.OPEN, T0, T2, true, T1))
+        assertThat(service.state(ReleaseStatus.OPEN, null, T0, T2, true, T1))
                 .isEqualTo(DocumentReadinessState.STALE);
     }
 
     @Test
-    void frozenReleaseWithASnapshotIsUpToDateEvenWhenTimestampsWouldOtherwiseSayStale() {
-        assertThat(service.state(ReleaseStatus.FROZEN, T2, T2, true, T0))
+    void frozenReleaseWithATicketChangeBeforeTheFreezeAndAfterGenerationIsStale() {
+        assertThat(service.state(ReleaseStatus.FROZEN, T2, null, T1, true, T0))
+                .isEqualTo(DocumentReadinessState.STALE);
+    }
+
+    @Test
+    void frozenReleaseWithAProductEditAfterTheFreezeStaysUpToDate() {
+        assertThat(service.state(ReleaseStatus.FROZEN, T1, null, T2, true, T0))
+                .isEqualTo(DocumentReadinessState.UP_TO_DATE);
+    }
+
+    @Test
+    void frozenReleaseRefrozenWithoutAnEditStaysUpToDate() {
+        assertThat(service.state(ReleaseStatus.FROZEN, T2, null, T0, true, T1))
+                .isEqualTo(DocumentReadinessState.UP_TO_DATE);
+    }
+
+    @Test
+    void frozenReleaseRefreshedAfterGenerationIsStale() {
+        assertThat(service.state(ReleaseStatus.FROZEN, T2, T1, null, true, T0))
+                .isEqualTo(DocumentReadinessState.STALE);
+    }
+
+    @Test
+    void frozenReleaseWithBothTimestampsNullIsUpToDate() {
+        assertThat(service.state(ReleaseStatus.FROZEN, T1, null, null, true, T0))
                 .isEqualTo(DocumentReadinessState.UP_TO_DATE);
     }
 
     @Test
     void bothTimestampsNullWithASnapshotPresentIsUpToDate() {
-        assertThat(service.state(ReleaseStatus.OPEN, null, null, true, T0))
+        assertThat(service.state(ReleaseStatus.OPEN, null, null, null, true, T0))
                 .isEqualTo(DocumentReadinessState.UP_TO_DATE);
     }
 
@@ -82,10 +109,10 @@ class DocumentReadinessServiceTest {
     // timestamp anywhere else, so without it this comparison could never see the change.
     @Test
     void removingATicketFromAnOpenReleaseFlipsAPreviouslyUpToDateDocumentToStale() {
-        DocumentReadinessState beforeRemoval = service.state(ReleaseStatus.OPEN, null, T0, true, T1);
+        DocumentReadinessState beforeRemoval = service.state(ReleaseStatus.OPEN, null, null, T0, true, T1);
         assertThat(beforeRemoval).isEqualTo(DocumentReadinessState.UP_TO_DATE);
 
-        DocumentReadinessState afterRemoval = service.state(ReleaseStatus.OPEN, null, T2, true, T1);
+        DocumentReadinessState afterRemoval = service.state(ReleaseStatus.OPEN, null, null, T2, true, T1);
         assertThat(afterRemoval).isEqualTo(DocumentReadinessState.STALE);
     }
 
@@ -121,6 +148,82 @@ class DocumentReadinessServiceTest {
                         tuple(TemplateDocumentType.RELEASE_NOTES, DocumentReadinessState.NOT_GENERATED),
                         tuple(TemplateDocumentType.RUNBOOK, DocumentReadinessState.NO_TEMPLATE),
                         tuple(TemplateDocumentType.APPROVAL, DocumentReadinessState.NO_TEMPLATE));
+    }
+
+    // D-14-01: readiness compares the staleness basis, never the AI revision's own save time.
+    @Test
+    void aiRevisionOfAStaleDocumentStaysStale() {
+        UUID releaseId = UUID.randomUUID();
+        stubRelease(releaseId, ReleaseStatus.OPEN, T1, null);
+        when(snapshotRepository.findLatestForAllReleases()).thenReturn(List.of(aiRevision(releaseId, T2, T0)));
+
+        assertThat(runbookState(releaseId)).isEqualTo(DocumentReadinessState.STALE);
+    }
+
+    @Test
+    void aiRevisionOfAnUpToDateDocumentBecomesStaleWhenTheTicketSetLaterChanges() {
+        UUID releaseId = UUID.randomUUID();
+        when(snapshotRepository.findLatestForAllReleases()).thenReturn(List.of(aiRevision(releaseId, T2, T1)));
+
+        stubRelease(releaseId, ReleaseStatus.OPEN, T0, null);
+        assertThat(runbookState(releaseId)).isEqualTo(DocumentReadinessState.UP_TO_DATE);
+
+        stubRelease(releaseId, ReleaseStatus.OPEN, T0, T2);
+        assertThat(runbookState(releaseId)).isEqualTo(DocumentReadinessState.STALE);
+    }
+
+    @Test
+    void generatedSnapshotUsesItsGenerationTimeAsBasis() {
+        UUID releaseId = UUID.randomUUID();
+        stubRelease(releaseId, ReleaseStatus.OPEN, T2, null);
+        when(snapshotRepository.findLatestForAllReleases()).thenReturn(List.of(generated(releaseId, T1)));
+
+        assertThat(runbookState(releaseId)).isEqualTo(DocumentReadinessState.STALE);
+    }
+
+    @Test
+    void frozenReleaseAiRevisionWhoseBasisPredatesAPreFreezeChangeIsStale() {
+        UUID releaseId = UUID.randomUUID();
+        stubRelease(releaseId, ReleaseStatus.FROZEN, T2, null, T1);
+        when(snapshotRepository.findLatestForAllReleases()).thenReturn(List.of(aiRevision(releaseId, T2, T0)));
+
+        assertThat(runbookState(releaseId)).isEqualTo(DocumentReadinessState.STALE);
+    }
+
+    @Test
+    void frozenReleaseAiRevisionWhoseBasisFollowsTheLastChangeIsUpToDate() {
+        UUID releaseId = UUID.randomUUID();
+        stubRelease(releaseId, ReleaseStatus.FROZEN, T2, null, T0);
+        when(snapshotRepository.findLatestForAllReleases()).thenReturn(List.of(aiRevision(releaseId, T2, T1)));
+
+        assertThat(runbookState(releaseId)).isEqualTo(DocumentReadinessState.UP_TO_DATE);
+    }
+
+    private void stubRelease(UUID releaseId, ReleaseStatus status, Instant lastRefreshedAt, Instant itemsChangedAt) {
+        stubRelease(releaseId, status, null, lastRefreshedAt, itemsChangedAt);
+    }
+
+    private void stubRelease(UUID releaseId, ReleaseStatus status, Instant frozenAt, Instant lastRefreshedAt,
+                             Instant itemsChangedAt) {
+        when(releaseRepository.search("")).thenReturn(List.of(new ReleaseSummary(releaseId, "R", "1.0", status,
+                "PRJ", T0, "actor", frozenAt, frozenAt == null ? null : "actor", lastRefreshedAt, itemsChangedAt, 0)));
+        when(templateRepository.existsByDocumentType(any())).thenReturn(true);
+    }
+
+    private DocumentReadinessState runbookState(UUID releaseId) {
+        return service.all().stream()
+                .filter(e -> e.documentType() == TemplateDocumentType.RUNBOOK && e.releaseId().equals(releaseId))
+                .findFirst().orElseThrow().state();
+    }
+
+    private static DocumentSnapshot generated(UUID releaseId, Instant generatedAt) {
+        return DocumentSnapshot.create(releaseId, TemplateDocumentType.RUNBOOK, 1, "# Doc", UUID.randomUUID(), "T",
+                "body", ChromeFields.empty(), "actor", generatedAt);
+    }
+
+    private static DocumentSnapshot aiRevision(UUID releaseId, Instant savedAt, Instant sourceGeneratedAt) {
+        return DocumentSnapshot.createAiRevision(generated(releaseId, sourceGeneratedAt), 2, "# AI",
+                AiMode.CLEAN_UP, "instr", "actor", savedAt);
     }
 
     private static ReleaseSummary summary(UUID id, ReleaseStatus status) {

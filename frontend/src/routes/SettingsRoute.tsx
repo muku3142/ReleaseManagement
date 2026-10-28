@@ -1,19 +1,20 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { useAdoCredential, useUpdateAdoCredential } from '../api/adoCredential';
 import { useJiraSite, useUpdateJiraSite } from '../api/jiraSite';
 import { ApiError } from '../api/client';
 import { EnvironmentLadderSection } from '../components/EnvironmentLadderSection';
-import { useSession, useReplaceJiraToken as useReplaceToken, messageForReason } from '../api/auth';
+import { useSession, useReplaceJiraToken as useReplaceToken } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
+import { BriefingSettingsSection } from '../components/BriefingSettingsSection';
 
 export function SettingsRoute() {
   const jiraSite = useJiraSite();
   const updateJiraSite = useUpdateJiraSite();
   const [baseUrl, setBaseUrl] = useState('');
-  const [saved, setSaved] = useState(false);
   const session = useSession();
   const replaceToken = useReplaceToken();
   const [apiToken, setApiToken] = useState('');
-  const [tokenReplaced, setTokenReplaced] = useState(false);
 
   useEffect(() => {
     if (jiraSite.data) setBaseUrl(jiraSite.data.baseUrl);
@@ -24,8 +25,7 @@ export function SettingsRoute() {
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setSaved(false);
-    updateJiraSite.mutate(baseUrl, { onSuccess: () => setSaved(true) });
+    updateJiraSite.mutate(baseUrl, { onSuccess: () => toast.success('Jira site saved.') });
   }
 
   const mutationProblem =
@@ -39,16 +39,16 @@ export function SettingsRoute() {
 
   function handleReplaceToken(event: React.FormEvent) {
     event.preventDefault();
-    setTokenReplaced(false);
     replaceToken.mutate(apiToken, {
       onSuccess: () => {
         setApiToken('');
-        setTokenReplaced(true);
+        toast.success('Token replaced.');
       },
     });
   }
 
   return (
+    <>
     <div className="max-w-xl">
       <h2 className="text-base font-semibold text-gray-900">Jira site</h2>
 
@@ -102,7 +102,6 @@ export function SettingsRoute() {
         >
           Save
         </button>
-        {saved && !updateJiraSite.isError && <p className="text-sm text-green-600">Saved.</p>}
         {mutationDetail && !fieldError && <p className="text-sm text-red-600">{mutationDetail}</p>}
       </form>
 
@@ -137,11 +136,6 @@ export function SettingsRoute() {
         >
           Replace token
         </button>
-        {tokenReplaced && !replaceToken.isError && (
-          <p role="status" className="text-sm text-green-600">
-            Token replaced.
-          </p>
-        )}
         {tokenProblem && (
           <p role="alert" data-reason={tokenProblem.reason} className="text-sm text-red-600">
             {messageForReason(tokenProblem)}
@@ -152,11 +146,15 @@ export function SettingsRoute() {
       <AzureDevOpsSection />
       <EnvironmentLadderSection />
     </div>
+    <div className="mt-8 max-w-3xl">
+      <BriefingSettingsSection />
+    </div>
+    </>
   );
 }
 
 const ADO_STATE_BADGE = {
-  OK: { label: 'OK', className: 'text-green-600' },
+  OK: { label: 'OK', className: 'text-success' },
   EXPIRING: { label: 'Expiring soon', className: 'text-amber-700' },
   EXPIRED: { label: 'Expired', className: 'text-red-600' },
 } as const;
@@ -167,7 +165,6 @@ function AzureDevOpsSection() {
   const [organization, setOrganization] = useState('');
   const [token, setToken] = useState('');
   const [expiresOn, setExpiresOn] = useState('');
-  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (credential.data?.configured) {
@@ -182,13 +179,12 @@ function AzureDevOpsSection() {
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setSaved(false);
     update.mutate(
       { organization, token, expiresOn },
       {
         onSuccess: () => {
           setToken('');
-          setSaved(true);
+          toast.success('Azure DevOps settings saved.');
         },
       },
     );
@@ -260,11 +256,6 @@ function AzureDevOpsSection() {
         >
           Save Azure DevOps token
         </button>
-        {saved && !update.isError && (
-          <p role="status" className="text-sm text-green-600">
-            Azure DevOps settings saved.
-          </p>
-        )}
         {problem && (
           <p role="alert" data-reason={problem.reason} className="text-sm text-red-600">
             {messageForReason(problem)}

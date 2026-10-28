@@ -4,22 +4,37 @@ import com.evision.releasemgmt.adapters.security.SessionRefreshException;
 import com.evision.releasemgmt.application.JiraSiteConfigService.JiraSiteNotConfiguredException;
 import com.evision.releasemgmt.domain.ado.AdoAccessException;
 import com.evision.releasemgmt.domain.ado.AdoCredentialTokenRequiredException;
+import com.evision.releasemgmt.domain.assistant.InvalidAssistRequestException;
+import com.evision.releasemgmt.domain.assistant.RagServiceException;
+import com.evision.releasemgmt.domain.assistant.TransformTooLargeException;
+import com.evision.releasemgmt.domain.document.RevisionSupersededException;
 import com.evision.releasemgmt.domain.auth.JiraAuthenticationException;
+import com.evision.releasemgmt.domain.briefing.BriefingRejectedException;
 import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
 import com.evision.releasemgmt.domain.document.ExportFailedException;
 import com.evision.releasemgmt.domain.document.ChosenTemplateNotFoundException;
 import com.evision.releasemgmt.domain.document.NoTemplateException;
 import com.evision.releasemgmt.domain.document.TemplateTypeMismatchException;
+import com.evision.releasemgmt.domain.portfolio.ClientDeploymentNotFoundException;
+import com.evision.releasemgmt.domain.portfolio.ClientDeploymentRejectedException;
+import com.evision.releasemgmt.domain.portfolio.ClientNotFoundException;
+import com.evision.releasemgmt.domain.portfolio.PortfolioEditRejectedException;
+import com.evision.releasemgmt.domain.portfolio.ProductJiraKeyTakenException;
+import com.evision.releasemgmt.domain.portfolio.ProductNotFoundException;
 import com.evision.releasemgmt.domain.promotion.LadderEditRejectedException;
 import com.evision.releasemgmt.domain.promotion.PromotionNotFoundException;
 import com.evision.releasemgmt.domain.promotion.PromotionRejectedException;
 import com.evision.releasemgmt.domain.promotion.StageNotFoundException;
+import com.evision.releasemgmt.domain.release.InvalidPackagesUrlException;
 import com.evision.releasemgmt.domain.release.ManualItemNotFoundException;
 import com.evision.releasemgmt.domain.jira.TicketNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseDuplicateException;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
+import com.evision.releasemgmt.domain.release.UnfreezeRejectedException;
+import com.evision.releasemgmt.domain.roadmap.RoadmapItemNotFoundException;
+import com.evision.releasemgmt.domain.roadmap.RoadmapRejectedException;
 import com.evision.releasemgmt.domain.template.LogoRejectedException;
 import com.evision.releasemgmt.domain.template.RenderBoundExceededException;
 import com.evision.releasemgmt.domain.template.TemplateDuplicateException;
@@ -47,10 +62,33 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(RagServiceException.class)
+    public ProblemDetail handleRagService(RagServiceException ex) {
+        // The message carries collection and id; it stays in the log, not the response.
+        log.warn("rag-service call failed status={}", ex.status());
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "Assistant unavailable",
+                "The assistant's search service isn't reachable right now.", "ASSISTANT_UNAVAILABLE");
+    }
+
     @ExceptionHandler(JiraSiteNotConfiguredException.class)
     public ProblemDetail handleJiraSiteNotConfigured(JiraSiteNotConfiguredException ex) {
         return problem(HttpStatus.CONFLICT, "Jira site not configured",
                 "No Jira Cloud site is configured yet.", "SITE_NOT_CONFIGURED");
+    }
+
+    @ExceptionHandler(BriefingRejectedException.class)
+    public ProblemDetail handleBriefingRejected(BriefingRejectedException ex) {
+        String reason = ex.reason().name();
+        return switch (ex.reason()) {
+            case BRIEFING_NO_JIRA_CREDENTIAL -> problem(HttpStatus.UNPROCESSABLE_ENTITY, "No Jira credential",
+                    "You have no stored Jira credential. Sign in with a Jira API token first.", reason);
+            case BRIEFING_SETTINGS_INVALID -> problem(HttpStatus.BAD_REQUEST, "Invalid briefing settings",
+                    "Some briefing settings are not valid.", reason);
+            case BRIEFING_TASK_NOT_RUNNABLE -> problem(HttpStatus.BAD_REQUEST, "Briefing not runnable",
+                    "Only the three Jira briefings can be run by the app.", reason);
+            case BRIEFING_TASK_DISABLED -> problem(HttpStatus.CONFLICT, "Briefing disabled",
+                    "Enable this briefing to run it.", reason);
+        };
     }
 
     @ExceptionHandler(AdoAccessException.class)
@@ -162,9 +200,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return switch (ex.reason()) {
             case RELEASE_NOT_FROZEN -> problem(HttpStatus.CONFLICT, "Release not frozen",
                     "Only frozen releases can be promoted. Freeze the release first.", "RELEASE_NOT_FROZEN");
-            case PROMOTION_STAGE_SKIPPED -> problem(HttpStatus.CONFLICT, "Stage cannot be targeted",
-                    "A promotion can only target the next stage of the ladder, or the current stage for a redeploy or a rollback.",
-                    "PROMOTION_STAGE_SKIPPED");
+            case PROMOTION_STAGE_EARLIER -> problem(HttpStatus.CONFLICT, "Stage cannot be targeted",
+                    "A promotion can target the current stage or a later one. To go back, record a rollback on the current stage.",
+                    "PROMOTION_STAGE_EARLIER");
             case PROMOTION_TARGET_RETIRED -> problem(HttpStatus.CONFLICT, "Stage retired",
                     "That stage has been retired from the environment ladder and can no longer be targeted.",
                     "PROMOTION_TARGET_RETIRED");
@@ -180,6 +218,157 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             case PROMOTION_OUTCOME_NOT_RECORDABLE -> problem(HttpStatus.UNPROCESSABLE_ENTITY, "Outcome not allowed",
                     "An entry can only be marked VOIDED by correcting it.", "PROMOTION_OUTCOME_NOT_RECORDABLE");
         };
+    }
+
+    @ExceptionHandler(ClientDeploymentRejectedException.class)
+    public ProblemDetail handleInstallRejected(ClientDeploymentRejectedException ex) {
+        ProblemDetail pd = switch (ex.reason()) {
+            case INSTALL_RELEASE_NOT_FROZEN -> problem(HttpStatus.CONFLICT, "Release not frozen",
+                    "Installs can only be recorded for a frozen release. Freeze the release first.",
+                    "INSTALL_RELEASE_NOT_FROZEN");
+            case INSTALL_PRODUCT_NOT_ON_RELEASE -> problem(HttpStatus.CONFLICT, "Product not on release",
+                    "This release doesn't cover that product. Add the product to the release first.",
+                    "INSTALL_PRODUCT_NOT_ON_RELEASE");
+            case INSTALL_PRODUCT_ARCHIVED -> problem(HttpStatus.CONFLICT, "Product archived",
+                    "That product is archived and can't receive new installs.", "INSTALL_PRODUCT_ARCHIVED");
+            case INSTALL_CLIENTS_REJECTED -> problem(HttpStatus.CONFLICT, "Install rejected",
+                    "One or more clients can't receive this install. Nothing was recorded.",
+                    "INSTALL_CLIENTS_REJECTED");
+            case INSTALL_ALREADY_SUPERSEDED -> problem(HttpStatus.CONFLICT, "Install already corrected",
+                    "This install has already been corrected or voided. Correct the latest entry instead.",
+                    "INSTALL_ALREADY_SUPERSEDED");
+            case INSTALL_INSTALLED_AT_INVALID -> problem(HttpStatus.UNPROCESSABLE_ENTITY, "Invalid install time",
+                    "The installed time can't be in the future.", "INSTALL_INSTALLED_AT_INVALID");
+            case INSTALL_OUTCOME_NOT_RECORDABLE -> problem(HttpStatus.UNPROCESSABLE_ENTITY, "Outcome not allowed",
+                    "An install can only be marked VOIDED by voiding it.", "INSTALL_OUTCOME_NOT_RECORDABLE");
+        };
+        if (!ex.clients().isEmpty()) {
+            pd.setProperty("clients", ex.clients().stream().map(c -> {
+                Map<String, Object> client = new LinkedHashMap<>();
+                client.put("clientId", c.clientId());
+                client.put("name", c.name());
+                client.put("reason", c.reason().name());
+                return client;
+            }).toList());
+        }
+        return pd;
+    }
+
+    @ExceptionHandler(InvalidPackagesUrlException.class)
+    public ProblemDetail handleInvalidPackagesUrl(InvalidPackagesUrlException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid packages link",
+                "Use an https link to OneDrive or SharePoint (sharepoint.com, onedrive.live.com or 1drv.ms).",
+                "RELEASE_PACKAGES_URL_INVALID");
+    }
+
+    @ExceptionHandler(PortfolioEditRejectedException.class)
+    public ProblemDetail handlePortfolioEditRejected(PortfolioEditRejectedException ex) {
+        return switch (ex.reason()) {
+            case PRODUCT_NAME_DUPLICATE -> problem(HttpStatus.CONFLICT, "Duplicate product name",
+                    "A product with this name already exists. Names are not case-sensitive.", "PRODUCT_NAME_DUPLICATE");
+            case CLIENT_NAME_DUPLICATE -> problem(HttpStatus.CONFLICT, "Duplicate client name",
+                    "A client with this name already exists. Names are not case-sensitive.", "CLIENT_NAME_DUPLICATE");
+            case PRODUCT_ARCHIVED -> problem(HttpStatus.CONFLICT, "Product archived",
+                    "That product is archived. Unarchive it first.", "PRODUCT_ARCHIVED");
+            case CLIENT_ARCHIVED -> problem(HttpStatus.CONFLICT, "Client archived",
+                    "That client is archived. Unarchive it first.", "CLIENT_ARCHIVED");
+            case CLIENT_LINK_HAS_INSTALLS -> problem(HttpStatus.CONFLICT, "Link in use",
+                    "This client has install records for this product, so the link can't be removed. "
+                            + "Archive the client instead to stop new installs.", "CLIENT_LINK_HAS_INSTALLS");
+            case PRODUCT_HAS_INSTALLS_ON_RELEASE -> problem(HttpStatus.CONFLICT, "Product in use",
+                    "Can't remove: installs are recorded for this product on this release.",
+                    "PRODUCT_HAS_INSTALLS_ON_RELEASE");
+            case RELEASE_PRODUCT_REQUIRED -> problem(HttpStatus.UNPROCESSABLE_ENTITY, "Product required",
+                    "Choose a product for this release.", "RELEASE_PRODUCT_REQUIRED");
+            case PRODUCT_NO_JIRA_PROJECT -> problem(HttpStatus.UNPROCESSABLE_ENTITY, "No Jira project",
+                    "This product has no Jira project. Add one in Portfolio › Products.", "PRODUCT_NO_JIRA_PROJECT");
+            case PRODUCT_JIRA_KEY_INVALID -> problem(HttpStatus.BAD_REQUEST, "Invalid Jira project key",
+                    "That isn't a valid Jira project key. Keys are letters and digits, starting with a letter, "
+                            + "for example CNV.", "PRODUCT_JIRA_KEY_INVALID");
+        };
+    }
+
+    @ExceptionHandler(ProductJiraKeyTakenException.class)
+    public ProblemDetail handleProductJiraKeyTaken(ProductJiraKeyTakenException ex) {
+        ProblemDetail pd = problem(HttpStatus.CONFLICT, "Jira project key in use",
+                "That Jira project key already belongs to another product. A key can belong to one product only.",
+                "PRODUCT_JIRA_KEY_TAKEN");
+        if (ex.key() != null) {
+            pd.setProperty("key", ex.key());
+        }
+        if (ex.productName() != null) {
+            pd.setProperty("productName", ex.productName());
+        }
+        return pd;
+    }
+
+    @ExceptionHandler(UnfreezeRejectedException.class)
+    public ProblemDetail handleUnfreezeRejected(UnfreezeRejectedException ex) {
+        return switch (ex.reason()) {
+            case UNFREEZE_RELEASE_NOT_FROZEN -> problem(HttpStatus.CONFLICT, "Release not frozen",
+                    "This release is already open.", "UNFREEZE_RELEASE_NOT_FROZEN");
+            case UNFREEZE_HAS_PROMOTIONS -> problem(HttpStatus.CONFLICT, "Release has promotions",
+                    "Can't unfreeze: this release has promotion history. Create a new release to change scope.",
+                    "UNFREEZE_HAS_PROMOTIONS");
+            case UNFREEZE_HAS_INSTALLS -> problem(HttpStatus.CONFLICT, "Release has installs",
+                    "Can't unfreeze: client installs are recorded for this release. Create a new release to change scope.",
+                    "UNFREEZE_HAS_INSTALLS");
+        };
+    }
+
+    @ExceptionHandler(RoadmapRejectedException.class)
+    public ProblemDetail handleRoadmapRejected(RoadmapRejectedException ex) {
+        String reason = ex.reason().name();
+        return switch (ex.reason()) {
+            case ROADMAP_REACH_INVALID -> problem(HttpStatus.BAD_REQUEST, "Invalid Reach",
+                    "Reach must be a whole number, 0 or more.", reason);
+            case ROADMAP_IMPACT_INVALID -> problem(HttpStatus.BAD_REQUEST, "Invalid Impact",
+                    "Impact must be 0.25, 0.5, 1, 2 or 3.", reason);
+            case ROADMAP_CONFIDENCE_INVALID -> problem(HttpStatus.BAD_REQUEST, "Invalid Confidence",
+                    "Confidence must be 100, 80 or 50 percent.", reason);
+            case ROADMAP_EFFORT_INVALID -> problem(HttpStatus.BAD_REQUEST, "Invalid Effort",
+                    "Effort must be a number above 0.", reason);
+            case ROADMAP_TOO_MANY_ITEMS -> problem(HttpStatus.BAD_REQUEST, "Too many items",
+                    "Too many items at once. Add up to 100 at a time.", reason);
+            case ROADMAP_REFRESH_TOO_LARGE -> problem(HttpStatus.BAD_REQUEST, "Too many Jira items",
+                    "There are too many Jira items to refresh at once. Archive items you no longer track.", reason);
+            case ROADMAP_NO_PRODUCT_FOR_PROJECT -> problem(HttpStatus.CONFLICT, "No product for project",
+                    "No product owns this Jira project.", reason);
+            case ROADMAP_PRODUCT_ARCHIVED -> problem(HttpStatus.CONFLICT, "Product archived",
+                    "That product is archived. Choose an active product.", reason);
+            case ROADMAP_ITEM_NOT_JIRA -> problem(HttpStatus.CONFLICT, "Not a Jira item",
+                    "This item was added by hand, so there is nothing to refresh from Jira.", reason);
+            case ROADMAP_ITEM_ARCHIVED -> problem(HttpStatus.CONFLICT, "Item archived",
+                    "This item is archived. Restore it before changing its inputs.", reason);
+            case ROADMAP_JIRA_KEY_DUPLICATE -> problem(HttpStatus.CONFLICT, "Already on the roadmap",
+                    "That issue is already on the roadmap.", reason);
+            case ROADMAP_FIELD_CALCULATED -> problem(HttpStatus.BAD_REQUEST, "Calculated value",
+                    "This value is calculated; override it with a reason instead.", reason);
+            case ROADMAP_FIELD_NOT_CALCULATED -> problem(HttpStatus.BAD_REQUEST, "Not a calculated value",
+                    "Only calculated values can be overridden or reset.", reason);
+        };
+    }
+
+    @ExceptionHandler(RoadmapItemNotFoundException.class)
+    public ProblemDetail handleRoadmapItemNotFound(RoadmapItemNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Roadmap item not found",
+                "That roadmap item no longer exists.", "ROADMAP_ITEM_NOT_FOUND");
+    }
+
+    @ExceptionHandler(ProductNotFoundException.class)
+    public ProblemDetail handleProductNotFound(ProductNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Product not found", "This product doesn't exist.", "PRODUCT_NOT_FOUND");
+    }
+
+    @ExceptionHandler(ClientNotFoundException.class)
+    public ProblemDetail handleClientNotFound(ClientNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Client not found", "This client doesn't exist.", "CLIENT_NOT_FOUND");
+    }
+
+    @ExceptionHandler(ClientDeploymentNotFoundException.class)
+    public ProblemDetail handleInstallNotFound(ClientDeploymentNotFoundException ex) {
+        return problem(HttpStatus.NOT_FOUND, "Install not found",
+                "This install entry doesn't exist on this release.", "INSTALL_NOT_FOUND");
     }
 
     @ExceptionHandler(LadderEditRejectedException.class)
@@ -230,6 +419,26 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleDocumentNotFound(DocumentNotFoundException ex) {
         return problem(HttpStatus.NOT_FOUND, "Document not found",
                 "This document doesn't exist yet.", "DOCUMENT_NOT_FOUND");
+    }
+
+    @ExceptionHandler(RevisionSupersededException.class)
+    public ProblemDetail handleRevisionSuperseded(RevisionSupersededException ex) {
+        return problem(HttpStatus.CONFLICT, "Document changed",
+                "This document has a newer revision. Reopen it and try again.", "REVISION_SUPERSEDED");
+    }
+
+    @ExceptionHandler(InvalidAssistRequestException.class)
+    public ProblemDetail handleInvalidAssistRequest(InvalidAssistRequestException ex) {
+        return problem(HttpStatus.BAD_REQUEST, "Invalid request", ex.getMessage(), "INVALID_ASSIST_REQUEST");
+    }
+
+    @ExceptionHandler(TransformTooLargeException.class)
+    public ProblemDetail handleTransformTooLarge(TransformTooLargeException ex) {
+        ProblemDetail pd = problem(HttpStatus.PAYLOAD_TOO_LARGE, "Text too large",
+                "This document is too long for the AI model on this server.", "TEXT_TOO_LARGE");
+        pd.setProperty("characters", ex.getCharacters());
+        pd.setProperty("maxCharacters", ex.getMaxCharacters());
+        return pd;
     }
 
     @ExceptionHandler(NoTemplateException.class)

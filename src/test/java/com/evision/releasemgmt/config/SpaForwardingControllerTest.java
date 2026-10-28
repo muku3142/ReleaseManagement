@@ -46,6 +46,10 @@ class SpaForwardingControllerTest {
         mockMvc.perform(get("/assets/index-BJiZJ4nx.js")).andExpect(forwardedUrl(null));
         mockMvc.perform(get("/assets/index-BiO8dE8o.css")).andExpect(forwardedUrl(null));
         mockMvc.perform(get("/assets/nested/deep/chunk-abc123.js")).andExpect(forwardedUrl(null));
+        mockMvc.perform(get("/favicon.svg")).andExpect(forwardedUrl(null));
+        mockMvc.perform(get("/favicon.ico")).andExpect(forwardedUrl(null));
+        mockMvc.perform(get("/apple-touch-icon.png")).andExpect(forwardedUrl(null));
+        mockMvc.perform(get("/brand/productops-mark.svg")).andExpect(forwardedUrl(null));
     }
 
     @Test

@@ -1,10 +1,14 @@
 package com.evision.ragservice.application;
 
+import com.evision.ragservice.application.PromptBuilder.NumberedToolSource;
 import com.evision.ragservice.domain.Citation;
 import com.evision.ragservice.domain.CitationBasis;
+import com.evision.ragservice.domain.CitationKind;
+import com.evision.ragservice.domain.ToolSource;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -25,6 +29,10 @@ public final class CitationBuilder {
     }
 
     public Result build(String answer, List<SourceDocument> sent) {
+        return build(answer, sent, List.of());
+    }
+
+    public Result build(String answer, List<SourceDocument> sent, List<NumberedToolSource> tools) {
         Set<Integer> marked = new TreeSet<>();
         Matcher m = MARKER.matcher(answer);
         while (m.find()) {
@@ -37,22 +45,31 @@ public final class CitationBuilder {
         int invented = 0;
         for (int id : marked) {
             SourceDocument doc = sent.stream().filter(d -> d.n() == id).findFirst().orElse(null);
-            if (doc == null) {
-                invented++;
-            } else {
+            NumberedToolSource tool = tools.stream().filter(t -> t.n() == id).findFirst().orElse(null);
+            if (doc != null) {
                 items.add(citation(doc));
+            } else if (tool != null) {
+                items.add(citation(tool));
+            } else {
+                invented++;
             }
         }
         if (!items.isEmpty()) {
             return new Result(CitationBasis.MARKED, items, invented);
         }
 
-        List<Citation> retrieved = sent.stream()
+        List<Citation> retrieved = new ArrayList<>(sent.stream()
                 .filter(d -> d.topScore() >= minScore)
                 .limit(MAX_RETRIEVED)
                 .map(CitationBuilder::citation)
-                .toList();
+                .toList());
+        tools.forEach(t -> retrieved.add(citation(t)));
         return new Result(CitationBasis.RETRIEVED, retrieved, invented);
+    }
+
+    private static Citation citation(NumberedToolSource tool) {
+        ToolSource source = tool.source();
+        return new Citation(tool.n(), source.id(), source.title(), source.url(), null, Map.of(), CitationKind.TOOL);
     }
 
     private static Citation citation(SourceDocument doc) {

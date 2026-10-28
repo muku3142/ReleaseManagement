@@ -20,6 +20,8 @@ class FakeChatPort implements ChatPort {
     volatile Duration delay = Duration.ZERO;
     volatile boolean blockUntilCancelled;
     volatile RuntimeException failAfterFirstToken;
+    volatile List<Completion> completions = List.of();
+    volatile List<List<String>> tokenScript = List.of();
 
     final List<List<ChatMessage>> streamCalls = new CopyOnWriteArrayList<>();
     volatile List<ChatMessage> lastMessages;
@@ -67,12 +69,14 @@ class FakeChatPort implements ChatPort {
                 Thread.currentThread().interrupt();
             }
         }
-        for (String token : tokens) {
+        int call = streamCalls.size() - 1;
+        List<String> emitted = tokenScript.isEmpty() ? tokens : tokenScript.get(Math.min(call, tokenScript.size() - 1));
+        for (String token : emitted) {
             onToken.accept(token);
             if (failAfterFirstToken != null) {
                 throw failAfterFirstToken;
             }
         }
-        return completion;
+        return completions.isEmpty() ? completion : completions.get(Math.min(call, completions.size() - 1));
     }
 }

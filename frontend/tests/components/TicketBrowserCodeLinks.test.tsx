@@ -163,14 +163,18 @@ describe('TicketBrowser linked commits', () => {
     expect(container.textContent).toContain('abcdef1');
   });
 
-  it('clickingAnywhereOnTheRowTogglesItsDetails', async () => {
+  it('doubleClickingAnywhereOnTheRowTogglesItsDetails', async () => {
     mockApi(LINKED);
     await renderAndSearch();
 
-    await act(async () => summaryCell().click());
+    await act(async () => {
+      summaryCell().dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
     expect(buttonByText('Show linked commits')).toBeDefined();
 
-    await act(async () => summaryCell().click());
+    await act(async () => {
+      summaryCell().dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
     expect(buttonByText('Show linked commits')).toBeUndefined();
   });
 

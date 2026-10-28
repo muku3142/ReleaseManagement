@@ -60,12 +60,14 @@ class ToolPropertiesTest {
     @Test
     void contextWithValidSecretBindsCaps() {
         runner.withPropertyValues("rag.tools.signing-secret=" + SECRET, "rag.tools.max-rounds=4",
-                "rag.tools.max-calls=4", "rag.tools.max-tools=5", "rag.tools.definitions-max-chars=1500",
+                "rag.tools.max-calls=4", "rag.tools.max-tools=6", "rag.tools.definitions-max-chars=1900",
                 "rag.tools.result-max-chars=8000", "rag.tools.num-predict=768").run(context -> {
                     assertThat(context).hasNotFailed();
                     ToolProperties props = context.getBean(ToolProperties.class);
                     assertThat(props.maxRounds()).isEqualTo(4);
                     assertThat(props.resultMaxChars()).isEqualTo(8000);
+                    assertThat(props.maxTools()).isEqualTo(6);
+                    assertThat(props.definitionsMaxChars()).isEqualTo(1900);
                 });
     }
 }

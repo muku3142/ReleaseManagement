@@ -31,7 +31,10 @@ public final class PlaceholderCatalog {
                     "Loops over every release item, ticket-backed and manual, in one unified collection.",
                     List.of("Body only")),
             new PlaceholderEntry(PlaceholderScope.ROOT, "groups", PlaceholderKind.SECTION, PlaceholderScope.GROUP,
-                    "Items pre-grouped by this template's chosen dimension (issue type or component).",
+                    "Items pre-grouped by this template's chosen dimension (issue type, component or bundle; ungrouped tickets fall into 'Other').",
+                    List.of("Body only")),
+            new PlaceholderEntry(PlaceholderScope.ROOT, "products", PlaceholderKind.SECTION, PlaceholderScope.PRODUCT,
+                    "Loops over the products this release covers. Empty for an unassigned release.",
                     List.of("Body only")),
 
             // ITEM
@@ -84,6 +87,10 @@ public final class PlaceholderCatalog {
             new PlaceholderEntry(PlaceholderScope.GROUP, "items", PlaceholderKind.SECTION, PlaceholderScope.ITEM,
                     "Loops over the items in this group, with the same fields as the root items collection.",
                     List.of("Body only")),
+
+            // PRODUCT
+            new PlaceholderEntry(PlaceholderScope.PRODUCT, "name", PlaceholderKind.VARIABLE, null,
+                    "The product's name.", List.of("Body only")),
 
             // COMMENT
             new PlaceholderEntry(PlaceholderScope.COMMENT, "text", PlaceholderKind.VARIABLE, null,

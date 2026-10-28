@@ -168,7 +168,7 @@ class EnrichmentServiceTest {
                 List.of(pr("5")), List.of(commit("abc", T0)), List.of(), history);
         Release release = new Release(RELEASE_ID, "r", "1", com.evision.releasemgmt.domain.release.ReleaseStatus.OPEN,
                 null, T0, "acc", null, null, null, null,
-                List.of(new ReleaseItem(ticket("EX-1", "1"), T0, previous)), List.of());
+                List.of(new ReleaseItem(ticket("EX-1", "1"), T0, previous)), List.of(), null);
         when(repository.findById(RELEASE_ID)).thenReturn(Optional.of(release));
         when(port.fetchLinks(ACCESS, "1", "EX-1")).thenThrow(new JiraTicketReadException(JiraAuthFailureReason.JIRA_UNREACHABLE));
 
@@ -276,7 +276,7 @@ class EnrichmentServiceTest {
     private void previousRelease(String key, String issueId, CodeLinks previous) {
         Release release = new Release(RELEASE_ID, "r", "1", com.evision.releasemgmt.domain.release.ReleaseStatus.OPEN,
                 null, T0, "acc", null, null, null, null,
-                List.of(new ReleaseItem(ticket(key, issueId), T0, previous)), List.of());
+                List.of(new ReleaseItem(ticket(key, issueId), T0, previous)), List.of(), null);
         when(repository.findById(RELEASE_ID)).thenReturn(Optional.of(release));
     }
 

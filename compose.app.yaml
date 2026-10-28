@@ -35,6 +35,7 @@ services:
       timeout: 3s
       retries: 20
       start_period: 10s
+    restart: unless-stopped
 
   app:
     build:
@@ -63,7 +64,15 @@ services:
       # Assistant is off by default and optional: no `:?` and no depends_on rag-service, so v1 starts without it.
       RM_ASSISTANT_ENABLED: ${RM_ASSISTANT_ENABLED:-false}
       RM_ASSISTANT_BASE_URL: http://rag-service:8081
-      RM_ASSISTANT_API_KEY: ${RM_ASSISTANT_API_KEY:-}
+      RM_ASSISTANT_API_KEY: ${RM_ASSISTANT_API_KEY}
+      RM_ASSISTANT_STREAM_DEADLINE: ${RM_ASSISTANT_STREAM_DEADLINE:-PT5M}
+      RM_ASSISTANT_NUM_CTX: ${RM_ASSISTANT_NUM_CTX:-4096}
+      RM_ASSISTANT_TRANSFORM_DEADLINE: ${RM_ASSISTANT_TRANSFORM_DEADLINE:-PT20M}
+      # Claude briefing files, mounted read-only (Phase 17.1)
+      RM_BRIEFINGS_DIR: /app/briefings/data
+      RM_BRIEFINGS_CONFIG: /app/briefings/config.json
+    volumes:
+      - ./briefings:/app/briefings:ro
     ports:
       - "${RM_PORT:-9292}:8080"
     restart: unless-stopped
@@ -81,12 +90,14 @@ services:
       RAG_DB_URL: jdbc:postgresql://postgres:5432/ragdb
       RAG_DB_USER: rag
       RAG_DB_PASSWORD: ${RAG_DB_PASSWORD:-rag}
-      RAG_ADMIN_KEY: ${RAG_ADMIN_KEY:?set RAG_ADMIN_KEY (at least 32 chars), e.g. openssl rand -base64 32}
-      RAG_TOOL_SIGNING_SECRET: ${RAG_TOOL_SIGNING_SECRET:?set RAG_TOOL_SIGNING_SECRET (at least 32 chars), e.g. openssl rand -base64 32}
+      #RAG_ADMIN_KEY: ${RAG_ADMIN_KEY:?set RAG_ADMIN_KEY (at least 32 chars), e.g. openssl rand -base64 32}
+      #RAG_TOOL_SIGNING_SECRET: ${RAG_TOOL_SIGNING_SECRET:?set RAG_TOOL_SIGNING_SECRET (at least 32 chars), e.g. openssl rand -base64 32}
       RAG_TOOL_MAX_ROUNDS: ${RAG_TOOL_MAX_ROUNDS:-4}
       RAG_TOOL_RESULT_MAX_CHARS: ${RAG_TOOL_RESULT_MAX_CHARS:-8000}
       RAG_OLLAMA_BASE_URL: ${RAG_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
-      RAG_CHAT_MODEL: ${RAG_CHAT_MODEL:-qwen2.5-coder:7b}
+      RAG_ADMIN_KEY: ${RAG_ADMIN_KEY:-d7Dn81Jmg6Z3f+JgbbO8aU6a+Pv1zYk4byTTUe06OOY=}
+      RAG_TOOL_SIGNING_SECRET: ${RAG_TOOL_SIGNING_SECRET:?set RAG_TOOL_SIGNING_SECRET (at least 32 chars), e.g. openssl rand -base64 32}
+      RAG_CHAT_MODEL: ${RAG_CHAT_MODEL:-qwen3:4b-instruct-2507-q4_K_M}
       RAG_CHAT_NUM_CTX: ${RAG_CHAT_NUM_CTX:-4096}
       RAG_CHAT_DEADLINE: ${RAG_CHAT_DEADLINE:-PT120S}
       RAG_CHAT_MAX_IN_FLIGHT_PER_CLIENT: ${RAG_CHAT_MAX_IN_FLIGHT_PER_CLIENT:-1}
@@ -94,7 +105,7 @@ services:
       # Linux hosts need this; Docker Desktop already resolves host.docker.internal.
       - "host.docker.internal:host-gateway"
     ports:
-      - "${RAG_PORT:-8081}:8081"
+      - "${RAG_PORT:-9393}:8081"
     restart: unless-stopped
 
 volumes:

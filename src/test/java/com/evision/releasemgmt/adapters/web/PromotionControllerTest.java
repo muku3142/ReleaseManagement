@@ -169,7 +169,7 @@ class PromotionControllerTest {
     @Test
     void ruleRejectionsMapToStableReasonCodes() throws Exception {
         assertRejection(PromotionRejection.RELEASE_NOT_FROZEN, 409);
-        assertRejection(PromotionRejection.PROMOTION_STAGE_SKIPPED, 409);
+        assertRejection(PromotionRejection.PROMOTION_STAGE_EARLIER, 409);
         assertRejection(PromotionRejection.PROMOTION_DEPLOYED_AT_INVALID, 422);
         assertRejection(PromotionRejection.PROMOTION_OUTCOME_NOT_RECORDABLE, 422);
     }

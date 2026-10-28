@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch } from '../../src/api/client';
 import {
   formatMaxSize,
+  GROUPING_DIMENSION_LABELS,
+  GROUPING_DIMENSIONS,
   templatesOfType,
   type Template,
   type TemplateListResponse,
@@ -135,5 +137,12 @@ describe('templates API client', () => {
 
   it('formatMaxSize(2097152) returns 2MB', () => {
     expect(formatMaxSize(2097152)).toBe('2MB');
+  });
+});
+
+describe('grouping dimensions', () => {
+  it('offers Bundle after Issue type and Component (D-17.2-07)', () => {
+    expect(GROUPING_DIMENSIONS).toEqual(['ISSUE_TYPE', 'COMPONENT', 'BUNDLE']);
+    expect(GROUPING_DIMENSION_LABELS.BUNDLE).toBe('Bundle');
   });
 });

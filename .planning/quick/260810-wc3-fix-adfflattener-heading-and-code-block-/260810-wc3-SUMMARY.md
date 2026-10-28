@@ -1,4 +1,5 @@
 ---
+status: complete
 task: 260810-wc3
 type: quick
 subsystem: backend / jira-adapter

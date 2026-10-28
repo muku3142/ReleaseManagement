@@ -7,10 +7,14 @@ import jakarta.validation.constraints.Size;
 
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 public record TicketSearchRequest(
         @Pattern(regexp = "^[0-9]+$", message = "must be a numeric Jira project id")
         String projectId,
+
+        // Searches every Jira project mapped to this product; the keys are resolved server-side.
+        UUID productId,
 
         @Pattern(regexp = "^[0-9]+$", message = "must be a numeric Jira sprint id")
         String sprintId,
@@ -22,15 +26,25 @@ public record TicketSearchRequest(
 
         // Optional and orthogonal to the filter mode: present means "hide what this release already
         // holds", absent means the unfiltered browse screen (D-05.2-05).
-        UUID releaseId) {
+        UUID releaseId,
 
-    @AssertTrue(message = "supply either projectId (sprintId optional), or jql - not both")
+        // Also orthogonal to the mode: hides tickets on any release, whatever its status (D-17.2-06).
+        // Boxed because Jackson 3 rejects an absent primitive; absent means false.
+        Boolean hideAlreadyInRelease) {
+
+    public boolean hidesAlreadyInRelease() {
+        return Boolean.TRUE.equals(hideAlreadyInRelease);
+    }
+
+    @AssertTrue(message = "supply exactly one of projectId (sprintId optional), productId, or jql")
     public boolean isExactlyOneFilterMode() {
         boolean picker = projectId != null;
+        boolean product = productId != null;
         boolean advanced = jql != null && !jql.isBlank();
-        // A sprint without a project is meaningless, and one alongside raw JQL would be
-        // silently ignored — reject both rather than guessing what was meant.
+        // A sprint without a project is meaningless, and one alongside a product or raw JQL would
+        // be silently ignored — reject rather than guessing what was meant.
         boolean orphanSprint = sprintId != null && projectId == null;
-        return (picker ^ advanced) && !orphanSprint;
+        long modes = Stream.of(picker, product, advanced).filter(Boolean::booleanValue).count();
+        return modes == 1 && !orphanSprint;
     }
 }

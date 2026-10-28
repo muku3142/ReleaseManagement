@@ -97,6 +97,20 @@ class TemplatePersistenceIT {
         assertThat(loaded.groupingDimension()).isEqualTo(GroupingDimension.COMPONENT);
     }
 
+    // D-17.2-07: proves V24's widened CHECK accepts BUNDLE.
+    @Test
+    void updateRoundTripsABundleGroupingDimension() {
+        Template saved = repository.create(template("Bundle Grouped", TemplateDocumentType.RUNBOOK));
+        Template withBundleDimension = new Template(saved.id(), saved.name(), saved.documentType(),
+                saved.body(), saved.active(), saved.chrome(), GroupingDimension.BUNDLE, saved.logo(),
+                saved.warnings(), saved.createdAt(), saved.createdBy(), saved.updatedAt(), saved.updatedBy());
+
+        repository.update(withBundleDimension);
+
+        Template loaded = repository.findById(saved.id()).orElseThrow();
+        assertThat(loaded.groupingDimension()).isEqualTo(GroupingDimension.BUNDLE);
+    }
+
     @Test
     void duplicateNameWithinDocumentTypeIsRejectedButSameNameUnderDifferentTypeSucceeds() {
         repository.create(template("Standard", TemplateDocumentType.RELEASE_NOTES));

@@ -1,25 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { Spinner } from '@/components/ui/spinner';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import {
   openReleases,
   useAddTicketsToRelease,
   useCreateRelease,
   useReleases,
+  groupKeys,
   type ReleaseAddResult,
+  type TicketGroup,
 } from '../api/releases';
 
 // D-03-01: this component owns exactly one job - choose a destination release for an
-// already-chosen ticketKeys array. It contains no ticket search, project picker, sprint picker
-// or ticket table of its own.
+// already-chosen selection (ticket groups). D-17.2-01: the product is fixed by the Tickets page, so the
+// dialog only offers that product's open releases and creates releases for it.
 export function AddToReleaseDialog(props: {
   open: boolean;
-  ticketKeys: string[];
-  jiraProjectKey: string | null;
+  groups: TicketGroup[];
+  productId: string;
+  productName: string;
+  startWithForm?: boolean;
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
   const releases = useReleases('');
@@ -45,16 +51,20 @@ export function AddToReleaseDialog(props: {
       createRelease.reset();
       addTickets.reset();
       dialog.showModal();
+      if (props.startWithForm) nameInputRef.current?.focus();
     }
     if (!props.open && dialog.open) dialog.close();
-  }, [props.open]);
+  }, [props.open, props.productId]);
 
-  const targets = openReleases(releases.data?.releases ?? []);
-  const zeroOpenReleases = releases.isSuccess && targets.length === 0;
-  // D-03-02: collapsed by default when at least one open release exists; auto-expanded, with the
-  // list section skipped entirely, when none do.
-  const formOpen = formOpenState || zeroOpenReleases;
+  const targets = openReleases(releases.data?.releases ?? []).filter((r) =>
+    r.products.some((p) => p.id === props.productId),
+  );
+  const zeroOpenReleases = !props.startWithForm && releases.isSuccess && targets.length === 0;
+  // D-03-02: collapsed by default when the product has at least one open release; auto-expanded
+  // when it has none, and always open when the user came to create a new release.
+  const formOpen = formOpenState || zeroOpenReleases || props.startWithForm === true;
 
+  const ticketCount = groupKeys(props.groups).length;
   const trimmedFilter = filter.trim().toLowerCase();
   const filteredTargets =
     targets.length > 8 && trimmedFilter !== ''
@@ -66,8 +76,10 @@ export function AddToReleaseDialog(props: {
       : targets;
 
   const listProblem =
-    releases.isError && releases.error instanceof ApiError ? releases.error.problem : undefined;
-  const showList = !listProblem && !releases.isPending && targets.length > 0;
+    !props.startWithForm && releases.isError && releases.error instanceof ApiError
+      ? releases.error.problem
+      : undefined;
+  const showList = !props.startWithForm && !listProblem && !releases.isPending && targets.length > 0;
 
   function goToRelease(result: ReleaseAddResult) {
     props.onClose();
@@ -88,8 +100,8 @@ export function AddToReleaseDialog(props: {
       {
         name: name.trim(),
         version: version.trim(),
-        jiraProjectKey: props.jiraProjectKey,
-        ticketKeys: props.ticketKeys,
+        productId: props.productId,
+        groups: props.groups,
       },
       { onSuccess: goToRelease },
     );
@@ -107,8 +119,8 @@ export function AddToReleaseDialog(props: {
   const versionError =
     createProblem?.reason === 'VALIDATION_FAILED' ? createProblem.fieldErrors?.version : undefined;
   // RELEASE_DUPLICATE has its own copy below, and a name/version field error is rendered against
-  // its own input. Everything else - a ticketKeys[n] violation, JIRA_UNREACHABLE, a frozen target
-  // - would otherwise be swallowed.
+  // its own input. Everything else - a ticketKeys[n] violation, JIRA_UNREACHABLE,
+  // PRODUCT_NO_JIRA_PROJECT, PRODUCT_ARCHIVED - would otherwise be swallowed.
   const showCreateProblem =
     createProblem !== undefined &&
     createProblem.reason !== 'RELEASE_DUPLICATE' &&
@@ -122,10 +134,13 @@ export function AddToReleaseDialog(props: {
       className="rounded border border-gray-200 bg-white p-6"
     >
       <h2 className="text-base font-semibold text-gray-900">
-        Add {props.ticketKeys.length} ticket(s) to a release
+        {props.startWithForm
+          ? `New release with ${ticketCount} ticket(s)`
+          : `Add ${ticketCount} ticket(s) to a release`}
       </h2>
+      <p className="mt-1 text-sm text-muted-foreground">Product: {props.productName}</p>
 
-      {releases.isPending && (
+      {!props.startWithForm && releases.isPending && (
         <div className="mt-4 flex items-center gap-3">
           <span
             className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600"
@@ -150,6 +165,12 @@ export function AddToReleaseDialog(props: {
         </div>
       )}
 
+      {zeroOpenReleases && (
+        <p className="mt-4 text-sm text-muted-foreground">
+          {props.productName} has no open releases. Create one below.
+        </p>
+      )}
+
       {showList && (
         <div className="mt-4">
           {targets.length > 8 && (
@@ -171,9 +192,10 @@ export function AddToReleaseDialog(props: {
                 </span>
                 <button
                   type="button"
+                  aria-label={`Add to ${r.name} ${r.version}`}
                   onClick={() =>
                     addTickets.mutate(
-                      { releaseId: r.id, ticketKeys: props.ticketKeys },
+                      { releaseId: r.id, groups: props.groups },
                       { onSuccess: goToRelease },
                     )
                   }
@@ -204,14 +226,16 @@ export function AddToReleaseDialog(props: {
         </p>
       )}
 
-      <button
-        type="button"
-        onClick={() => setFormOpenState((open) => !open)}
-        aria-expanded={formOpen}
-        className="mt-4 text-sm text-blue-600 underline"
-      >
-        New release…
-      </button>
+      {!props.startWithForm && (
+        <button
+          type="button"
+          onClick={() => setFormOpenState((open) => !open)}
+          aria-expanded={formOpen}
+          className="mt-4 text-sm text-blue-600 underline"
+        >
+          New release…
+        </button>
+      )}
 
       {formOpen && (
         <form onSubmit={handleCreateSubmit} className="mt-3 space-y-2">
@@ -220,6 +244,7 @@ export function AddToReleaseDialog(props: {
               Release name
             </label>
             <input
+              ref={nameInputRef}
               id="releaseName"
               type="text"
               required
@@ -258,9 +283,18 @@ export function AddToReleaseDialog(props: {
           <button
             type="submit"
             disabled={createRelease.isPending || name.trim() === '' || version.trim() === ''}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
-            Create &amp; add
+            {createRelease.isPending ? (
+              <>
+                <Spinner />
+                Creating release…
+              </>
+            ) : props.startWithForm ? (
+              'Create release'
+            ) : (
+              'Create & add'
+            )}
           </button>
         </form>
       )}

@@ -40,7 +40,7 @@ class DocumentsToolTest {
 
     private static DocumentSnapshot snapshot(UUID releaseId, int revision) {
         return new DocumentSnapshot(UUID.randomUUID(), releaseId, TemplateDocumentType.RUNBOOK, revision, CANARY, null,
-                "Runbook", CANARY, null, Instant.EPOCH, "acc-1");
+                "Runbook", CANARY, null, Instant.EPOCH, "acc-1", null);
     }
 
     @Test

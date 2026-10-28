@@ -43,14 +43,17 @@ public class TransformService {
     private final ChatProperties props;
     private final TokenEstimator estimator;
     private final PromptBuilder promptBuilder;
+    private final String promptHash;
 
-    public TransformService(ChatPort chat, GenerationGate gate, GenerationTimers timers, ChatProperties props) {
+    public TransformService(ChatPort chat, GenerationGate gate, GenerationTimers timers, ChatProperties props,
+                            PromptRules rules) {
         this.chat = chat;
         this.gate = gate;
         this.timers = timers;
         this.props = props;
         this.estimator = new TokenEstimator(props.charsPerToken());
-        this.promptBuilder = new PromptBuilder(estimator, props.numCtx(), props.historyTokenBudget());
+        this.promptBuilder = new PromptBuilder(estimator, props.numCtx(), props.historyTokenBudget(), rules);
+        this.promptHash = rules.hash();
     }
 
     public Plan prepare(UUID clientId, Command command) {
@@ -104,7 +107,7 @@ public class TransformService {
                 truncated = completion.promptEvalCount() != null && ChatService.probablyTruncated(
                         plan.estimatedTokens(), completion.promptEvalCount(), props.numCtx());
                 sink.send(StreamEvents.DONE, new Done(false, null, completion.finishReason(), truncated,
-                        completion.promptEvalCount(), completion.evalCount()));
+                        completion.promptEvalCount(), completion.evalCount(), false, props.model(), promptHash));
             }
         } catch (RuntimeException e) {
             ErrorReason reason = cancel.reason() == CancelReason.DEADLINE ? ErrorReason.DEADLINE
@@ -125,7 +128,7 @@ public class TransformService {
             long end = System.nanoTime();
             log.info("generation endpoint=transform outcome={} requestId={} clientId={} promptVersion={} model={} "
                             + "estimatedPromptTokens={} promptEvalCount={} evalCount={} doneReason={} loadMs={} "
-                            + "totalMs={} ttftMs={} truncated={}",
+                            + "totalMs={} ttftMs={} truncated={} promptHash={}",
                     outcome, plan.requestId(), plan.clientId(), Prompts.PROMPT_VERSION, props.model(),
                     plan.estimatedTokens(), completion == null ? null : completion.promptEvalCount(),
                     completion == null ? null : completion.evalCount(),
@@ -133,7 +136,7 @@ public class TransformService {
                     completion == null ? null : completion.loadDurationMs(),
                     Duration.ofNanos(end - start).toMillis(),
                     firstTokenNanos[0] == 0 ? null : Duration.ofNanos(firstTokenNanos[0] - start).toMillis(),
-                    truncated);
+                    truncated, promptHash);
             sink.complete();
         }
     }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { apiFetch, ApiError } from '../../src/api/client';
-import { messageForReason } from '../../src/api/auth';
+import { messageForReason } from '../../src/api/reasonMessages';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -26,6 +26,26 @@ describe('messageForReason', () => {
     ];
     const messages = reasons.map((reason) => messageForReason({ status: 401, reason }));
     expect(new Set(messages).size).toBe(messages.length);
+  });
+});
+
+describe('messageForReason unfreeze and promotion copy', () => {
+  it.each([
+    ['UNFREEZE_HAS_PROMOTIONS', "Can't unfreeze: this release has promotion history. Create a new release to change scope."],
+    ['UNFREEZE_HAS_INSTALLS', "Can't unfreeze: client installs are recorded for this release. Create a new release to change scope."],
+    ['UNFREEZE_RELEASE_NOT_FROZEN', 'This release is already open.'],
+    [
+      'PROMOTION_STAGE_EARLIER',
+      "Can't promote to an earlier stage. Choose the current stage or a later one; to go back, record a rollback on the current stage.",
+    ],
+  ])('maps %s to its UI copy', (reason, copy) => {
+    expect(messageForReason({ status: 409, reason })).toBe(copy);
+  });
+
+  it('no longer knows PROMOTION_STAGE_SKIPPED and falls back to the generic message', () => {
+    expect(messageForReason({ status: 409, reason: 'PROMOTION_STAGE_SKIPPED' })).toBe(
+      messageForReason({ status: 409, reason: 'SOMETHING_UNKNOWN' }),
+    );
   });
 });
 

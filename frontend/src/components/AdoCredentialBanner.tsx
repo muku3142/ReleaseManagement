@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { useAdoCredential } from '../api/adoCredential';
+import { Alert } from '@/components/ui/alert';
 
 export function AdoCredentialBanner() {
   const credential = useAdoCredential();
@@ -10,17 +11,20 @@ export function AdoCredentialBanner() {
   const expired = state === 'EXPIRED';
 
   return (
-    <div
+    <Alert
+      variant="warning"
       role="alert"
       data-reason={expired ? 'ADO_CREDENTIAL_EXPIRED' : 'ADO_CREDENTIAL_EXPIRING'}
-      className="border-b border-amber-300 bg-amber-50 px-6 py-3 text-sm text-amber-900"
+      className="mx-6 mt-4 w-auto lg:mx-8"
     >
-      {expired
-        ? `The Azure DevOps token expired on ${date}. Commit lists fall back to commits that name the ticket key.`
-        : `The Azure DevOps token expires on ${date}.`}{' '}
-      <Link to="/settings" className="font-medium underline">
-        Update the Azure DevOps token
-      </Link>
-    </div>
+      <div>
+        {expired
+          ? `The Azure DevOps token expired on ${date}. Commit lists fall back to commits that name the ticket key.`
+          : `The Azure DevOps token expires on ${date}.`}{' '}
+        <Link to="/settings" className="font-semibold underline underline-offset-4">
+          Update the Azure DevOps token
+        </Link>
+      </div>
+    </Alert>
   );
 }

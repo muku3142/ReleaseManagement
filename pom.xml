@@ -25,6 +25,7 @@
     <wiremock.version>3.13.2</wiremock.version>
     <testcontainers.version>2.0.5</testcontainers.version>
     <frontend-plugin.version>2.0.1</frontend-plugin.version>
+    <excludedGroups>quality-gate,assistant-golden</excludedGroups>
   </properties>
 
   <dependencies>
@@ -178,6 +179,20 @@
   </build>
 
   <profiles>
+    <profile>
+      <id>quality-gate</id>
+      <properties>
+        <groups>quality-gate</groups>
+        <excludedGroups>none</excludedGroups>
+      </properties>
+    </profile>
+    <profile>
+      <id>assistant-golden</id>
+      <properties>
+        <groups>assistant-golden</groups>
+        <excludedGroups>none</excludedGroups>
+      </properties>
+    </profile>
     <profile>
       <id>frontend</id>
       <activation>

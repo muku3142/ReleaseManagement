@@ -8,6 +8,7 @@ import com.evision.releasemgmt.application.DocumentGenerationService;
 import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.config.JwtConfig;
 import com.evision.releasemgmt.config.SecurityConfig;
+import com.evision.releasemgmt.domain.document.AiMode;
 import com.evision.releasemgmt.domain.document.ChosenTemplateNotFoundException;
 import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
@@ -34,6 +35,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -77,7 +79,7 @@ class DocumentControllerTest {
                                              UUID templateId) {
         Instant now = Instant.parse("2026-08-10T09:00:00Z");
         return new DocumentSnapshot(UUID.randomUUID(), releaseId, type, revision, "# Notes", templateId,
-                "Standard notes", "Body", ChromeFields.empty(), now, "557058:abc-123");
+                "Standard notes", "Body", ChromeFields.empty(), now, "557058:abc-123", null);
     }
 
     private void stubActors() {
@@ -232,6 +234,65 @@ class DocumentControllerTest {
                 .andExpect(jsonPath("$.latestRevision").value(3));
 
         verify(service, never()).latest(any(), any());
+    }
+
+    @Test
+    void getGeneratedRevisionReportsNoAiAssist() throws Exception {
+        UUID releaseId = UUID.randomUUID();
+        UUID templateId = UUID.randomUUID();
+        DocumentSnapshot snapshot = snapshot(releaseId, TemplateDocumentType.RELEASE_NOTES, 1, templateId);
+        when(service.latest(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(snapshot);
+        when(service.nextRevision(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(2);
+        when(service.templateStillExists(templateId)).thenReturn(true);
+        stubActors();
+
+        mockMvc.perform(get("/api/releases/{releaseId}/documents/{documentType}", releaseId, "RELEASE_NOTES")
+                        .with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aiAssisted").value(false))
+                .andExpect(jsonPath("$.aiMode").value(nullValue()))
+                .andExpect(jsonPath("$.aiInstruction").value(nullValue()));
+    }
+
+    @Test
+    void getAiRevisionReportsModeAndInstruction() throws Exception {
+        UUID releaseId = UUID.randomUUID();
+        UUID templateId = UUID.randomUUID();
+        DocumentSnapshot source = snapshot(releaseId, TemplateDocumentType.RELEASE_NOTES, 1, templateId);
+        DocumentSnapshot ai = DocumentSnapshot.createAiRevision(source, 2, "# Tidy", AiMode.CLEAN_UP,
+                "make it tidy", "557058:abc-123", Instant.parse("2026-08-11T09:00:00Z"));
+        when(service.latest(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(ai);
+        when(service.nextRevision(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(3);
+        when(service.templateStillExists(templateId)).thenReturn(true);
+        stubActors();
+
+        mockMvc.perform(get("/api/releases/{releaseId}/documents/{documentType}", releaseId, "RELEASE_NOTES")
+                        .with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.aiAssisted").value(true))
+                .andExpect(jsonPath("$.aiMode").value("CLEAN_UP"))
+                .andExpect(jsonPath("$.aiInstruction").value("make it tidy"))
+                .andExpect(jsonPath("$.generatedBy").value("rm@acme.com"));
+    }
+
+    @Test
+    void getRevisionsReportsAiFieldsForBothKinds() throws Exception {
+        UUID releaseId = UUID.randomUUID();
+        DocumentSnapshot generated = snapshot(releaseId, TemplateDocumentType.RELEASE_NOTES, 1, UUID.randomUUID());
+        DocumentSnapshot ai = DocumentSnapshot.createAiRevision(generated, 2, "# Tidy", AiMode.CUSTOM,
+                "shorter", "557058:abc-123", Instant.parse("2026-08-11T09:00:00Z"));
+        when(service.revisions(releaseId, TemplateDocumentType.RELEASE_NOTES)).thenReturn(List.of(ai, generated));
+        stubActors();
+
+        mockMvc.perform(get("/api/releases/{releaseId}/documents/{documentType}/revisions", releaseId,
+                        "RELEASE_NOTES").with(authenticated()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.revisions[0].aiAssisted").value(true))
+                .andExpect(jsonPath("$.revisions[0].aiMode").value("CUSTOM"))
+                .andExpect(jsonPath("$.revisions[0].aiInstruction").value("shorter"))
+                .andExpect(jsonPath("$.revisions[1].aiAssisted").value(false))
+                .andExpect(jsonPath("$.revisions[1].aiMode").value(nullValue()))
+                .andExpect(jsonPath("$.revisions[1].aiInstruction").value(nullValue()));
     }
 
     @Test

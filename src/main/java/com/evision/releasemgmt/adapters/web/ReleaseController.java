@@ -6,8 +6,11 @@ import com.evision.releasemgmt.adapters.web.dto.CreateReleaseRequest;
 import com.evision.releasemgmt.adapters.web.dto.ItemChurnResponse;
 import com.evision.releasemgmt.adapters.web.dto.ManualItemRequest;
 import com.evision.releasemgmt.adapters.web.dto.ManualItemResponse;
+import com.evision.releasemgmt.adapters.web.dto.PackagesUrlRequest;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseAddResultResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseItemResponse;
+import com.evision.releasemgmt.adapters.web.dto.ReleaseProductRequest;
+import com.evision.releasemgmt.adapters.web.dto.ReleaseProductResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseSearchResponse;
 import com.evision.releasemgmt.adapters.web.dto.ReleaseSummaryResponse;
@@ -16,6 +19,7 @@ import com.evision.releasemgmt.application.DashboardService;
 import com.evision.releasemgmt.application.ReleaseService;
 import com.evision.releasemgmt.application.ResolvedActors;
 import com.evision.releasemgmt.domain.dashboard.TicketChurn;
+import com.evision.releasemgmt.domain.portfolio.ReleaseProduct;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.Release;
@@ -64,9 +68,8 @@ public class ReleaseController {
         // Every /api/** path is authenticated() in SecurityConfig, so Spring Security guarantees a
         // principal here; its name is the Jira accountId recorded as the actor (D-03-12).
         return toAddResult(service.createWithTickets(request.name(), request.version(),
-                request.jiraProjectKey(),
                 request.ticketKeys() == null ? List.of() : request.ticketKeys(),
-                principal.getName()));
+                request.productId(), request.bundle(), principal.getName()));
     }
 
     @GetMapping
@@ -77,8 +80,10 @@ public class ReleaseController {
         ResolvedActors actors = actorResolution.resolve(summaries.stream()
                 .flatMap(s -> Stream.of(s.createdBy(), s.frozenBy()))
                 .toArray(String[]::new));
+        Map<UUID, List<ReleaseProduct>> products = service.productsOfReleases(
+                summaries.stream().map(ReleaseSummary::id).toList());
         return new ReleaseSearchResponse(summaries.stream()
-                .map(s -> toSummaryResponse(s, actors)).toList());
+                .map(s -> toSummaryResponse(s, actors, products)).toList());
     }
 
     @GetMapping("/{releaseId}")
@@ -86,15 +91,28 @@ public class ReleaseController {
         return toResponse(service.get(releaseId));
     }
 
+    @PutMapping("/{releaseId}/product")
+    public ReleaseResponse setProduct(@PathVariable UUID releaseId,
+                                      @Valid @RequestBody ReleaseProductRequest request) {
+        return toResponse(service.setProduct(releaseId, request.productId()));
+    }
+
+    @PutMapping("/{releaseId}/packages-url")
+    public ReleaseResponse setPackagesUrl(@PathVariable UUID releaseId,
+                                          @Valid @RequestBody PackagesUrlRequest request) {
+        return toResponse(service.setPackagesUrl(releaseId, request.url()));
+    }
+
     @PostMapping("/{releaseId}/items")
     public ReleaseAddResultResponse addTickets(@PathVariable UUID releaseId,
                                                @Valid @RequestBody AddTicketsRequest request) {
-        return toAddResult(service.addTickets(releaseId, request.ticketKeys()));
+        return toAddResult(service.addTickets(releaseId, request.ticketKeys(), request.bundle()));
     }
 
     @DeleteMapping("/{releaseId}/items/{ticketKey}")
-    public ReleaseResponse removeTicket(@PathVariable UUID releaseId, @PathVariable String ticketKey) {
-        return toResponse(service.removeTicket(releaseId, ticketKey));
+    public ReleaseResponse removeTicket(@PathVariable UUID releaseId, @PathVariable String ticketKey,
+                                        @RequestParam(name = "withBundle", defaultValue = "false") boolean withBundle) {
+        return toResponse(service.removeTicket(releaseId, ticketKey, withBundle));
     }
 
     @PostMapping("/{releaseId}/refresh")
@@ -111,6 +129,11 @@ public class ReleaseController {
     @PostMapping("/{releaseId}/freeze")
     public ReleaseResponse freeze(@PathVariable UUID releaseId, Principal principal) {
         return toResponse(service.freeze(releaseId, principal.getName()));
+    }
+
+    @PostMapping("/{releaseId}/unfreeze")
+    public ReleaseResponse unfreeze(@PathVariable UUID releaseId, Principal principal) {
+        return toResponse(service.unfreeze(releaseId, principal.getName()));
     }
 
     @DeleteMapping("/{releaseId}")
@@ -157,14 +180,23 @@ public class ReleaseController {
                 actors.display(release.frozenBy()), release.lastRefreshedAt(),
                 release.items().stream()
                         .map(item -> toItemResponse(item, churn.get(item.ticket().key()))).toList(),
-                release.manualItems().stream().map(ReleaseController::toManualItemResponse).toList());
+                release.manualItems().stream().map(ReleaseController::toManualItemResponse).toList(),
+                toProductResponses(service.productsOf(release.id())),
+                service.unfreezeBlocker(release).map(Enum::name).orElse(null),
+                release.packagesUrl());
     }
 
-    private static ReleaseSummaryResponse toSummaryResponse(ReleaseSummary summary, ResolvedActors actors) {
+    private static ReleaseSummaryResponse toSummaryResponse(ReleaseSummary summary, ResolvedActors actors,
+                                                              Map<UUID, List<ReleaseProduct>> products) {
         return new ReleaseSummaryResponse(summary.id(), summary.name(), summary.version(),
                 summary.status().name(), summary.jiraProjectKey(), summary.createdAt(),
                 actors.display(summary.createdBy()), summary.frozenAt(),
-                actors.display(summary.frozenBy()), summary.lastRefreshedAt(), summary.itemCount());
+                actors.display(summary.frozenBy()), summary.lastRefreshedAt(), summary.itemCount(),
+                toProductResponses(products.getOrDefault(summary.id(), List.of())));
+    }
+
+    private static List<ReleaseProductResponse> toProductResponses(List<ReleaseProduct> products) {
+        return products.stream().map(ReleaseProductResponse::from).toList();
     }
 
     private static ReleaseItemResponse toItemResponse(ReleaseItem item, TicketChurn churn) {
@@ -174,7 +206,8 @@ public class ReleaseController {
                 item.ticket().component(), item.ticket().description(), item.ticket().comments(),
                 item.ticket().commentTotal(), item.addedAt(), CodeLinksResponse.from(item.codeLinks()),
                 churn == null ? null : new ItemChurnResponse(churn.commitsToDone(),
-                        churn.postDoneCommits(), churn.reopens(), churn.keyTaggedOnly(), churn.outlier()));
+                        churn.postDoneCommits(), churn.reopens(), churn.keyTaggedOnly(), churn.outlier()),
+                item.bundle());
     }
 
     private static ManualItemResponse toManualItemResponse(ManualItem item) {

@@ -35,6 +35,8 @@ const ENTRIES: PlaceholderEntry[] = [
     tags: ['Body only', 'Ticket only'],
   },
   { scope: 'GROUP', token: 'groupName', kind: 'VARIABLE', description: "The group's label.", tags: ['Body only'] },
+  { scope: 'ROOT', token: 'products', kind: 'SECTION', description: 'The products.', tags: ['Body only'] },
+  { scope: 'PRODUCT', token: 'name', kind: 'VARIABLE', description: "The product's name.", tags: ['Body only'] },
 ];
 
 let container: HTMLDivElement;
@@ -99,6 +101,13 @@ describe('PlaceholderDrawer', () => {
     const groupNameRow = rowButton('groupName');
     expect(releaseHeading!.compareDocumentPosition(releaseNameRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(groupHeading!.compareDocumentPosition(groupNameRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('places the product name entry under Product fields', async () => {
+    await renderDrawer({});
+    expect(container.textContent).toContain('Product fields');
+    const productHeading = [...container.querySelectorAll('button')].find((b) => b.textContent?.includes('Product fields'));
+    expect(productHeading!.compareDocumentPosition(rowButton('name')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('renders every entry as a real <button> element - the UX-01 keyboard equivalent', async () => {

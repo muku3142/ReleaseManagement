@@ -28,10 +28,13 @@ public final class StreamEvents {
 
     /** refusalLayer: GATE | MODEL | null */
     public record Done(boolean refusal, String refusalLayer, String finishReason, boolean truncated,
-                       Integer promptTokens, Integer completionTokens) {
+                       Integer promptTokens, Integer completionTokens, boolean historyTrimmed, String model,
+                       String promptHash) {
 
-        public static Done forToolCalls(Integer promptTokens, Integer completionTokens) {
-            return new Done(false, null, "tool_calls", false, promptTokens, completionTokens);
+        public static Done forToolCalls(Integer promptTokens, Integer completionTokens, boolean historyTrimmed,
+                                        String model, String promptHash) {
+            return new Done(false, null, "tool_calls", false, promptTokens, completionTokens, historyTrimmed, model,
+                    promptHash);
         }
     }
 

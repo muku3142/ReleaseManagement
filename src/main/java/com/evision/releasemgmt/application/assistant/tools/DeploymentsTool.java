@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -112,7 +113,7 @@ public class DeploymentsTool implements AssistantTool {
     private RecentDeployments recent(Object stageArgument, int days) {
         UUID stageId = stageArgument == null ? null : stageId(stageArgument.toString().trim());
         Instant now = clock.instant();
-        DeploymentPage page = dashboardService.deployments(stageId, now.minus(Duration.ofDays(days)), now, LIMIT, 0);
+        DeploymentPage page = dashboardService.deployments(stageId, now.minus(Duration.ofDays(days)), now, LIMIT, 0, Set.of());
         ResolvedActors resolved = actors.resolve(page.entries().stream().map(DeploymentRow::recordedBy)
                 .toArray(String[]::new));
         List<RecentRow> rows = page.entries().stream()

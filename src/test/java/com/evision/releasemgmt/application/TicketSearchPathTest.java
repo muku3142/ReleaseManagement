@@ -6,6 +6,7 @@ import com.evision.releasemgmt.domain.auth.JiraAccessContext;
 import com.evision.releasemgmt.domain.jira.StatusCategory;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.jira.TicketSearchCriteria;
+import com.evision.releasemgmt.ports.ProductRepository;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import com.github.tomakehurst.wiremock.junit5.WireMockRuntimeInfo;
 import com.github.tomakehurst.wiremock.junit5.WireMockTest;
@@ -49,6 +50,9 @@ class TicketSearchPathTest {
     @Mock
     private ReleaseRepository releaseRepository;
 
+    @Mock
+    private ProductRepository productRepository;
+
     // The tenant's real shape: 'Resolution' is carried by the system field plus two custom
     // fields, which is what made every search fail with JIRA_ERROR.
     private static final String TENANT_FIELDS = """
@@ -86,7 +90,8 @@ class TicketSearchPathTest {
                 accessContextService,
                 new FieldMetadataService(accessContextService, new JiraFieldMetadataAdapter(restClient), ""),
                 new JiraRestTicketAdapter(restClient, 100, 50),
-                releaseRepository);
+                releaseRepository,
+                productRepository);
     }
 
     @Test
@@ -168,7 +173,7 @@ class TicketSearchPathTest {
 
         List<TicketDetail> tickets = service(wm).search(
                 TicketSearchCriteria.byProject("10023", null, EnumSet.of(StatusCategory.DONE)),
-                UUID.randomUUID());
+                UUID.randomUUID(), false);
 
         assertThat(tickets).hasSize(1);
         assertThat(tickets.get(0).key()).isEqualTo("CNV-2897");

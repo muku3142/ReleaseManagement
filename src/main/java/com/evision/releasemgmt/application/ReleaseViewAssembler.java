@@ -11,6 +11,7 @@ import com.evision.releasemgmt.domain.template.view.CommentView;
 import com.evision.releasemgmt.domain.template.view.GroupView;
 import com.evision.releasemgmt.domain.template.view.CommitView;
 import com.evision.releasemgmt.domain.template.view.ItemView;
+import com.evision.releasemgmt.domain.template.view.ProductView;
 import com.evision.releasemgmt.domain.template.view.PullRequestView;
 import com.evision.releasemgmt.domain.template.view.ReleaseView;
 import org.springframework.stereotype.Service;
@@ -28,11 +29,11 @@ import java.util.TreeMap;
 @Service
 public class ReleaseViewAssembler {
 
-    public ReleaseView assemble(Release release, GroupingDimension dimension) {
-        List<ItemView> ticketItems = release.items().stream()
+    public ReleaseView assemble(Release release, List<String> productNames, GroupingDimension dimension) {
+        List<ReleaseItem> sortedTickets = release.items().stream()
                 .sorted(Comparator.comparing(ReleaseItem::ticketKey))
-                .map(ReleaseViewAssembler::mapTicketItem)
                 .toList();
+        List<ItemView> ticketItems = sortedTickets.stream().map(ReleaseViewAssembler::mapTicketItem).toList();
         List<ItemView> manualItems = release.manualItems().stream()
                 .sorted(Comparator.comparing(ManualItem::addedAt))
                 .map(ReleaseViewAssembler::mapManualItem)
@@ -52,30 +53,25 @@ public class ReleaseViewAssembler {
                 instantOrEmpty(release.frozenAt()),
                 instantOrEmpty(release.lastRefreshedAt()),
                 List.copyOf(items),
-                groups(items, dimension));
+                groups(sortedTickets, ticketItems, manualItems, dimension),
+                productNames.stream().map(n -> new ProductView(nullToEmpty(n))).toList());
     }
 
     // D-04-02: Mustache is logic-less and cannot group, so grouping is always a view-model concern.
     // Issue type is DOC-02's stated default; Phase 5 (D-05-04) added component as the one other
-    // supported dimension - epic and label were considered and declined (D-05-02). Manual items
-    // always have a category instead, so they group by that regardless of dimension.
-    private static List<GroupView> groups(List<ItemView> items, GroupingDimension dimension) {
-        List<GroupView> result = new ArrayList<>();
-
-        // Ticket-backed groups first, sorted alphabetically by group name.
-        Map<String, List<ItemView>> byKey = new TreeMap<>();
-        for (ItemView item : items) {
-            if (!item.isManual()) {
-                byKey.computeIfAbsent(groupKey(item, dimension), k -> new ArrayList<>()).add(item);
-            }
-        }
-        byKey.forEach((key, groupItems) -> result.add(new GroupView(key, List.copyOf(groupItems))));
+    // supported dimension - epic and label were considered and declined (D-05-02); D-17.2-07 added
+    // bundle. Manual items always have a category instead, so they group by that regardless of dimension.
+    private static List<GroupView> groups(List<ReleaseItem> tickets, List<ItemView> ticketItems,
+                                          List<ItemView> manualItems, GroupingDimension dimension) {
+        List<GroupView> result = new ArrayList<>(dimension == GroupingDimension.BUNDLE
+                ? bundleGroups(tickets, ticketItems)
+                : ticketGroups(ticketItems, dimension));
 
         // Then manual-category groups, in ManualItemCategory declaration order.
         for (ManualItemCategory category : ManualItemCategory.values()) {
             String label = categoryLabel(category);
-            List<ItemView> groupItems = items.stream()
-                    .filter(item -> item.isManual() && label.equals(item.category()))
+            List<ItemView> groupItems = manualItems.stream()
+                    .filter(item -> label.equals(item.category()))
                     .toList();
             if (!groupItems.isEmpty()) {
                 result.add(new GroupView(label, groupItems));
@@ -83,6 +79,41 @@ public class ReleaseViewAssembler {
         }
 
         return List.copyOf(result);
+    }
+
+    // Sorted alphabetically by group name.
+    private static List<GroupView> ticketGroups(List<ItemView> ticketItems, GroupingDimension dimension) {
+        Map<String, List<ItemView>> byKey = new TreeMap<>();
+        for (ItemView item : ticketItems) {
+            byKey.computeIfAbsent(groupKey(item, dimension), k -> new ArrayList<>()).add(item);
+        }
+        return toGroups(byKey);
+    }
+
+    // D-17.2-07: ungrouped tickets are kept apart from the bundle map so a bundle literally named
+    // "Other" stays its own group instead of absorbing them. ticketItems is index-aligned with tickets.
+    private static List<GroupView> bundleGroups(List<ReleaseItem> tickets, List<ItemView> ticketItems) {
+        Map<String, List<ItemView>> byBundle = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        List<ItemView> ungrouped = new ArrayList<>();
+        for (int i = 0; i < tickets.size(); i++) {
+            String bundle = tickets.get(i).bundle();
+            if (bundle == null || bundle.isBlank()) {
+                ungrouped.add(ticketItems.get(i));
+            } else {
+                byBundle.computeIfAbsent(bundle, k -> new ArrayList<>()).add(ticketItems.get(i));
+            }
+        }
+        List<GroupView> result = new ArrayList<>(toGroups(byBundle));
+        if (!ungrouped.isEmpty()) {
+            result.add(new GroupView("Other", List.copyOf(ungrouped)));
+        }
+        return result;
+    }
+
+    private static List<GroupView> toGroups(Map<String, List<ItemView>> byKey) {
+        return byKey.entrySet().stream()
+                .map(e -> new GroupView(e.getKey(), List.copyOf(e.getValue())))
+                .toList();
     }
 
     // D-05-03: the no-component display default is applied HERE, not in the Jira adapter and not

@@ -6,7 +6,9 @@ import { ReleaseDetailRoute, addResultMessage } from '../../src/routes/ReleaseDe
 import type { CodeLinks, Release, ReleaseItem } from '../../src/api/releases';
 
 const navigate = vi.fn();
+let locationHash = '';
 vi.mock('@tanstack/react-router', () => ({
+  useLocation: ({ select }: { select: (l: { hash: string }) => string }) => select({ hash: locationHash }),
   useParams: () => ({ releaseId: 'r1' }),
   useSearch: () => ({}),
   useNavigate: () => navigate,
@@ -19,6 +21,7 @@ const RELEASE: Release = {
   version: '2026.08',
   status: 'OPEN',
   jiraProjectKey: 'CNV',
+  products: [],
   createdAt: '2026-08-05T00:00:00Z',
   createdBy: 'rm@acme.com',
   frozenAt: null,
@@ -34,9 +37,13 @@ const RELEASE: Release = {
       addedAt: '2026-08-05T00:00:00Z',
     },
   ],
+  unfreezeBlockedReason: null,
+
+  packagesUrl: null,
 };
 
 const EMPTY_PROMOTIONS = { stages: [], currentStageId: null, nextStageId: null, entries: [] };
+const EMPTY_INSTALLS = { releaseId: 'r1', frozen: false, inProduction: false, products: [], entries: [] };
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -89,12 +96,14 @@ function mockAddTicketsApi(
     const url = String(input);
     const method = init?.method ?? 'GET';
     if (url === '/api/jira/projects') return json(200, [{ id: '10023', key: 'CNV', name: 'Convergence' }]);
+    if (url === '/api/products') return json(200, { products: [{ id: 'p1', name: 'Alpha', archived: false, clientCount: 0, releaseCount: 1, jiraProjectKeys: ['CNV'] }] });
     if (url.match(/^\/api\/jira\/projects\/[^/]+\/sprints$/)) return json(200, []);
     if (url === '/api/tickets/search' && method === 'POST') return json(200, { tickets: overrides.tickets ?? [] });
     if (url === `/api/releases/${release.id}/items` && method === 'POST') {
       return overrides.addResponse ?? json(200, { release, added: 0, alreadyPresent: 0, notFound: 0 });
     }
     if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
+    if (String(input).endsWith('/installs')) return json(200, EMPTY_INSTALLS);
     if (url.startsWith('/api/documents/readiness')) return json(200, { entries: [] });
     if (url.includes('/revisions')) return json(200, { revisions: [] });
     return json(200, release);
@@ -123,6 +132,7 @@ describe('ReleaseDetailRoute', () => {
     container.remove();
     vi.restoreAllMocks();
     navigate.mockReset();
+    locationHash = '';
   });
 
   // showModal() makes the rest of the document inert, so an error rendered in the page content
@@ -133,6 +143,7 @@ describe('ReleaseDetailRoute', () => {
       const url = String(input);
       if (url.endsWith('/freeze')) return json(409, { status: 409, reason: 'RELEASE_FROZEN' });
       if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
+      if (String(input).endsWith('/installs')) return json(200, EMPTY_INSTALLS);
       return json(200, RELEASE);
     });
 
@@ -152,11 +163,26 @@ describe('ReleaseDetailRoute', () => {
     );
   });
 
+  it('renders the Client installs section after the promotion history', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
+      if (url.endsWith('/installs')) return json(200, EMPTY_INSTALLS);
+      return json(200, RELEASE);
+    });
+
+    await renderRoute();
+    await flush();
+    const headings = [...container.querySelectorAll('h3')].map((h) => h.textContent);
+    expect(headings.indexOf('Client installs')).toBeGreaterThan(headings.indexOf('Promotion history'));
+    expect(container.textContent).toContain('Freeze this release to record client installs.');
+  });
+
   // release_manual_item has no uniqueness constraint, so submitting the prefilled form silently
   // created a second copy of the item that was being edited.
   it('reopens the manual-item form empty after an edit was abandoned', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
-      String(input).endsWith('/promotions') ? json(200, EMPTY_PROMOTIONS) : json(200, RELEASE),
+      String(input).endsWith('/installs') ? json(200, EMPTY_INSTALLS) : String(input).endsWith('/promotions') ? json(200, EMPTY_PROMOTIONS) : json(200, RELEASE),
     );
 
     await renderRoute();
@@ -175,12 +201,24 @@ describe('ReleaseDetailRoute', () => {
     expect(byText('Add item')).toBeDefined();
   });
 
+  it('shows the Products line with Unassigned for a release with no products', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+      String(input).endsWith('/installs') ? json(200, EMPTY_INSTALLS) : String(input).endsWith('/promotions') ? json(200, EMPTY_PROMOTIONS) : json(200, RELEASE),
+    );
+
+    await renderRoute();
+
+    expect(container.textContent).toContain('Product:');
+    expect(container.textContent).toContain('Unassigned');
+  });
+
   it('does not refetch the release it just deleted', async () => {
     const requested: string[] = [];
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       requested.push(`${init?.method ?? 'GET'} ${String(input)}`);
       if (init?.method === 'DELETE') return new Response(null, { status: 204 });
       if (String(input).endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
+      if (String(input).endsWith('/installs')) return json(200, EMPTY_INSTALLS);
       return json(200, RELEASE);
     });
 
@@ -203,6 +241,7 @@ describe('ReleaseDetailRoute', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       if (init?.method === 'DELETE') return json(409, { status: 409, reason: 'RELEASE_FROZEN' });
       if (String(input).endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
+      if (String(input).endsWith('/installs')) return json(200, EMPTY_INSTALLS);
       return json(200, RELEASE);
     });
 
@@ -226,6 +265,7 @@ describe('ReleaseDetailRoute', () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
       const url = String(input);
       if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
+      if (String(input).endsWith('/installs')) return json(200, EMPTY_INSTALLS);
       if (url.startsWith('/api/documents/readiness')) return json(200, { entries: [] });
       if (url.includes('/revisions')) return json(200, { revisions: [] });
       return json(200, RELEASE);
@@ -296,7 +336,8 @@ describe('ReleaseDetailRoute', () => {
         commentTotal: 0,
       },
     ];
-    mockAddTicketsApi(RELEASE, {
+    const withProduct = { ...RELEASE, products: [{ id: 'p1', name: 'Alpha', archived: false, hasInstalls: false }] };
+    mockAddTicketsApi(withProduct, {
       tickets: TICKETS,
       addResponse: json(200, { release: RELEASE, added: 1, alreadyPresent: 0, notFound: 0 }),
     });
@@ -357,6 +398,7 @@ describe('ReleaseDetailRoute', () => {
         addedAt: '2026-08-05T00:00:00Z',
         codeLinks,
         churn: null,
+        bundle: null,
       };
     }
 
@@ -396,6 +438,7 @@ describe('ReleaseDetailRoute', () => {
         const method = init?.method ?? 'GET';
         if (method === 'POST') calls.push(`${method} ${url}`);
         if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
+        if (String(input).endsWith('/installs')) return json(200, EMPTY_INSTALLS);
         if (url.startsWith('/api/documents/readiness')) return json(200, { entries: [] });
         if (url.includes('/revisions')) return json(200, { revisions: [] });
         return json(200, release);
@@ -503,6 +546,495 @@ describe('ReleaseDetailRoute', () => {
       expect(container.querySelector('[data-status="FAILED"]')).not.toBeNull();
       expect(findByText('Refresh code links')).toBeUndefined();
       expect(findByText('Retry')).toBeUndefined();
+    });
+  });
+
+  describe('assistant drawer and ticket anchors', () => {
+    function ticket(key: string): ReleaseItem {
+      return {
+        key,
+        summary: `Summary ${key}`,
+        issueType: 'Story',
+        status: 'Done',
+        resolution: null,
+        assignee: null,
+        reporter: null,
+        fixVersions: [],
+        component: null,
+        description: `Body of ${key}`,
+        comments: [],
+        commentTotal: 0,
+        addedAt: '2026-08-05T00:00:00Z',
+        codeLinks: {
+          status: 'NO_LINK',
+          reason: null,
+          incomplete: false,
+          attemptedAt: null,
+          commitsSource: null,
+          pullRequests: [],
+          commits: [],
+          branches: [],
+        },
+        churn: null,
+        bundle: null,
+      };
+    }
+    const WITH_TICKETS: Release = { ...RELEASE, items: [ticket('CNV-1'), ticket('CNV-2'), ticket('CNV-3')] };
+
+    function mockApi(assistantEnabled: boolean) {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+        const url = String(input);
+        if (url === '/api/assistant/status') {
+          return json(200, assistantEnabled ? { enabled: true, starters: { unscoped: [], release: ['Summarise it'] } } : { enabled: false });
+        }
+        if (url === '/api/assistant/freshness') return json(200, { lastIndexedAt: null });
+        if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
+        if (String(input).endsWith('/installs')) return json(200, EMPTY_INSTALLS);
+        if (url.startsWith('/api/documents/readiness')) return json(200, { entries: [] });
+        if (url.includes('/revisions')) return json(200, { revisions: [] });
+        return json(200, WITH_TICKETS);
+      });
+    }
+
+    beforeEach(() => {
+      Element.prototype.scrollIntoView = vi.fn();
+    });
+
+    it('shows no toggle or drawer when the assistant is disabled', async () => {
+      mockApi(false);
+      await renderRoute();
+      expect(findByText('Ask about this release')).toBeUndefined();
+      expect(container.querySelector('#assistant-drawer')).toBeNull();
+    });
+
+    it('opens and closes the drawer from the toggle and returns focus to it', async () => {
+      mockApi(true);
+      await renderRoute();
+      const toggle = byText('Ask about this release');
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(toggle.getAttribute('aria-controls')).toBe('assistant-drawer');
+
+      await act(async () => toggle.click());
+      expect(container.querySelector('#assistant-drawer')).not.toBeNull();
+      expect(toggle.getAttribute('aria-expanded')).toBe('true');
+      expect(container.querySelector('#assistant-drawer')!.textContent).toContain('Release: Sprint 42 2026.08');
+
+      await act(async () => toggle.click());
+      expect(container.querySelector('#assistant-drawer')).toBeNull();
+      expect(document.activeElement).toBe(toggle);
+    });
+
+    it('gives every ticket row an id', async () => {
+      mockApi(false);
+      await renderRoute();
+      expect(container.querySelector('tr#ticket-CNV-2')).not.toBeNull();
+    });
+
+    it('expands and scrolls to the ticket named by the hash, and follows a hash change', async () => {
+      mockApi(false);
+      locationHash = 'ticket-CNV-2';
+      await renderRoute();
+      expect(container.textContent).toContain('Body of CNV-2');
+      expect(container.textContent).not.toContain('Body of CNV-3');
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
+
+      locationHash = 'ticket-CNV-3';
+      await renderRoute();
+      expect(container.textContent).toContain('Body of CNV-3');
+    });
+
+    it('ignores a hash that names no ticket on the release', async () => {
+      mockApi(false);
+      locationHash = 'ticket-NOPE-9';
+      await renderRoute();
+      expect(container.textContent).not.toContain('Body of');
+    });
+  });
+
+  describe('unfreeze', () => {
+    const FROZEN: Release = {
+      ...RELEASE,
+      status: 'FROZEN',
+      frozenAt: '2026-08-06T00:00:00Z',
+      frozenBy: 'rm@acme.com',
+    };
+
+    function confirmButton(label: string): HTMLButtonElement {
+      return [...container.querySelectorAll('dialog button')].find(
+        (b) => b.textContent === label,
+      ) as HTMLButtonElement;
+    }
+
+    function headerButton(label: string) {
+      return [...container.querySelectorAll('button')].find((b) => b.textContent === label && !b.closest('dialog'));
+    }
+
+    function mockUnfreeze(
+      initial: Release,
+      options: { unfreeze?: Response; entries?: unknown[] } = {},
+    ) {
+      let current = initial;
+      const calls: string[] = [];
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        calls.push(`${method} ${url}`);
+        if (url.endsWith('/unfreeze')) {
+          if (options.unfreeze) return options.unfreeze;
+          current = { ...RELEASE, unfreezeBlockedReason: null };
+          return json(200, current);
+        }
+        if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
+        if (url.endsWith('/installs')) return json(200, EMPTY_INSTALLS);
+        if (url.startsWith('/api/documents/readiness')) return json(200, { entries: options.entries ?? [] });
+        if (url.includes('/revisions')) return json(200, { revisions: [] });
+        return json(200, current);
+      });
+      return calls;
+    }
+
+    it('offers an enabled Unfreeze button and the unlocked banner when nothing blocks it', async () => {
+      mockUnfreeze(FROZEN);
+      await renderRoute();
+      const button = byText('Unfreeze release');
+      expect(button.getAttribute('aria-disabled')).toBeNull();
+      expect(button.className).toContain('border-gray-300');
+      expect(button.className).not.toContain('bg-blue-600');
+      expect(container.textContent).toContain(
+        'This release is frozen. Its ticket set is locked. Unfreeze it to change tickets, if nothing has been deployed or installed yet.',
+      );
+    });
+
+    it('unfreezes after confirmation, focuses Add tickets and announces it', async () => {
+      const calls = mockUnfreeze(FROZEN);
+      await renderRoute();
+      await act(async () => byText('Unfreeze release').click());
+      expect(container.querySelector('dialog[open]')?.textContent).toContain('Unfreeze Sprint 42 2026.08?');
+      await act(async () => confirmButton('Unfreeze release').click());
+      await flush();
+
+      expect(calls).toContain('POST /api/releases/r1/unfreeze');
+      expect(headerButton('Unfreeze release')).toBeUndefined();
+      expect(document.activeElement).toBe(byText('Add tickets'));
+      expect(container.querySelector('[role="status"].sr-only')?.textContent).toBe(
+        'Sprint 42 2026.08 unfrozen. Tickets can be edited.',
+      );
+    });
+
+    it.each([
+      [
+        'UNFREEZE_HAS_PROMOTIONS',
+        "Can't unfreeze: this release has promotion history. Create a new release to change scope.",
+      ],
+      [
+        'UNFREEZE_HAS_INSTALLS',
+        "Can't unfreeze: client installs are recorded for this release. Create a new release to change scope.",
+      ],
+    ] as const)('blocks the button with the %s reason and opens no dialog', async (reason, copy) => {
+      mockUnfreeze({ ...FROZEN, unfreezeBlockedReason: reason });
+      await renderRoute();
+      const button = byText('Unfreeze release');
+      expect(button.getAttribute('aria-disabled')).toBe('true');
+      expect(button.getAttribute('aria-describedby')).toBe('unfreeze-blocked-reason');
+      expect(container.querySelector('#unfreeze-blocked-reason')?.textContent).toBe(copy);
+      expect(container.textContent).toContain('This release is frozen. Its ticket set is locked and cannot be changed.');
+
+      await act(async () => button.click());
+      expect([...container.querySelectorAll('dialog')].every((d) => !d.open)).toBe(true);
+    });
+
+    it('shows a server rejection in the alert paragraph and closes the dialog', async () => {
+      mockUnfreeze(FROZEN, {
+        unfreeze: json(409, { status: 409, reason: 'UNFREEZE_HAS_PROMOTIONS' }),
+      });
+      await renderRoute();
+      await act(async () => byText('Unfreeze release').click());
+      await act(async () => confirmButton('Unfreeze release').click());
+      await flush();
+
+      expect([...container.querySelectorAll('dialog')].every((d) => !d.open)).toBe(true);
+      expect(container.querySelector('[role="alert"][data-reason="UNFREEZE_HAS_PROMOTIONS"]')?.textContent).toContain(
+        "Can't unfreeze: this release has promotion history.",
+      );
+    });
+
+    it('says the freeze can be undone until a promotion or install is recorded', async () => {
+      mockUnfreeze(RELEASE);
+      await renderRoute();
+      expect(headerButton('Unfreeze release')).toBeUndefined();
+      await act(async () => byText('Freeze release').click());
+      const body = container.querySelector('dialog')?.textContent ?? '';
+      expect(body).toContain('You can unfreeze it again until a promotion or client install is recorded');
+      expect(body).not.toContain('no way to unfreeze');
+    });
+
+    describe('out-of-date documents note', () => {
+      const NOTE = 'This release was unfrozen. Its existing documents are out of date';
+      const STALE = [{ releaseId: 'r1', documentType: 'RELEASE_NOTES', state: 'STALE' }];
+
+      async function unfreezeNow() {
+        await act(async () => byText('Unfreeze release').click());
+        await act(async () => confirmButton('Unfreeze release').click());
+        await flush();
+      }
+
+      it('shows after an unfreeze when the server reports a STALE document', async () => {
+        mockUnfreeze(FROZEN, { entries: STALE });
+        await renderRoute();
+        await unfreezeNow();
+        expect(container.textContent).toContain(NOTE);
+      });
+
+      it('is absent after an unfreeze when no document is STALE', async () => {
+        mockUnfreeze(FROZEN, { entries: [] });
+        await renderRoute();
+        await unfreezeNow();
+        expect(container.textContent).not.toContain(NOTE);
+      });
+
+      it('is absent on an open release that was not unfrozen in this visit', async () => {
+        mockUnfreeze(RELEASE, { entries: STALE });
+        await renderRoute();
+        expect(container.textContent).not.toContain(NOTE);
+      });
+    });
+  });
+
+  describe('packages link and Add to roadmap', () => {
+    function ticket(key: string): ReleaseItem {
+      return {
+        key,
+        summary: `Summary ${key}`,
+        issueType: 'Story',
+        status: 'Done',
+        resolution: null,
+        assignee: null,
+        reporter: null,
+        fixVersions: [],
+        component: null,
+        description: '',
+        comments: [],
+        commentTotal: 0,
+        addedAt: '2026-08-05T00:00:00Z',
+        codeLinks: {
+          status: 'NO_LINK',
+          reason: null,
+          incomplete: false,
+          attemptedAt: null,
+          commitsSource: null,
+          pullRequests: [],
+          commits: [],
+          branches: [],
+        },
+        churn: null,
+        bundle: null,
+      };
+    }
+
+    const PACKAGES = 'https://contoso.sharepoint.com/sites/pkg';
+
+    function mockApi(release: Release) {
+      const posts: { url: string; body: unknown }[] = [];
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        if (method === 'POST') posts.push({ url, body: JSON.parse(String(init?.body)) });
+        if (url === '/api/roadmap/items/from-release') {
+          return json(200, {
+            added: [{ jiraKey: 'CNV-1', itemId: 'i1' }],
+            alreadyPresent: [{ jiraKey: 'CNV-2', itemId: 'i2' }],
+            notFound: [],
+            rejected: [],
+          });
+        }
+        if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
+        if (url.endsWith('/installs')) return json(200, EMPTY_INSTALLS);
+        if (url.startsWith('/api/documents/readiness')) return json(200, { entries: [] });
+        if (url.includes('/revisions')) return json(200, { revisions: [] });
+        return json(200, release);
+      });
+      return posts;
+    }
+
+    it('shows the packages row for a FROZEN release', async () => {
+      mockApi({ ...RELEASE, status: 'FROZEN', packagesUrl: PACKAGES });
+      await renderRoute();
+      const anchor = [...container.querySelectorAll('a')].find((a) => a.textContent === 'Open packages');
+      expect(anchor?.getAttribute('href')).toBe(PACKAGES);
+    });
+
+    it('sends ticked tickets to the roadmap and reports the duplicates', async () => {
+      const posts = mockApi({ ...RELEASE, items: [ticket('CNV-1'), ticket('CNV-2')] });
+      await renderRoute();
+      for (const key of ['CNV-1', 'CNV-2']) {
+        const box = container.querySelector<HTMLInputElement>(`input[aria-label="Select ${key}"]`)!;
+        await act(async () => box.click());
+      }
+      expect(container.textContent).toContain('2 selected');
+      await act(async () => byText('Add to roadmap').click());
+      await flush();
+      expect(posts.find((p) => p.url === '/api/roadmap/items/from-release')?.body).toEqual({
+        releaseId: 'r1',
+        ticketKeys: ['CNV-1', 'CNV-2'],
+      });
+      expect(container.textContent).toContain('CNV-2 is already on the roadmap.');
+      expect(container.textContent).not.toContain('2 selected');
+    });
+  });
+
+  describe('bundles', () => {
+    function bundled(key: string, bundle: string | null): ReleaseItem {
+      return {
+        key,
+        summary: `Summary ${key}`,
+        issueType: 'Story',
+        status: 'Done',
+        resolution: null,
+        assignee: null,
+        reporter: null,
+        fixVersions: [],
+        component: null,
+        description: '',
+        comments: [],
+        commentTotal: 0,
+        addedAt: '2026-08-05T00:00:00Z',
+        codeLinks: {
+          status: 'NO_LINK',
+          reason: null,
+          incomplete: false,
+          attemptedAt: null,
+          commitsSource: null,
+          pullRequests: [],
+          commits: [],
+          branches: [],
+        },
+        churn: null,
+        bundle,
+      };
+    }
+
+    const MIXED = [
+      bundled('A-1', 'Payments'),
+      bundled('A-2', null),
+      bundled('A-3', 'Payments'),
+      bundled('A-4', 'Auth'),
+    ];
+    const GROUPED_ROWS = ['# Auth (1)', 'A-4', '# Payments (2)', 'A-1', 'A-3', '# Ungrouped (1)', 'A-2'];
+
+    function mockBundles(release: Release) {
+      const deletes: string[] = [];
+      vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+        const url = String(input);
+        if (init?.method === 'DELETE') {
+          deletes.push(url);
+          return json(200, release);
+        }
+        if (url.endsWith('/promotions')) return json(200, EMPTY_PROMOTIONS);
+        if (url.endsWith('/installs')) return json(200, EMPTY_INSTALLS);
+        if (url.startsWith('/api/documents/readiness')) return json(200, { entries: [] });
+        if (url.includes('/revisions')) return json(200, { revisions: [] });
+        return json(200, release);
+      });
+      return deletes;
+    }
+
+    function ticketRows(): string[] {
+      const table = [...container.querySelectorAll('table')].find((t) =>
+        t.querySelector('input[aria-label="Select all tickets"]'),
+      )!;
+      return [...table.querySelectorAll('tbody > tr')].map((row) => {
+        const header = row.querySelector('th[scope="rowgroup"]');
+        if (header) return `# ${header.textContent}`;
+        return row.querySelector('td:nth-child(2)')?.textContent ?? '';
+      });
+    }
+
+    function dialogButton(text: string): HTMLButtonElement {
+      const button = [...container.querySelectorAll('dialog[open] button')].find((b) => b.textContent === text);
+      expect(button, `no open-dialog button labelled "${text}"`).toBeDefined();
+      return button as HTMLButtonElement;
+    }
+
+    function removeButton(key: string): HTMLButtonElement {
+      return container.querySelector<HTMLButtonElement>(`button[aria-label="Remove ticket ${key}"]`)!;
+    }
+
+    it('groups tickets under sorted bundle headers with ungrouped last', async () => {
+      mockBundles({ ...RELEASE, items: MIXED });
+      await renderRoute();
+      expect(ticketRows()).toEqual(GROUPED_ROWS);
+      expect(container.querySelector('th[scope="rowgroup"]')?.getAttribute('colspan')).toBe('12');
+    });
+
+    it('shows no header rows when no ticket is bundled', async () => {
+      mockBundles({ ...RELEASE, items: [bundled('A-2', null), bundled('A-1', null)] });
+      await renderRoute();
+      expect(ticketRows()).toEqual(['A-2', 'A-1']);
+    });
+
+    it('removes an ungrouped ticket straight away', async () => {
+      const deletes = mockBundles({ ...RELEASE, items: MIXED });
+      await renderRoute();
+      await act(async () => removeButton('A-2').click());
+      await flush();
+      expect(deletes).toEqual(['/api/releases/r1/items/A-2']);
+      expect(container.querySelector('dialog[open]')).toBeNull();
+    });
+
+    it('asks before removing a bundled ticket and removes the whole bundle on request', async () => {
+      const deletes = mockBundles({ ...RELEASE, items: MIXED });
+      await renderRoute();
+      await act(async () => removeButton('A-1').click());
+      expect(deletes).toEqual([]);
+      const dialog = container.querySelector('dialog[open]');
+      expect(dialog?.querySelector('h2')?.textContent).toBe('Remove A-1?');
+      expect(dialog?.textContent).toContain('"Payments"');
+      await act(async () => dialogButton('Remove whole bundle').click());
+      await flush();
+      expect(deletes).toEqual(['/api/releases/r1/items/A-1?withBundle=true']);
+      expect(container.querySelector('dialog[open]')).toBeNull();
+    });
+
+    it('removes only the ticket when asked', async () => {
+      const deletes = mockBundles({ ...RELEASE, items: MIXED });
+      await renderRoute();
+      await act(async () => removeButton('A-1').click());
+      await act(async () => dialogButton('Remove only A-1').click());
+      await flush();
+      expect(deletes).toEqual(['/api/releases/r1/items/A-1']);
+      expect(container.querySelector('dialog[open]')).toBeNull();
+    });
+
+    it('sends nothing when the bundle removal is cancelled', async () => {
+      const deletes = mockBundles({ ...RELEASE, items: MIXED });
+      await renderRoute();
+      await act(async () => removeButton('A-1').click());
+      await act(async () => dialogButton('Cancel').click());
+      await flush();
+      expect(deletes).toEqual([]);
+      expect(container.querySelector('dialog[open]')).toBeNull();
+    });
+
+    it('keeps the header rows but no Remove column on a frozen release', async () => {
+      mockBundles({
+        ...RELEASE,
+        status: 'FROZEN',
+        frozenAt: '2026-08-06T00:00:00Z',
+        frozenBy: 'rm@acme.com',
+        items: MIXED,
+      });
+      await renderRoute();
+      expect(ticketRows()).toEqual(GROUPED_ROWS);
+      expect(container.querySelector('button[aria-label^="Remove ticket"]')).toBeNull();
+      expect(container.querySelector('th[scope="rowgroup"]')?.getAttribute('colspan')).toBe('11');
+    });
+
+    it('selects every ticket across bundles with select all', async () => {
+      mockBundles({ ...RELEASE, items: MIXED });
+      await renderRoute();
+      const selectAll = container.querySelector<HTMLInputElement>('input[aria-label="Select all tickets"]')!;
+      await act(async () => selectAll.click());
+      expect(container.textContent).toContain('4 selected');
     });
   });
 });

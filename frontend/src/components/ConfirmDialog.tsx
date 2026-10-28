@@ -10,6 +10,7 @@ export function ConfirmDialog(props: {
   confirmLabel: string;
   confirmClassName: string;
   pending: boolean;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
   children?: ReactNode;
@@ -43,7 +44,7 @@ export function ConfirmDialog(props: {
         <button
           type="button"
           onClick={props.onConfirm}
-          disabled={props.pending}
+          disabled={props.pending || props.confirmDisabled}
           className={props.confirmClassName}
         >
           {props.confirmLabel}

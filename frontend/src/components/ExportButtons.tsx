@@ -1,5 +1,5 @@
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import { useExportDocument, type ExportFormat } from '../api/documents';
 import type { DocumentType } from '../api/templates';
 

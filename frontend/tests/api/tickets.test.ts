@@ -5,6 +5,7 @@ import {
   toSearchBody,
   type TicketSearchResponse,
 } from '../../src/api/tickets';
+import { messageForReason } from '../../src/api/reasonMessages';
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -40,6 +41,20 @@ describe('ticket search client', () => {
 
     expect(body).toEqual({ projectId: '10023', statusCategories: ['DONE'] });
     expect('sprintId' in body).toBe(false);
+  });
+
+  it('sends only the product id and status filter on the product path', () => {
+    const body = toSearchBody({ mode: 'product', productId: 'p1', statusCategories: ['DONE'] }, 'r1');
+
+    expect(body).toEqual({ productId: 'p1', statusCategories: ['DONE'], releaseId: 'r1' });
+    expect('projectId' in body).toBe(false);
+    expect('jql' in body).toBe(false);
+  });
+
+  it('maps PRODUCT_NO_JIRA_PROJECT to the generic notice copy', () => {
+    expect(messageForReason({ status: 422, reason: 'PRODUCT_NO_JIRA_PROJECT' })).toBe(
+      'This product has no Jira project. Add one in Portfolio › Products.',
+    );
   });
 
   it('sends only the jql field on the advanced path, with no implied status filter', () => {
@@ -134,5 +149,46 @@ describe('ticket search client', () => {
 
     expect('releaseId' in projectBody).toBe(false);
     expect('releaseId' in jqlBody).toBe(false);
+  });
+
+  it('asks the server to hide released tickets on the product path, beside the release scope', () => {
+    const body = toSearchBody(
+      { mode: 'product', productId: 'p1', statusCategories: ['DONE'] },
+      'r1',
+      true,
+    );
+
+    expect(body).toEqual({
+      productId: 'p1',
+      statusCategories: ['DONE'],
+      releaseId: 'r1',
+      hideAlreadyInRelease: true,
+    });
+  });
+
+  it('asks the server to hide released tickets on the jql path without scoping the query', () => {
+    const body = toSearchBody({ mode: 'jql', jql: 'project = CNV' }, undefined, true);
+
+    expect(body).toEqual({ jql: 'project = CNV', hideAlreadyInRelease: true });
+  });
+
+  it('asks the server to hide released tickets on the project path', () => {
+    const body = toSearchBody(
+      { mode: 'project', projectId: '10023', sprintId: null, statusCategories: ['DONE'] },
+      undefined,
+      true,
+    );
+
+    expect(body).toEqual({
+      projectId: '10023',
+      statusCategories: ['DONE'],
+      hideAlreadyInRelease: true,
+    });
+  });
+
+  it('never sends hideAlreadyInRelease as false', () => {
+    const body = toSearchBody({ mode: 'jql', jql: 'project = CNV' }, undefined, false);
+
+    expect('hideAlreadyInRelease' in body).toBe(false);
   });
 });

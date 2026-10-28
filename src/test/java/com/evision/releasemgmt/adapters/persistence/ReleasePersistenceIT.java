@@ -66,6 +66,122 @@ class ReleasePersistenceIT {
                 "Ship it", List.of("Looks good", "He said \"ship it\""), 2, null, null, null, null, false), Instant.now(), CodeLinks.notAttempted());
     }
 
+    private static ReleaseItem bundled(String key, String bundle) {
+        ReleaseItem plain = item(key);
+        return new ReleaseItem(plain.ticket(), plain.addedAt(), plain.codeLinks(), bundle);
+    }
+
+    private static String bundleOf(Release release, String key) {
+        return release.items().stream().filter(i -> i.ticketKey().equals(key)).findFirst().orElseThrow().bundle();
+    }
+
+    @Test
+    void bundleRoundTripsAndThreeArgItemsReloadUngrouped() {
+        Release release = Release.create("Bundle Create", "1.0", "CNV", "rm@acme.com", Instant.now());
+
+        repository.create(release, List.of(bundled("CNV-1", "Payments fixes"), item("CNV-2")));
+
+        Release loaded = repository.findById(release.id()).orElseThrow();
+        assertThat(bundleOf(loaded, "CNV-1")).isEqualTo("Payments fixes");
+        assertThat(bundleOf(loaded, "CNV-2")).isNull();
+    }
+
+    @Test
+    void addItemsStoresTheBundleAndRefreshKeepsIt() {
+        Release release = Release.create("Bundle Add", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(item("CNV-1")));
+
+        repository.addItems(release.id(), List.of(bundled("CNV-2", "Payments fixes")));
+        Release refreshed = repository.replaceItemSnapshots(release.id(),
+                List.of(itemWithComponent("CNV-2", "Billing")), Instant.now());
+
+        assertThat(bundleOf(refreshed, "CNV-2")).isEqualTo("Payments fixes");
+        assertThat(bundleOf(refreshed, "CNV-1")).isNull();
+    }
+
+    @Test
+    void removeBundleDeletesOnlyThatBundleAndStampsItemsChangedAt() {
+        Release release = Release.create("Bundle Remove", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(bundled("CNV-1", "Payments fixes"), bundled("CNV-2", "Payments fixes"),
+                bundled("CNV-3", "Other"), item("CNV-4")));
+        Instant changedAtBefore = repository.findById(release.id()).orElseThrow().itemsChangedAt();
+
+        Release loaded = repository.removeBundle(release.id(), "Payments fixes");
+
+        assertThat(loaded.items()).extracting(ReleaseItem::ticketKey).containsExactly("CNV-3", "CNV-4");
+        assertThat(loaded.itemsChangedAt()).isAfter(changedAtBefore);
+    }
+
+    @Test
+    void removeBundleOfUnknownNameIsANoOpAndDoesNotStampItemsChangedAt() {
+        Release release = Release.create("Bundle Noop", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(bundled("CNV-1", "Payments fixes")));
+        Instant changedAtBefore = repository.findById(release.id()).orElseThrow().itemsChangedAt();
+
+        Release loaded = repository.removeBundle(release.id(), "Nope");
+
+        assertThat(loaded.items()).hasSize(1);
+        assertThat(loaded.itemsChangedAt()).isEqualTo(changedAtBefore);
+    }
+
+    @Test
+    void removeBundleOnAFrozenReleaseIsRefusedAndDeletesNothing() {
+        Release release = Release.create("Bundle Frozen", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of(bundled("CNV-1", "Payments fixes")));
+        repository.freeze(release.id(), "rm@acme.com", Instant.now());
+
+        assertThatThrownBy(() -> repository.removeBundle(release.id(), "Payments fixes"))
+                .isInstanceOf(ReleaseFrozenException.class);
+        assertThat(repository.findById(release.id()).orElseThrow().items()).hasSize(1);
+    }
+
+    @Test
+    void ticketKeysInAnyReleaseReturnsTheRequestedKeysHeldByOpenOrFrozenReleases() {
+        Release open = Release.create("Any Open", "1.0", "ABC", "rm@acme.com", Instant.now());
+        repository.create(open, List.of(item("ABC-1"), item("ABC-2")));
+        Release frozen = Release.create("Any Frozen", "1.0", "ABC", "rm@acme.com", Instant.now());
+        repository.create(frozen, List.of(item("ABC-3")));
+        repository.freeze(frozen.id(), "rm@acme.com", Instant.now());
+
+        assertThat(repository.ticketKeysInAnyRelease(List.of("ABC-1", "ABC-3", "ABC-9")))
+                .containsExactlyInAnyOrder("ABC-1", "ABC-3");
+    }
+
+    @Test
+    void ticketKeysInAnyReleaseReturnsAKeyHeldByTwoReleasesOnce() {
+        repository.create(Release.create("Dup A", "1.0", "ABC", "rm@acme.com", Instant.now()), List.of(item("ABC-1")));
+        repository.create(Release.create("Dup B", "1.0", "ABC", "rm@acme.com", Instant.now()), List.of(item("ABC-1")));
+
+        assertThat(repository.ticketKeysInAnyRelease(List.of("ABC-1"))).containsExactly("ABC-1");
+    }
+
+    @Test
+    void ticketKeysInAnyReleaseOfNoKeysIsEmpty() {
+        repository.create(Release.create("Empty In", "1.0", "ABC", "rm@acme.com", Instant.now()), List.of(item("ABC-1")));
+
+        assertThat(repository.ticketKeysInAnyRelease(List.of())).isEmpty();
+    }
+
+    @Test
+    void groupingDimensionCheckAcceptsBundleAndStillRejectsUnknownValues() {
+        assertThat(jdbcTemplate.queryForList("SELECT conname FROM pg_constraint WHERE conrelid = 'template'::regclass"
+                + " AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%grouping_dimension%'", String.class))
+                .containsExactly("template_grouping_dimension_check");
+        UUID id = UUID.randomUUID();
+        jdbcTemplate.update("INSERT INTO template (id, name, document_type, body, created_by, updated_by)"
+                + " VALUES (?, 'Bundle Check', 'RELEASE_NOTES', '', 'rm', 'rm')", id);
+        try {
+            jdbcTemplate.update("UPDATE template SET grouping_dimension = 'BUNDLE' WHERE id = ?", id);
+            assertThat(jdbcTemplate.queryForObject("SELECT grouping_dimension FROM template WHERE id = ?",
+                    String.class, id)).isEqualTo("BUNDLE");
+            assertThatThrownBy(() -> jdbcTemplate.update(
+                    "UPDATE template SET grouping_dimension = 'EPIC' WHERE id = ?", id))
+                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        } finally {
+            jdbcTemplate.update("DELETE FROM template WHERE id = ?", id);
+        }
+    }
+
     @Test
     void createPersistsReleaseAndItsItemsInOneCall() {
         Release release = Release.create("Create Test", "1.0", "CNV", "rm@acme.com", Instant.now());
@@ -386,6 +502,28 @@ class ReleasePersistenceIT {
         assertThat(loaded.status()).isEqualTo(ReleaseStatus.FROZEN);
         assertThat(loaded.frozenBy()).isEqualTo("rm@acme.com");
         assertThat(loaded.frozenAt()).isEqualTo(frozenAt);
+    }
+
+    @Test
+    void packagesLinkIsStoredAndClearedInAnyStatusWithoutStampingItemsChanged() {
+        Release release = Release.create("Packages Test", "1.0", "CNV", "rm@acme.com", Instant.now());
+        repository.create(release, List.of());
+        repository.freeze(release.id(), "rm@acme.com", Instant.now());
+        Instant itemsChangedBefore = repository.findById(release.id()).orElseThrow().itemsChangedAt();
+        String url = "https://contoso.sharepoint.com/sites/rel/Shared%20Documents/1.0";
+
+        repository.setPackagesUrl(release.id(), url);
+
+        Release stored = repository.findById(release.id()).orElseThrow();
+        assertThat(stored.packagesUrl()).isEqualTo(url);
+        assertThat(stored.status()).isEqualTo(ReleaseStatus.FROZEN);
+        assertThat(stored.itemsChangedAt()).isEqualTo(itemsChangedBefore);
+
+        repository.setPackagesUrl(release.id(), null);
+
+        assertThat(repository.findById(release.id()).orElseThrow().packagesUrl()).isNull();
+        assertThatThrownBy(() -> repository.setPackagesUrl(UUID.randomUUID(), "x"))
+                .isInstanceOf(com.evision.releasemgmt.domain.release.ReleaseNotFoundException.class);
     }
 
     @Test

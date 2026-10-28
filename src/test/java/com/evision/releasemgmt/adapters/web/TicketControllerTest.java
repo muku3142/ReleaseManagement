@@ -14,7 +14,10 @@ import com.evision.releasemgmt.config.SecurityConfig;
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
+import com.evision.releasemgmt.domain.jira.StatusCategory;
 import com.evision.releasemgmt.domain.jira.TicketSearchCriteria;
+import com.evision.releasemgmt.domain.portfolio.PortfolioEditRejectedException;
+import com.evision.releasemgmt.domain.portfolio.PortfolioEditRejection;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -31,6 +34,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -67,7 +72,7 @@ class TicketControllerTest {
 
     @Test
     void pickerSearchReturnsTicketsAndDefaultsToDoneOnly() throws Exception {
-        when(service.search(any(), any())).thenReturn(List.of(ticket("CNV-1")));
+        when(service.search(any(), any(), anyBoolean())).thenReturn(List.of(ticket("CNV-1")));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -76,14 +81,14 @@ class TicketControllerTest {
                 .andExpect(jsonPath("$.tickets[0].key").value("CNV-1"));
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
-        verify(service).search(criteria.capture(), any());
+        verify(service).search(criteria.capture(), any(), anyBoolean());
         assertThat(criteria.getValue().toJql())
                 .isEqualTo("project = 10023 AND sprint = 10891 AND statusCategory IN (\"Done\") ORDER BY key ASC");
     }
 
     @Test
     void jqlSearchForwardsQueryVerbatim() throws Exception {
-        when(service.search(any(), any())).thenReturn(List.of(ticket("CNV-1")));
+        when(service.search(any(), any(), anyBoolean())).thenReturn(List.of(ticket("CNV-1")));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -91,7 +96,7 @@ class TicketControllerTest {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
-        verify(service).search(criteria.capture(), any());
+        verify(service).search(criteria.capture(), any(), anyBoolean());
         assertThat(criteria.getValue().toJql()).isEqualTo("project = CNV AND status = Done");
     }
 
@@ -103,7 +108,7 @@ class TicketControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
 
-        verify(service, never()).search(any(), any());
+        verify(service, never()).search(any(), any(), anyBoolean());
     }
 
     @Test
@@ -123,12 +128,12 @@ class TicketControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.fieldErrors.projectId").exists());
 
-        verify(service, never()).search(any(), any());
+        verify(service, never()).search(any(), any(), anyBoolean());
     }
 
     @Test
     void projectWithoutSprintIsAValidSearch() throws Exception {
-        when(service.search(any(), any())).thenReturn(List.of(ticket("CNV-1")));
+        when(service.search(any(), any(), anyBoolean())).thenReturn(List.of(ticket("CNV-1")));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -136,7 +141,7 @@ class TicketControllerTest {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
-        verify(service).search(criteria.capture(), any());
+        verify(service).search(criteria.capture(), any(), anyBoolean());
         assertThat(criteria.getValue().toJql())
                 .isEqualTo("project = 10023 AND statusCategory IN (\"Done\") ORDER BY key ASC");
     }
@@ -149,7 +154,7 @@ class TicketControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
 
-        verify(service, never()).search(any(), any());
+        verify(service, never()).search(any(), any(), anyBoolean());
     }
 
     @Test
@@ -159,12 +164,12 @@ class TicketControllerTest {
                         .content("{\"sprintId\":\"10891\",\"jql\":\"project = CNV\"}"))
                 .andExpect(status().isBadRequest());
 
-        verify(service, never()).search(any(), any());
+        verify(service, never()).search(any(), any(), anyBoolean());
     }
 
     @Test
     void emptyResultIsASuccessNotAnError() throws Exception {
-        when(service.search(any(), any())).thenReturn(List.of());
+        when(service.search(any(), any(), anyBoolean())).thenReturn(List.of());
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -176,7 +181,7 @@ class TicketControllerTest {
 
     @Test
     void resultSetTooLargeMapsToUnprocessableEntity() throws Exception {
-        when(service.search(any(), any()))
+        when(service.search(any(), any(), anyBoolean()))
                 .thenThrow(new JiraTicketReadException(JiraAuthFailureReason.RESULT_SET_TOO_LARGE));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
@@ -188,7 +193,7 @@ class TicketControllerTest {
 
     @Test
     void rateLimitedMapsToTooManyRequests() throws Exception {
-        when(service.search(any(), any()))
+        when(service.search(any(), any(), anyBoolean()))
                 .thenThrow(new JiraTicketReadException(JiraAuthFailureReason.JIRA_RATE_LIMITED));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
@@ -200,7 +205,7 @@ class TicketControllerTest {
 
     @Test
     void unreachableMapsToServiceUnavailable() throws Exception {
-        when(service.search(any(), any()))
+        when(service.search(any(), any(), anyBoolean()))
                 .thenThrow(new JiraTicketReadException(JiraAuthFailureReason.JIRA_UNREACHABLE));
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
@@ -221,7 +226,7 @@ class TicketControllerTest {
 
     @Test
     void nullResolutionAndAssigneeSerialiseAsJsonNulls() throws Exception {
-        when(service.search(any(), any())).thenReturn(List.of(
+        when(service.search(any(), any(), anyBoolean())).thenReturn(List.of(
                 new TicketDetail("CNV-9", "Unresolved", "Task", "In Progress", null, null, "Reporter Person",
                         List.of(), null, "", List.of(), 0, null, null, null, null, false)));
 
@@ -235,7 +240,7 @@ class TicketControllerTest {
 
     @Test
     void explicitStatusCategoriesAreComposedIntoTheQuery() throws Exception {
-        when(service.search(any(), any())).thenReturn(List.of());
+        when(service.search(any(), any(), anyBoolean())).thenReturn(List.of());
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -244,7 +249,7 @@ class TicketControllerTest {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
-        verify(service).search(criteria.capture(), any());
+        verify(service).search(criteria.capture(), any(), anyBoolean());
         assertThat(criteria.getValue().toJql()).contains("statusCategory IN (\"To Do\", \"In Progress\")");
         assertThat(criteria.getValue().toJql()).doesNotContain("\"Done\"");
     }
@@ -257,12 +262,12 @@ class TicketControllerTest {
                                 + "\"statusCategories\":[\"NOPE\"]}"))
                 .andExpect(status().isBadRequest());
 
-        verify(service, never()).search(any(), any());
+        verify(service, never()).search(any(), any(), anyBoolean());
     }
 
     @Test
     void releaseIdInTheBodyReachesTheServiceAsASeparateArgument() throws Exception {
-        when(service.search(any(), any())).thenReturn(List.of());
+        when(service.search(any(), any(), anyBoolean())).thenReturn(List.of());
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -272,14 +277,14 @@ class TicketControllerTest {
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
         ArgumentCaptor<UUID> releaseId = ArgumentCaptor.forClass(UUID.class);
-        verify(service).search(criteria.capture(), releaseId.capture());
+        verify(service).search(criteria.capture(), releaseId.capture(), eq(false));
         assertThat(releaseId.getValue()).isEqualTo(UUID.fromString("3f2504e0-4f89-11d3-9a0c-0305e82c3301"));
         assertThat(criteria.getValue().toJql()).doesNotContain("3f2504e0");
     }
 
     @Test
     void absentReleaseIdReachesTheServiceAsNull() throws Exception {
-        when(service.search(any(), any())).thenReturn(List.of());
+        when(service.search(any(), any(), anyBoolean())).thenReturn(List.of());
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -287,13 +292,13 @@ class TicketControllerTest {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<UUID> releaseId = ArgumentCaptor.forClass(UUID.class);
-        verify(service).search(any(), releaseId.capture());
+        verify(service).search(any(), releaseId.capture(), eq(false));
         assertThat(releaseId.getValue()).isNull();
     }
 
     @Test
     void aReleaseScopeAlongsideRawJqlIsAccepted() throws Exception {
-        when(service.search(any(), any())).thenReturn(List.of());
+        when(service.search(any(), any(), anyBoolean())).thenReturn(List.of());
 
         mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -302,8 +307,88 @@ class TicketControllerTest {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<UUID> releaseId = ArgumentCaptor.forClass(UUID.class);
-        verify(service).search(any(), releaseId.capture());
+        verify(service).search(any(), releaseId.capture(), eq(false));
         assertThat(releaseId.getValue()).isEqualTo(UUID.fromString("3f2504e0-4f89-11d3-9a0c-0305e82c3301"));
+    }
+
+    @Test
+    void productSearchReachesTheServiceWithItsCategoriesAndReleaseScope() throws Exception {
+        UUID productId = UUID.fromString("7c9e6679-7425-40de-944b-e07fc1f90ae7");
+        UUID releaseId = UUID.fromString("3f2504e0-4f89-11d3-9a0c-0305e82c3301");
+        when(service.searchProduct(any(), any(), any(), anyBoolean())).thenReturn(List.of(ticket("ABC-1")));
+
+        mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":\"" + productId + "\",\"statusCategories\":[\"TO_DO\"],"
+                                + "\"releaseId\":\"" + releaseId + "\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tickets[0].key").value("ABC-1"));
+
+        verify(service).searchProduct(productId, java.util.Set.of(StatusCategory.TO_DO), releaseId, false);
+        verify(service, never()).search(any(), any(), anyBoolean());
+    }
+
+    @Test
+    void hideAlreadyInReleaseReachesTheServiceInProductMode() throws Exception {
+        UUID productId = UUID.fromString("7c9e6679-7425-40de-944b-e07fc1f90ae7");
+        when(service.searchProduct(any(), any(), any(), anyBoolean())).thenReturn(List.of());
+
+        mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":\"" + productId + "\",\"hideAlreadyInRelease\":true}"))
+                .andExpect(status().isOk());
+
+        verify(service).searchProduct(productId, null, null, true);
+    }
+
+    @Test
+    void hideAlreadyInReleaseReachesTheServiceInJqlMode() throws Exception {
+        when(service.search(any(), any(), anyBoolean())).thenReturn(List.of());
+
+        mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"jql\":\"project = CNV\",\"hideAlreadyInRelease\":true}"))
+                .andExpect(status().isOk());
+
+        verify(service).search(any(), eq(null), eq(true));
+    }
+
+    @Test
+    void hideAlreadyInReleaseDoesNotSatisfyTheExactlyOneModeRule() throws Exception {
+        mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"hideAlreadyInRelease\":true}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
+
+        verify(service, never()).search(any(), any(), anyBoolean());
+    }
+
+    @Test
+    void productAlongsideAnotherModeIsRejected() throws Exception {
+        String product = "\"productId\":\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"";
+        for (String other : List.of("\"projectId\":\"10023\"", "\"jql\":\"project = CNV\"", "\"sprintId\":\"10891\"")) {
+            mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{" + product + "," + other + "}"))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.reason").value("VALIDATION_FAILED"));
+        }
+
+        verify(service, never()).searchProduct(any(), any(), any(), anyBoolean());
+        verify(service, never()).search(any(), any(), anyBoolean());
+    }
+
+    @Test
+    void productWithoutAJiraProjectIsUnprocessable() throws Exception {
+        when(service.searchProduct(any(), any(), any(), anyBoolean()))
+                .thenThrow(new PortfolioEditRejectedException(PortfolioEditRejection.PRODUCT_NO_JIRA_PROJECT));
+
+        mockMvc.perform(post("/api/tickets/search").with(csrf()).with(authenticated())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"productId\":\"7c9e6679-7425-40de-944b-e07fc1f90ae7\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.reason").value("PRODUCT_NO_JIRA_PROJECT"));
     }
 
     private static CodeLinks codeLinks(EnrichmentStatus status, List<LinkedCommit> commits) {

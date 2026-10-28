@@ -63,13 +63,13 @@ class DocumentExportControllerTest {
     private static DocumentSnapshot snapshot(UUID releaseId, int revision) {
         return new DocumentSnapshot(UUID.randomUUID(), releaseId, TemplateDocumentType.RELEASE_NOTES, revision,
                 "# Notes", UUID.randomUUID(), "Standard notes", "Body", ChromeFields.empty(),
-                Instant.parse("2026-08-10T09:00:00Z"), "557058:abc-123");
+                Instant.parse("2026-08-10T09:00:00Z"), "557058:abc-123", null);
     }
 
     private static Release release(UUID releaseId, String name, String version) {
         Instant now = Instant.parse("2026-08-01T00:00:00Z");
         return new Release(releaseId, name, version, ReleaseStatus.OPEN, "CNV", now, "actor-0", null, null,
-                now, null, List.of(), List.of());
+                now, null, List.of(), List.of(), null);
     }
 
     @Test

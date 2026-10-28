@@ -202,13 +202,15 @@ describe('PromotionSection', () => {
     expect(dialog.querySelector<HTMLSelectElement>('#promotionStage')!.value).toBe('s2');
   });
 
-  it('shows retired stages as disabled options', async () => {
+  it('does not offer retired or earlier stages when recording', async () => {
     mockApi({ ...AT_TEST, stages: [DEV, TEST, UAT, stage('s5', 'OLD', 5, { retired: true })] });
     await renderSection(true);
     const dialog = await openDialog();
 
-    const retired = [...dialog.querySelectorAll('option')].find((o) => o.textContent === 'OLD (retired)');
-    expect(retired?.disabled).toBe(true);
+    expect([...dialog.querySelectorAll('option')].filter((o) => o.closest('#promotionStage')).map((o) => o.textContent)).toEqual([
+      'TEST (redeploy)',
+      'UAT',
+    ]);
   });
 
   it('posts only stage and outcome when the optional fields are untouched, then shows the new entry', async () => {
@@ -247,7 +249,7 @@ describe('PromotionSection', () => {
   });
 
   it('keeps the dialog open and shows the mapped message on a rejected promotion', async () => {
-    mockApi(AT_TEST, () => json(409, { status: 409, reason: 'PROMOTION_STAGE_SKIPPED' }));
+    mockApi(AT_TEST, () => json(409, { status: 409, reason: 'PROMOTION_STAGE_EARLIER' }));
     await renderSection(true);
     const dialog = await openDialog();
 
@@ -256,8 +258,8 @@ describe('PromotionSection', () => {
 
     expect(dialog.open).toBe(true);
     const alert = dialog.querySelector('[role="alert"]');
-    expect(alert?.getAttribute('data-reason')).toBe('PROMOTION_STAGE_SKIPPED');
-    expect(alert?.textContent).toContain('next stage of the ladder');
+    expect(alert?.getAttribute('data-reason')).toBe('PROMOTION_STAGE_EARLIER');
+    expect(alert?.textContent).toContain('earlier stage');
   });
 
   describe('corrections', () => {

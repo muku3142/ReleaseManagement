@@ -25,6 +25,7 @@ const SCOPE_PUSHES: Record<string, Scope> = {
   comments: 'COMMENT',
   commits: 'COMMIT',
   pullRequests: 'PULL_REQUEST',
+  products: 'PRODUCT',
 };
 
 function toContext(view: ReleaseView) {
@@ -41,6 +42,7 @@ function toContext(view: ReleaseView) {
     },
     items: cap(view.items),
     groups: view.groups.map((g) => ({ groupName: g.groupName, items: cap(g.items) })),
+    products: view.products,
   };
 }
 
@@ -222,7 +224,10 @@ function renderBodyRegion(outcome: PreviewOutcome): ReactNode {
           Generated documents are bounded separately when produced.
         </p>
       )}
-      <div className="prose prose-gray max-w-none p-4" dangerouslySetInnerHTML={{ __html: outcome.html }} />
+      <div
+        className="paper prose prose-gray max-w-none bg-white p-4 text-zinc-950"
+        dangerouslySetInnerHTML={{ __html: outcome.html }}
+      />
     </>
   );
 }

@@ -75,7 +75,7 @@ rag:
     signing-secret: test-tool-signing-secret-0123456789-abcdef
     max-rounds: 4
     max-calls: 4
-    max-tools: 5
-    definitions-max-chars: 1500
+    max-tools: 6
+    definitions-max-chars: 1900
     result-max-chars: 8000
     num-predict: 768

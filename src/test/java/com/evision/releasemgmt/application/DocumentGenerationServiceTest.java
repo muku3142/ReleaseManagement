@@ -15,6 +15,7 @@ import com.evision.releasemgmt.domain.template.Template;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import com.evision.releasemgmt.domain.template.view.SampleReleaseView;
 import com.evision.releasemgmt.ports.DocumentSnapshotRepository;
+import com.evision.releasemgmt.ports.ReleaseProductRepository;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import com.evision.releasemgmt.ports.TemplateRepository;
 import org.junit.jupiter.api.Test;
@@ -42,10 +43,11 @@ class DocumentGenerationServiceTest {
     private final TemplateRepository templateRepository = mock(TemplateRepository.class);
     private final DocumentSnapshotRepository snapshotRepository = mock(DocumentSnapshotRepository.class);
     private final ReleaseViewAssembler assembler = mock(ReleaseViewAssembler.class);
+    private final ReleaseProductRepository releaseProducts = mock(ReleaseProductRepository.class);
     private final RenderService renderService =
             new RenderService(new MustacheFlexmarkRenderAdapter(), Duration.ofSeconds(2), 500, 64);
     private final DocumentGenerationService service = new DocumentGenerationService(releaseRepository,
-            templateRepository, snapshotRepository, assembler, renderService);
+            templateRepository, snapshotRepository, assembler, renderService, releaseProducts);
 
     @Test
     void generatingStoresTheResolvedMarkdownBodyNotItsRenderedHtml() {
@@ -127,7 +129,7 @@ class DocumentGenerationServiceTest {
     void generationWorksIdenticallyOnAFrozenRelease() {
         Instant now = Instant.now();
         Release frozenRelease = new Release(UUID.randomUUID(), "Sample Release", "2026.08",
-                ReleaseStatus.FROZEN, "CNV", now, "actor-0", now, "actor-1", now, null, List.of(), List.of());
+                ReleaseStatus.FROZEN, "CNV", now, "actor-0", now, "actor-1", now, null, List.of(), List.of(), null);
         Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body", ChromeFields.empty());
         stubHappyPath(frozenRelease, template, 1);
 
@@ -169,7 +171,7 @@ class DocumentGenerationServiceTest {
 
         service.generate(release.id(), TemplateDocumentType.RELEASE_NOTES, null, "actor-1");
 
-        verify(assembler).assemble(release, GroupingDimension.COMPONENT);
+        verify(assembler).assemble(release, List.of(), GroupingDimension.COMPONENT);
     }
 
     @Test
@@ -178,11 +180,11 @@ class DocumentGenerationServiceTest {
         Template template = activeTemplate(TemplateDocumentType.RELEASE_NOTES, "Body", ChromeFields.empty());
         when(releaseRepository.findById(release.id())).thenReturn(Optional.of(release));
         when(templateRepository.findActive(template.documentType())).thenReturn(Optional.of(template));
-        when(assembler.assemble(release, GroupingDimension.ISSUE_TYPE)).thenReturn(SampleReleaseView.instance());
+        when(assembler.assemble(release, List.of(), GroupingDimension.ISSUE_TYPE)).thenReturn(SampleReleaseView.instance());
         RenderService boundBreachingRenderService = mock(RenderService.class);
         when(boundBreachingRenderService.resolveText(any(), any(), any())).thenThrow(new RenderBoundExceededException());
         DocumentGenerationService serviceWithBoundBreach = new DocumentGenerationService(releaseRepository,
-                templateRepository, snapshotRepository, assembler, boundBreachingRenderService);
+                templateRepository, snapshotRepository, assembler, boundBreachingRenderService, releaseProducts);
 
         assertThatThrownBy(() -> serviceWithBoundBreach.generate(release.id(), TemplateDocumentType.RELEASE_NOTES,
                 null, "actor-1")).isInstanceOf(RenderBoundExceededException.class);
@@ -285,7 +287,7 @@ class DocumentGenerationServiceTest {
     private void stubHappyPath(Release release, Template template, int nextRevision) {
         when(releaseRepository.findById(release.id())).thenReturn(Optional.of(release));
         when(templateRepository.findActive(template.documentType())).thenReturn(Optional.of(template));
-        when(assembler.assemble(release, template.groupingDimension())).thenReturn(SampleReleaseView.instance());
+        when(assembler.assemble(release, List.of(), template.groupingDimension())).thenReturn(SampleReleaseView.instance());
         when(templateRepository.findLogo(template.id())).thenReturn(Optional.empty());
         when(snapshotRepository.nextRevision(release.id(), template.documentType())).thenReturn(nextRevision);
         when(snapshotRepository.create(any(), any())).thenAnswer(inv -> inv.getArgument(0));
@@ -294,7 +296,7 @@ class DocumentGenerationServiceTest {
     private static Release openRelease() {
         Instant now = Instant.now();
         return new Release(UUID.randomUUID(), "Sample Release", "2026.08", ReleaseStatus.OPEN, "CNV",
-                now, "actor-0", null, null, now, null, List.of(), List.of());
+                now, "actor-0", null, null, now, null, List.of(), List.of(), null);
     }
 
     private static Template activeTemplate(TemplateDocumentType documentType, String body, ChromeFields chrome) {

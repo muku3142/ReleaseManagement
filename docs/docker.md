@@ -365,7 +365,7 @@ The container healthcheck uses `/actuator/health/readiness`, which excludes Olla
 
 ### Chat and transform
 
-Run `ollama pull qwen3:4b` before first use. The chat model is set only by `RAG_CHAT_MODEL`;
+Run `ollama pull qwen3:4b-instruct-2507-q4_K_M` before first use. The chat model is set only by `RAG_CHAT_MODEL`;
 callers cannot choose one. Other settings: `RAG_CHAT_NUM_CTX` (lower it if `ollama ps` does not
 show 100% GPU), `RAG_CHAT_DEADLINE` (hard cap on one answer) and
 `RAG_CHAT_MAX_IN_FLIGHT_PER_CLIENT`.
@@ -390,8 +390,24 @@ Status codes callers rely on:
 - Error event `DEADLINE`: the answer hit `RAG_CHAT_DEADLINE`; the tokens already sent stay valid.
 - `done.refusal=true`: the service answered "I don't know" because retrieval was too weak or the model declined.
 
+The `done` event also carries `historyTrimmed` (true when the prompt budget kept fewer history turns than
+were sent), `model` (the configured chat model) and `promptHash` (12 characters identifying the prompt rule
+text; transform reports `historyTrimmed=false`). The fields are additive.
+
+The service writes an SSE comment heartbeat every 5 seconds (`rag.chat.heartbeat-interval`), so a caller that
+closes the connection is noticed, and its generation cancelled, within about 5 seconds.
+
 Indexing pauses while a chat or transform runs and catches up afterwards. Proxies in front of the
 service must not buffer `text/event-stream`; the service sends `X-Accel-Buffering: no`.
+
+#### Prompt rule text
+
+The rule text is configurable under `rag.prompts.*`: `chat-system`, `transform-system`, `tool-rules`,
+`final-round-rule` and `correction`, with env overrides `RAG_PROMPTS_CHATSYSTEM`,
+`RAG_PROMPTS_TRANSFORMSYSTEM`, `RAG_PROMPTS_TOOLRULES`, `RAG_PROMPTS_FINALROUNDRULE` and
+`RAG_PROMPTS_CORRECTION`. The data fences are not configurable. The text is validated at startup, and its hash
+is logged as `promptHash` and returned in `done`. Any `promptHash` change requires
+`mvn -f rag-service/pom.xml test -Pgolden` and the quality gate in `docs/quality-gate.md` before it ships.
 
 ### Tool calls: configuration
 
@@ -400,8 +416,36 @@ service must not buffer `text/event-stream`; the service sends `X-Accel-Bufferin
 `RAG_TOOL_MAX_ROUNDS` (default 4) caps rounds per question; `RAG_TOOL_RESULT_MAX_CHARS` (default 8000) caps one tool
 result (the context budget may reject smaller results first, with 413).
 
+### Tool calls: protocol
+
+The service never calls your app and holds none of its credentials (RAG-08); it only asks your app to run a tool and
+send back the result. The protocol is stateless: every request carries everything.
+
+- **Request.** `POST /v1/chat` takes optional `tools` and `toolTurns`. Each tool is `{name, description, parameters}`
+  with `parameters` a flat JSON Schema: an object of at most 8 string, integer, number or boolean properties, each
+  with an optional description, enum and maxLength, plus `required`. At most 5 tools and 1,500 characters in total.
+  Without these fields the endpoint behaves as before.
+- **Tool call.** When the model wants a tool, the stream ends with a `tool_call` event
+  `{round, questionId, calls: [{id, name, arguments}], signature}` followed by `done` with
+  `finishReason: "tool_calls"`. Tokens streamed before `tool_call` are provisional: discard them.
+- **Resume.** Run every call (there can be several per round), then POST `/v1/chat` again with the same question and
+  history plus `toolTurns`. Each earlier turn is sent back unchanged (`round`, `questionId`, `calls`, `signature`)
+  with `results: [{callId, content, isError, source?}]` keyed by `callId`. A failed tool is `isError: true` with
+  `content: "{\"error\":\"...\"}"`. An optional `source {id, title, url}` becomes a `kind: TOOL` citation.
+- **Limits.** At most 4 rounds, after which the service answers without tools, and 4 calls per round. An invalid call
+  gets one automatic correction retry, then the stream sends error `TOOL_CALL_INVALID`. A result over
+  `RAG_TOOL_RESULT_MAX_CHARS`, or over the context budget, gets 413 `TOOL_RESULT_TOO_LARGE`: send a smaller
+  projection, for example counts instead of lists. Each POST has its own `RAG_CHAT_DEADLINE`, and a resume can get 429
+  like any request; handle it the same way.
+- **Rejected turns.** A changed, missing or invented turn is 400 `TOOL_TURN_INVALID` and Ollama is never contacted.
+  Rotating `RAG_TOOL_SIGNING_SECRET` turns in-flight rounds into this 400; restart the question.
+
 ### Accepted risks (chat)
 
+- **Injection through tool results.** Results are fenced as data like documents, but a small model can still be
+  steered by planted text in them. Golden case TC06 measures this.
+- **Replay.** A valid turn can be replayed by the same client for the same question. That reproduces only the model's
+  own call.
 - **Residual prompt injection (SAFE-02).** Document, history and transform text is fenced as data
   and answers are plain text, but a small model can still be steered by planted text. Nothing is
   executed and answers are advisory. The golden injection cases measure this.
@@ -418,6 +462,20 @@ When on, it needs `RM_ASSISTANT_API_KEY`, the client key from `POST /v1/admin/cl
 and refuses to start without it. Compose sets `RM_ASSISTANT_BASE_URL=http://rag-service:8081` because the app
 container reaches rag-service over the compose network. The index sweep runs every 30 minutes; change it with
 `RM_ASSISTANT_SWEEP_INTERVAL` (ISO-8601, e.g. `PT10M`).
+
+Assistant prompts and starters live under `app.assistant` in `application.yml`: `prompts.scoped-question`
+(must contain `{release}` and `{question}`; `{release}` is replaced by "name version"), `prompts.tool-descriptions.*`
+(override the in-code tool descriptions, 1 to 300 characters), `starters.unscoped` and `starters.release` (at most 6
+entries of 200 characters each), `history-max-turns` (1 to 20) and `stream-deadline` (`RM_ASSISTANT_STREAM_DEADLINE`,
+default `PT5M`). Invalid values stop startup when the switch is on. Environment variables cannot express lists or
+multi-line text well, so override those through `SPRING_APPLICATION_JSON` or a file mounted via
+`SPRING_CONFIG_ADDITIONAL_LOCATION`.
+
+Document assist is configured under `app.assistant.document-assist`: the six instruction texts
+(`instructions.clean-up` and `instructions.summarize`, each with `release-notes`, `runbook` and `approval`; 1 to
+`instruction-max-chars` characters) override the same way. `num-ctx` (`RM_ASSISTANT_NUM_CTX`) must equal
+`RAG_CHAT_NUM_CTX`, and `system-tokens` must be re-derived (length of the rag transform system prompt divided by
+`chars-per-token`, rounded up) whenever that prompt is overridden, or the "too long" check disagrees with rag-service.
 
 `app` does not depend on `rag-service`, so v1 behaves the same when the switch is off or rag-service is down.
 
@@ -493,3 +551,13 @@ This stack is for local and demo use. Before deploying anywhere real:
 - **No resource limits** are set. Add them; `MaxRAMPercentage` only pays off once a container
   memory limit exists.
 - **No backup** for the `pgdata` volume.
+
+## Briefings
+
+The app container reads the Claude briefing files from the repo's `./briefings` folder, mounted
+read-only at `/app/briefings`. `RM_BRIEFINGS_DIR` (`/app/briefings/data`) and `RM_BRIEFINGS_CONFIG`
+(`/app/briefings/config.json`) point the app at it; `mvn spring-boot:run` uses the relative defaults.
+
+- The mount is read-only, so the writer must prune old `<task>-<timestamp>.json` files itself.
+- `briefings/data/.gitkeep` keeps the mount source present on a fresh clone; the result files themselves are git-ignored.
+- On a Linux host the files must be world-readable, because the container user (uid 1001) is not the file owner.

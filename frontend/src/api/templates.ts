@@ -13,11 +13,12 @@ export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
 
 // D-05-04: a per-template setting. ISSUE_TYPE is the default so every template authored in Phase 4
 // keeps rendering {{#groups}} exactly as it did.
-export const GROUPING_DIMENSIONS = ['ISSUE_TYPE', 'COMPONENT'] as const;
+export const GROUPING_DIMENSIONS = ['ISSUE_TYPE', 'COMPONENT', 'BUNDLE'] as const;
 export type GroupingDimension = (typeof GROUPING_DIMENSIONS)[number];
 export const GROUPING_DIMENSION_LABELS: Record<GroupingDimension, string> = {
   ISSUE_TYPE: 'Issue type',
   COMPONENT: 'Component',
+  BUNDLE: 'Bundle',
 };
 
 export type ChromeFields = {
@@ -72,7 +73,7 @@ export type Template = {
 export type TemplateListResponse = { templates: TemplateSummary[] };
 
 export type PlaceholderEntry = {
-  scope: 'ROOT' | 'ITEM' | 'GROUP' | 'COMMENT' | 'COMMIT' | 'PULL_REQUEST';
+  scope: 'ROOT' | 'ITEM' | 'GROUP' | 'COMMENT' | 'COMMIT' | 'PULL_REQUEST' | 'PRODUCT';
   token: string;
   kind: 'VARIABLE' | 'SECTION';
   description: string;
@@ -118,6 +119,7 @@ export type ReleaseView = {
   lastRefreshedAt: string;
   items: ItemView[];
   groups: GroupView[];
+  products: { name: string }[];
 };
 
 export const templatesQueryKey = () => ['templates'] as const;

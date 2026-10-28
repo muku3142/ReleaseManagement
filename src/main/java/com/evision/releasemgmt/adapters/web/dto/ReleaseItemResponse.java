@@ -7,5 +7,5 @@ public record ReleaseItemResponse(String key, String summary, String issueType, 
                                   String resolution, String assignee, String reporter,
                                   List<String> fixVersions, String component, String description,
                                   List<String> comments, int commentTotal, Instant addedAt,
-                                  CodeLinksResponse codeLinks, ItemChurnResponse churn) {
+                                  CodeLinksResponse codeLinks, ItemChurnResponse churn, String bundle) {
 }

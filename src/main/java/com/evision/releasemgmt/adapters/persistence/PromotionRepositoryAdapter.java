@@ -42,7 +42,7 @@ public class PromotionRepositoryAdapter implements PromotionRepository {
     @Override
     @Transactional
     public Promotion appendUnderLock(UUID releaseId, Function<PromotionHistory, Promotion> decide) {
-        // D-07-07: "next stage" only holds if no other recording for this release can commit between the
+        // D-15.1-03: "not an earlier stage" only holds if no other recording for this release can commit between the
         // check and the insert; same reasoning as ReleaseRepositoryAdapter.lockOpen. Taking the lock first
         // also serialises two corrections of one entry, so the unique index on supersedes_id is a backstop
         // whose violation would indicate a bug - hence DataIntegrityViolationException is not caught.

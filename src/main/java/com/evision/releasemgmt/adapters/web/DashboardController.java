@@ -19,6 +19,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @RestController
@@ -28,6 +30,8 @@ public class DashboardController {
     // Must equal MAX_HISTORY_SPAN_DAYS in frontend/src/api/dashboard.ts (DashboardSpanContractTest keeps them in step).
     static final int MAX_HISTORY_SPAN_DAYS = 366;
     static final int MAX_PAGE_SIZE = 100;
+    // Must equal MAX_PRODUCT_FILTER in frontend/src/api/dashboard.ts (DashboardSpanContractTest keeps them in step).
+    static final int MAX_PRODUCT_FILTER = 50;
     // The browser sends local-midnight bounds, so one daylight-saving change inside the range adds an hour.
     private static final Duration DST_SLACK = Duration.ofHours(1);
 
@@ -40,20 +44,22 @@ public class DashboardController {
     }
 
     @GetMapping("/releases")
-    public DashboardResponse releases(@RequestParam(defaultValue = "active") String scope) {
+    public DashboardResponse releases(@RequestParam(defaultValue = "active") String scope,
+                                      @RequestParam(required = false) List<UUID> productIds) {
         boolean all = switch (scope) {
             case "active" -> false;
             case "all" -> true;
             default -> throw invalid("scope must be 'active' or 'all'");
         };
-        return toResponse(service.releases(all));
+        return toResponse(service.releases(all, productScope(productIds)));
     }
 
     @GetMapping("/deployments")
     public DeploymentPageResponse deployments(@RequestParam(required = false) UUID stageId,
                                               @RequestParam Instant from, @RequestParam Instant to,
                                               @RequestParam(defaultValue = "50") int limit,
-                                              @RequestParam(defaultValue = "0") int offset) {
+                                              @RequestParam(defaultValue = "0") int offset,
+                                              @RequestParam(required = false) List<UUID> productIds) {
         if (limit < 1 || limit > MAX_PAGE_SIZE) {
             throw invalid("limit must be between 1 and " + MAX_PAGE_SIZE);
         }
@@ -66,7 +72,8 @@ public class DashboardController {
         if (Duration.between(from, to).compareTo(Duration.ofDays(MAX_HISTORY_SPAN_DAYS).plus(DST_SLACK)) > 0) {
             throw invalid("the range must not exceed " + MAX_HISTORY_SPAN_DAYS + " days");
         }
-        DashboardService.DeploymentPage page = service.deployments(stageId, from, to, limit, offset);
+        DashboardService.DeploymentPage page = service.deployments(stageId, from, to, limit, offset,
+                productScope(productIds));
         // D-05.3-05: resolved once per response, never per row.
         ResolvedActors actors = actorResolution.resolve(
                 page.entries().stream().map(DeploymentRow::recordedBy).distinct().toArray(String[]::new));
@@ -74,7 +81,17 @@ public class DashboardController {
                 page.entries().stream().map(row -> toEntry(row, actors)).toList(), page.hasMore());
     }
 
-    private static ErrorResponseException invalid(String detail) {
+    static Set<UUID> productScope(List<UUID> productIds) {
+        if (productIds == null) {
+            return Set.of();
+        }
+        if (productIds.size() > MAX_PRODUCT_FILTER) {
+            throw invalid("at most " + MAX_PRODUCT_FILTER + " products can be selected");
+        }
+        return Set.copyOf(productIds);
+    }
+
+    static ErrorResponseException invalid(String detail) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, detail);
         problem.setTitle("Request validation failed");
         problem.setProperty("reason", "VALIDATION_FAILED");

@@ -85,7 +85,8 @@ public class DocumentController {
                 all.stream().map(DocumentSnapshot::generatedBy).toArray(String[]::new));
         List<DocumentRevisionResponse> revisions = all.stream()
                 .map(s -> new DocumentRevisionResponse(s.revision(), s.revision() == latestRevision,
-                        s.generatedAt(), actors.display(s.generatedBy()), s.templateName()))
+                        s.generatedAt(), actors.display(s.generatedBy()), s.templateName(),
+                        s.aiAssisted(), aiMode(s), aiInstruction(s)))
                 .toList();
         return new DocumentRevisionListResponse(revisions);
     }
@@ -169,6 +170,15 @@ public class DocumentController {
         ResolvedActors actors = actorResolution.resolve(snapshot.generatedBy());
         return new DocumentResponse(snapshot.id(), snapshot.releaseId(), snapshot.documentType().name(),
                 snapshot.revision(), latestRevision, snapshot.markdown(), snapshot.templateName(),
-                templateDeleted, hasLogo, chromeResponse, snapshot.generatedAt(), actors.display(snapshot.generatedBy()));
+                templateDeleted, hasLogo, chromeResponse, snapshot.generatedAt(), actors.display(snapshot.generatedBy()),
+                snapshot.aiAssisted(), aiMode(snapshot), aiInstruction(snapshot));
+    }
+
+    private static String aiMode(DocumentSnapshot snapshot) {
+        return snapshot.aiAssisted() ? snapshot.aiAssist().mode().name() : null;
+    }
+
+    private static String aiInstruction(DocumentSnapshot snapshot) {
+        return snapshot.aiAssisted() ? snapshot.aiAssist().instruction() : null;
     }
 }

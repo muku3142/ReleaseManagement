@@ -58,6 +58,16 @@ class ArchitectureBoundaryTest {
     }
 
     @Test
+    void noRawJavaNetClientsOutsideTheOllamaAdapterAndConfig() {
+        // RAG-08 / SAFE-03: Ollama is the only outbound call; no URL, socket or URLConnection route to an app may exist
+        noClasses().that().resideOutsideOfPackages("..adapters.ollama..", "..config..")
+                .should().dependOnClassesThat().belongToAnyOf(java.net.URL.class, java.net.URLConnection.class,
+                        java.net.HttpURLConnection.class, java.net.Socket.class)
+                .allowEmptyShould(true)
+                .check(classes);
+    }
+
+    @Test
     void applicationNeverDependsOnTheServletLayer() {
         // keeps SseEmitter behind EventSink
         noClasses().that().resideInAPackage("..application..")

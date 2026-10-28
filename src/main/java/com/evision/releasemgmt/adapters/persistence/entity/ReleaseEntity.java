@@ -49,6 +49,9 @@ public class ReleaseEntity {
     @Column(name = "items_changed_at")
     private Instant itemsChangedAt;
 
+    @Column(name = "packages_url")
+    private String packagesUrl;
+
     public ReleaseEntity() {
     }
 
@@ -90,6 +93,14 @@ public class ReleaseEntity {
 
     public void setJiraProjectKey(String jiraProjectKey) {
         this.jiraProjectKey = jiraProjectKey;
+    }
+
+    public String getPackagesUrl() {
+        return packagesUrl;
+    }
+
+    public void setPackagesUrl(String packagesUrl) {
+        this.packagesUrl = packagesUrl;
     }
 
     public Instant getCreatedAt() {

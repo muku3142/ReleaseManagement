@@ -4,6 +4,8 @@ import com.evision.releasemgmt.adapters.persistence.entity.DocumentSnapshotEntit
 import com.evision.releasemgmt.adapters.persistence.entity.DocumentSnapshotLogoEntity;
 import com.evision.releasemgmt.adapters.persistence.repository.DocumentSnapshotJpaRepository;
 import com.evision.releasemgmt.adapters.persistence.repository.DocumentSnapshotLogoJpaRepository;
+import com.evision.releasemgmt.domain.assistant.ReleaseIndexInvalidated;
+import com.evision.releasemgmt.domain.document.AiAssist;
 import com.evision.releasemgmt.domain.document.DocumentNotFoundException;
 import com.evision.releasemgmt.domain.document.DocumentSnapshot;
 import com.evision.releasemgmt.domain.template.ChromeFields;
@@ -11,6 +13,7 @@ import com.evision.releasemgmt.domain.template.LogoImage;
 import com.evision.releasemgmt.domain.template.LogoMetadata;
 import com.evision.releasemgmt.domain.template.TemplateDocumentType;
 import com.evision.releasemgmt.ports.DocumentSnapshotRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,11 +27,14 @@ public class DocumentSnapshotRepositoryAdapter implements DocumentSnapshotReposi
 
     private final DocumentSnapshotJpaRepository jpa;
     private final DocumentSnapshotLogoJpaRepository logoJpa;
+    private final ApplicationEventPublisher publisher;
 
     public DocumentSnapshotRepositoryAdapter(DocumentSnapshotJpaRepository jpa,
-                                             DocumentSnapshotLogoJpaRepository logoJpa) {
+                                             DocumentSnapshotLogoJpaRepository logoJpa,
+                                             ApplicationEventPublisher publisher) {
         this.jpa = jpa;
         this.logoJpa = logoJpa;
+        this.publisher = publisher;
     }
 
     @Override
@@ -54,6 +60,7 @@ public class DocumentSnapshotRepositoryAdapter implements DocumentSnapshotReposi
             logoEntity.setUploadedAt(metadata.uploadedAt());
             logoJpa.save(logoEntity);
         }
+        publisher.publishEvent(new ReleaseIndexInvalidated(snapshot.releaseId()));
         return load(snapshot.id());
     }
 
@@ -121,15 +128,25 @@ public class DocumentSnapshotRepositoryAdapter implements DocumentSnapshotReposi
         entity.setLogoRenderHeightMm(chrome.logoRenderHeightMm());
         entity.setGeneratedAt(snapshot.generatedAt());
         entity.setGeneratedBy(snapshot.generatedBy());
+        AiAssist ai = snapshot.aiAssist();
+        if (ai != null) {
+            entity.setAiMode(ai.mode());
+            entity.setAiInstruction(ai.instruction());
+            entity.setAiSourceRevision(ai.sourceRevision());
+            entity.setBasisGeneratedAt(ai.basisGeneratedAt());
+        }
         return entity;
     }
 
     private static DocumentSnapshot toDomain(DocumentSnapshotEntity e) {
         ChromeFields chrome = new ChromeFields(e.isCoverEnabled(), e.getCoverTitle(), e.getCoverSubtitle(),
                 e.getHeaderText(), e.getFooterText(), e.isPageNumbersEnabled(), e.getLogoRenderHeightMm());
+        AiAssist ai = e.getAiMode() == null ? null
+                : new AiAssist(e.getAiMode(), e.getAiInstruction(), e.getAiSourceRevision(),
+                        e.getBasisGeneratedAt());
         return new DocumentSnapshot(e.getId(), e.getReleaseId(), e.getDocumentType(), e.getRevision(),
                 e.getMarkdown(), e.getTemplateId(), e.getTemplateName(), e.getTemplateBody(), chrome,
-                e.getGeneratedAt(), e.getGeneratedBy());
+                e.getGeneratedAt(), e.getGeneratedBy(), ai);
     }
 
     private static LogoImage toDomain(DocumentSnapshotLogoEntity e) {

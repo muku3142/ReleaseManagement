@@ -1,15 +1,30 @@
-import { StrictMode, act } from 'react';
+import { StrictMode, act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AddTicketsToReleaseDialog } from '../../src/components/AddTicketsToReleaseDialog';
 import type { ReleaseAddResult } from '../../src/api/releases';
 
-const PROJECTS = [{ id: '10023', key: 'CNV', name: 'Convergence' }];
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ children, to, search, className }: { children?: ReactNode; to: string; search?: Record<string, string>; className?: string }) => (
+    <a href={search ? `${to}?${new URLSearchParams(search)}` : to} className={className}>
+      {children}
+    </a>
+  ),
+}));
+
+const PROJECTS = [{ id: '10023', key: 'ABC', name: 'Alpha Core' }];
+
+const PRODUCTS = {
+  products: [
+    { id: 'p1', name: 'Alpha', archived: false, clientCount: 0, releaseCount: 1, jiraProjectKeys: ['ABC'] },
+    { id: 'p2', name: 'Beta', archived: false, clientCount: 0, releaseCount: 1, jiraProjectKeys: [] },
+  ],
+};
 
 const TICKETS = [
   {
-    key: 'CNV-1',
+    key: 'ABC-1',
     summary: 'Fix login bug',
     issueType: 'Bug',
     status: 'Done',
@@ -23,7 +38,7 @@ const TICKETS = [
     commentTotal: 0,
   },
   {
-    key: 'CNV-2',
+    key: 'ABC-2',
     summary: 'Add export button',
     issueType: 'Story',
     status: 'Done',
@@ -43,7 +58,7 @@ const RELEASE_STUB = {
   name: 'Sprint 42',
   version: '2026.08',
   status: 'OPEN',
-  jiraProjectKey: 'CNV',
+  jiraProjectKey: 'ABC',
   createdAt: '2026-08-05T00:00:00Z',
   createdBy: 'rm@acme.com',
   frozenAt: null,
@@ -74,6 +89,7 @@ function mockApi(overrides: MockOverrides = {}): { url: string; body: unknown }[
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ url, body });
     if (url === '/api/jira/projects') return json(200, PROJECTS);
+    if (url === '/api/products') return json(200, PRODUCTS);
     const sprintsMatch = url.match(/^\/api\/jira\/projects\/([^/]+)\/sprints$/);
     if (sprintsMatch) return json(200, []);
     if (url === '/api/tickets/search' && method === 'POST') return json(200, { tickets: TICKETS });
@@ -98,7 +114,7 @@ async function flush() {
   });
 }
 
-async function renderDialog(open = true) {
+async function renderDialog(open = true, productId: string | null = 'p1') {
   await act(async () => {
     root.render(
       <StrictMode>
@@ -108,6 +124,7 @@ async function renderDialog(open = true) {
             releaseId="r1"
             releaseName="Sprint 42"
             version="2026.08"
+            productId={productId ?? undefined}
             onAdded={onAdded}
             onClose={onClose}
           />
@@ -149,8 +166,8 @@ async function loadTickets() {
 
 async function selectBothTickets() {
   await act(async () => {
-    rowCheckbox('CNV-1').click();
-    rowCheckbox('CNV-2').click();
+    rowCheckbox('ABC-1').click();
+    rowCheckbox('ABC-2').click();
   });
   await flush();
 }
@@ -193,6 +210,52 @@ describe('AddTicketsToReleaseDialog', () => {
     ).toBe(true);
   });
 
+  it('browsesAllOfTheReleasesProductProjectsByDefault', async () => {
+    const calls = mockApi();
+    await renderDialog();
+
+    expect(projectSelect().options[0]?.textContent).toBe('All Alpha projects');
+    await act(async () => byText('Load tickets').click());
+    await flush();
+
+    const searchCall = calls.find((c) => c.url === '/api/tickets/search');
+    expect(searchCall?.body).toEqual({
+      productId: 'p1',
+      statusCategories: ['DONE'],
+      releaseId: 'r1',
+      hideAlreadyInRelease: true,
+    });
+  });
+
+  it('offersHideTicketsAlreadyInAReleaseCheckedByDefault', async () => {
+    mockApi();
+    await renderDialog();
+
+    const label = [...container.querySelectorAll('label')].find(
+      (l) => l.textContent?.trim() === 'Hide tickets already in a release',
+    );
+    expect(label?.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
+  });
+
+  it('showsTheNoJiraProjectNoticeInsteadOfTheBrowserForAProductWithoutKeys', async () => {
+    mockApi();
+    await renderDialog(true, 'p2');
+
+    const notice = container.querySelector('[data-reason="PRODUCT_NO_JIRA_PROJECT"]');
+    expect(notice?.textContent).toBe('Beta has no Jira project. Add one in Portfolio › Products.');
+    expect(notice?.querySelector('a')?.getAttribute('href')).toBe('/portfolio?tab=products');
+    expect(container.querySelector('#projectId')).toBeNull();
+    expect([...container.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['Cancel']);
+  });
+
+  it('asksForAProductWhenTheReleaseHasNone', async () => {
+    mockApi();
+    await renderDialog(true, null);
+
+    expect(container.textContent).toContain('Choose a product for this release first.');
+    expect(container.querySelector('#projectId')).toBeNull();
+  });
+
   it('searchesAreScopedToThisRelease', async () => {
     const calls = mockApi();
     await renderDialog();
@@ -220,7 +283,7 @@ describe('AddTicketsToReleaseDialog', () => {
 
     const addCalls = calls.filter((c) => c.url === '/api/releases/r1/items');
     expect(addCalls).toHaveLength(1);
-    expect(addCalls[0]?.body).toEqual({ ticketKeys: ['CNV-1', 'CNV-2'] });
+    expect(addCalls[0]?.body).toEqual({ ticketKeys: ['ABC-1', 'ABC-2'] });
   });
 
   it('aSuccessfulAddReportsTheServerCountsAndCloses', async () => {
@@ -262,5 +325,12 @@ describe('AddTicketsToReleaseDialog', () => {
     await renderDialog(true);
 
     expect(container.querySelectorAll('tbody tr').length).toBe(0);
+  });
+
+  it('has no free-text bundle input', async () => {
+    mockApi();
+    await renderDialog();
+
+    expect(container.querySelector('#addTicketsBundle')).toBeNull();
   });
 });

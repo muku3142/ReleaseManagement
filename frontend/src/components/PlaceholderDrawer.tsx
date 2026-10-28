@@ -84,6 +84,7 @@ export function PlaceholderDrawer(props: {
   const [releaseOpen, setReleaseOpen] = useState(true);
   const [itemOpen, setItemOpen] = useState(true);
   const [groupOpen, setGroupOpen] = useState(true);
+  const [productOpen, setProductOpen] = useState(true);
   const [announcement, setAnnouncement] = useState('');
 
   useEffect(() => {
@@ -114,6 +115,7 @@ export function PlaceholderDrawer(props: {
   const releaseEntries = filtered.filter((entry) => entry.scope === 'ROOT');
   const itemEntries = filtered.filter((entry) => ITEM_SCOPES.includes(entry.scope));
   const groupEntries = filtered.filter((entry) => entry.scope === 'GROUP');
+  const productEntries = filtered.filter((entry) => entry.scope === 'PRODUCT');
 
   return (
     <div
@@ -163,6 +165,14 @@ export function PlaceholderDrawer(props: {
             entries={groupEntries}
             open={groupOpen}
             onToggle={() => setGroupOpen((v) => !v)}
+            onRowInsert={handleInsert}
+          />
+          <Section
+            title="Product fields"
+            subheading="Valid inside {{#products}}"
+            entries={productEntries}
+            open={productOpen}
+            onToggle={() => setProductOpen((v) => !v)}
             onRowInsert={handleInsert}
           />
         </>

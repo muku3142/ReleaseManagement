@@ -15,6 +15,7 @@ import com.evision.releasemgmt.domain.release.ReleaseStatus;
 import com.evision.releasemgmt.domain.template.GroupingDimension;
 import com.evision.releasemgmt.domain.template.view.CommitView;
 import com.evision.releasemgmt.domain.template.view.GroupView;
+import com.evision.releasemgmt.domain.template.view.ProductView;
 import com.evision.releasemgmt.domain.template.view.PullRequestView;
 import com.evision.releasemgmt.domain.template.view.ItemView;
 import com.evision.releasemgmt.domain.template.view.ReleaseView;
@@ -41,7 +42,7 @@ class ReleaseViewAssemblerTest {
     @Test
     void producesThreeItemsWithManualLast() {
         ReleaseView view = assembler.assemble(releaseWith(List.of(BUG_TICKET, STORY_TICKET),
-                List.of(manualItem())), GroupingDimension.ISSUE_TYPE);
+                List.of(manualItem())), List.of(), GroupingDimension.ISSUE_TYPE);
 
         assertThat(view.items()).hasSize(3);
         assertThat(view.items().get(2).isManual()).isTrue();
@@ -50,7 +51,7 @@ class ReleaseViewAssemblerTest {
     @Test
     void manualItemHasCategoryLabelAndBlankTicketOnlyFields() {
         ReleaseView view = assembler.assemble(releaseWith(List.of(), List.of(manualItem())),
-                GroupingDimension.ISSUE_TYPE);
+                List.of(), GroupingDimension.ISSUE_TYPE);
 
         ItemView manual = view.items().get(0);
         assertThat(manual.isManual()).isTrue();
@@ -67,7 +68,7 @@ class ReleaseViewAssemblerTest {
     @Test
     void ticketItemHasEmptyCategoryAndNoLinkedCode() {
         ReleaseView view = assembler.assemble(releaseWith(List.of(BUG_TICKET), List.of()),
-                GroupingDimension.ISSUE_TYPE);
+                List.of(), GroupingDimension.ISSUE_TYPE);
 
         ItemView ticketItem = view.items().get(0);
         assertThat(ticketItem.category()).isEmpty();
@@ -78,7 +79,7 @@ class ReleaseViewAssemblerTest {
     @Test
     void groupsAppearBugThenStoryThenDatabaseScriptWhenGroupedByIssueType() {
         ReleaseView view = assembler.assemble(releaseWith(List.of(BUG_TICKET, STORY_TICKET),
-                List.of(manualItem())), GroupingDimension.ISSUE_TYPE);
+                List.of(manualItem())), List.of(), GroupingDimension.ISSUE_TYPE);
 
         assertThat(view.groups()).extracting(GroupView::groupName)
                 .containsExactly("Bug", "Story", "Database script");
@@ -91,21 +92,21 @@ class ReleaseViewAssemblerTest {
     void frozenReleaseRendersStatusAndFrozenAtOpenReleaseRendersEmptyFrozenAt() {
         Release frozen = new Release(UUID.randomUUID(), "R", "1.0", ReleaseStatus.FROZEN, "PRJ",
                 Instant.parse("2026-01-01T00:00:00Z"), "actor",
-                Instant.parse("2026-01-02T00:00:00Z"), "actor", null, null, List.of(), List.of());
-        ReleaseView frozenView = assembler.assemble(frozen, GroupingDimension.ISSUE_TYPE);
+                Instant.parse("2026-01-02T00:00:00Z"), "actor", null, null, List.of(), List.of(), null);
+        ReleaseView frozenView = assembler.assemble(frozen, List.of(), GroupingDimension.ISSUE_TYPE);
         assertThat(frozenView.status()).isEqualTo("FROZEN");
         assertThat(frozenView.frozenAt()).isEqualTo("2026-01-02T00:00:00Z");
 
         Release open = new Release(UUID.randomUUID(), "R", "1.0", ReleaseStatus.OPEN, "PRJ",
-                Instant.parse("2026-01-01T00:00:00Z"), "actor", null, null, null, null, List.of(), List.of());
-        ReleaseView openView = assembler.assemble(open, GroupingDimension.ISSUE_TYPE);
+                Instant.parse("2026-01-01T00:00:00Z"), "actor", null, null, null, null, List.of(), List.of(), null);
+        ReleaseView openView = assembler.assemble(open, List.of(), GroupingDimension.ISSUE_TYPE);
         assertThat(openView.frozenAt()).isEmpty();
     }
 
     @Test
     void nullResolutionAndAssigneeRenderAsEmptyStringNeverNull() {
         ReleaseView view = assembler.assemble(releaseWith(List.of(BUG_TICKET), List.of()),
-                GroupingDimension.ISSUE_TYPE);
+                List.of(), GroupingDimension.ISSUE_TYPE);
 
         ItemView item = view.items().get(0);
         assertThat(item.resolution()).isEmpty();
@@ -117,7 +118,7 @@ class ReleaseViewAssemblerTest {
     @Test
     void issueTypeDimensionProducesTheSameGroupsAsBeforeTheDimensionWasAdded() {
         ReleaseView view = assembler.assemble(releaseWith(List.of(BUG_TICKET, STORY_TICKET), List.of()),
-                GroupingDimension.ISSUE_TYPE);
+                List.of(), GroupingDimension.ISSUE_TYPE);
 
         assertThat(view.groups()).extracting(GroupView::groupName).containsExactly("Bug", "Story");
     }
@@ -133,7 +134,7 @@ class ReleaseViewAssemblerTest {
 
         ReleaseView view = assembler.assemble(
                 releaseWith(List.of(zebraComponentTicket, matchingComponentTicket), List.of()),
-                GroupingDimension.COMPONENT);
+                List.of(), GroupingDimension.COMPONENT);
 
         assertThat(view.groups()).extracting(GroupView::groupName)
                 .containsExactly("Matching Module", "Zebra Module");
@@ -146,7 +147,7 @@ class ReleaseViewAssemblerTest {
                 List.of(), "", "Blank description", List.of(), 0, null, null, null, null, false);
 
         ReleaseView view = assembler.assemble(releaseWith(List.of(BUG_TICKET, blankComponentTicket), List.of()),
-                GroupingDimension.COMPONENT);
+                List.of(), GroupingDimension.COMPONENT);
 
         assertThat(view.groups()).extracting(GroupView::groupName).containsExactly("Uncategorised");
         assertThat(view.groups().get(0).items()).extracting(ItemView::key)
@@ -166,7 +167,7 @@ class ReleaseViewAssemblerTest {
 
         ReleaseView view = assembler.assemble(
                 releaseWith(List.of(blankComponentTicket, aardvarkComponentTicket), List.of()),
-                GroupingDimension.COMPONENT);
+                List.of(), GroupingDimension.COMPONENT);
 
         // "Aardvark Module" < "Uncategorised" alphabetically ('A' < 'U'), so it must lead.
         assertThat(view.groups()).extracting(GroupView::groupName)
@@ -177,8 +178,8 @@ class ReleaseViewAssemblerTest {
     void manualItemsGroupByCategoryUnderBothDimensions() {
         Release release = releaseWith(List.of(), List.of(manualItem()));
 
-        ReleaseView issueTypeView = assembler.assemble(release, GroupingDimension.ISSUE_TYPE);
-        ReleaseView componentView = assembler.assemble(release, GroupingDimension.COMPONENT);
+        ReleaseView issueTypeView = assembler.assemble(release, List.of(), GroupingDimension.ISSUE_TYPE);
+        ReleaseView componentView = assembler.assemble(release, List.of(), GroupingDimension.COMPONENT);
 
         assertThat(issueTypeView.groups()).extracting(GroupView::groupName).containsExactly("Database script");
         assertThat(componentView.groups()).extracting(GroupView::groupName).containsExactly("Database script");
@@ -187,7 +188,7 @@ class ReleaseViewAssemblerTest {
     @Test
     void itemViewComponentIsEmptyForManualItemsAndForTicketsWithNoComponent() {
         ReleaseView view = assembler.assemble(releaseWith(List.of(BUG_TICKET), List.of(manualItem())),
-                GroupingDimension.ISSUE_TYPE);
+                List.of(), GroupingDimension.ISSUE_TYPE);
 
         ItemView ticketItem = view.items().stream().filter(i -> !i.isManual()).findFirst().orElseThrow();
         ItemView manualItem = view.items().stream().filter(ItemView::isManual).findFirst().orElseThrow();
@@ -202,7 +203,7 @@ class ReleaseViewAssemblerTest {
                         commit("aaaaaaa1111", "first", null, "2026-01-01T00:00:00Z")),
                 List.of(pullRequest("1001", false), pullRequest("1003", true), pullRequest("1002", true)));
 
-        ItemView item = assembler.assemble(releaseWith(links), GroupingDimension.ISSUE_TYPE).items().get(0);
+        ItemView item = assembler.assemble(releaseWith(links), List.of(), GroupingDimension.ISSUE_TYPE).items().get(0);
 
         assertThat(item.commits()).extracting(CommitView::id).containsExactly("aaaaaaa", "bbbbbbb");
         assertThat(item.commits().get(0).author()).isEmpty();
@@ -216,7 +217,7 @@ class ReleaseViewAssemblerTest {
             CodeLinks links = codeLinks(status, List.of(commit("aaaaaaa1111", "kept rows", "Dev", "2026-01-01T00:00:00Z")),
                     List.of(pullRequest("1002", true)));
 
-            ItemView item = assembler.assemble(releaseWith(links), GroupingDimension.ISSUE_TYPE).items().get(0);
+            ItemView item = assembler.assemble(releaseWith(links), List.of(), GroupingDimension.ISSUE_TYPE).items().get(0);
 
             assertThat(item.commits()).as(status.name()).isEmpty();
             assertThat(item.pullRequests()).as(status.name()).isEmpty();
@@ -241,7 +242,7 @@ class ReleaseViewAssemblerTest {
     private static Release releaseWith(CodeLinks links) {
         Instant now = Instant.now();
         return new Release(UUID.randomUUID(), "R", "1.0", ReleaseStatus.OPEN, "PRJ",
-                now, "actor", null, null, null, null, List.of(new ReleaseItem(BUG_TICKET, now, links)), List.of());
+                now, "actor", null, null, null, null, List.of(new ReleaseItem(BUG_TICKET, now, links)), List.of(), null);
     }
 
     private static ManualItem manualItem() {
@@ -253,6 +254,82 @@ class ReleaseViewAssemblerTest {
         Instant now = Instant.now();
         List<ReleaseItem> items = tickets.stream().map(ticket -> new ReleaseItem(ticket, now, CodeLinks.notAttempted())).toList();
         return new Release(UUID.randomUUID(), "R", "1.0", ReleaseStatus.OPEN, "PRJ",
-                now, "actor", null, null, null, null, items, manualItems);
+                now, "actor", null, null, null, null, items, manualItems, null);
+    }
+
+    // D-17.2-07: bundles first (case-insensitive), then "Other" for ungrouped tickets, then manual categories.
+    @Test
+    void bundleDimensionGroupsByBundleThenOtherThenManualCategories() {
+        Release release = releaseWithBundles(List.of(
+                bundled(ticket("ABC-1"), "Payments fixes"),
+                bundled(ticket("ABC-2"), "audit"),
+                bundled(ticket("ABC-3"), null),
+                bundled(ticket("ABC-4"), "Payments fixes")),
+                List.of(new ManualItem(UUID.randomUUID(), "Flip flag", "", ManualItemCategory.CONFIG_CHANGE,
+                        Instant.now())));
+
+        ReleaseView view = assembler.assemble(release, List.of(), GroupingDimension.BUNDLE);
+
+        assertThat(view.groups()).extracting(GroupView::groupName)
+                .containsExactly("audit", "Payments fixes", "Other", "Config change");
+        assertThat(view.groups().get(0).items()).extracting(ItemView::key).containsExactly("ABC-2");
+        assertThat(view.groups().get(1).items()).extracting(ItemView::key).containsExactly("ABC-1", "ABC-4");
+        assertThat(view.groups().get(2).items()).extracting(ItemView::key).containsExactly("ABC-3");
+        assertThat(view.groups().get(3).items()).extracting(ItemView::isManual).containsExactly(true);
+    }
+
+    @Test
+    void bundleDimensionWithNoBundlesPutsEveryTicketUnderOther() {
+        ReleaseView view = assembler.assemble(releaseWith(List.of(BUG_TICKET, STORY_TICKET), List.of(manualItem())),
+                List.of(), GroupingDimension.BUNDLE);
+
+        assertThat(view.groups()).extracting(GroupView::groupName).containsExactly("Other", "Database script");
+        assertThat(view.groups().get(0).items()).extracting(ItemView::key).containsExactly("ABC-1", "ABC-2");
+    }
+
+    @Test
+    void bundleDimensionOmitsOtherWhenEveryTicketIsBundled() {
+        Release release = releaseWithBundles(List.of(
+                bundled(ticket("ABC-1"), "Alpha"), bundled(ticket("ABC-2"), "Beta")), List.of());
+
+        ReleaseView view = assembler.assemble(release, List.of(), GroupingDimension.BUNDLE);
+
+        assertThat(view.groups()).extracting(GroupView::groupName).containsExactly("Alpha", "Beta");
+    }
+
+    // A bundle literally named "Other" stays its own group rather than absorbing the ungrouped tickets.
+    @Test
+    void bundleNamedOtherIsNotMergedWithUngroupedTickets() {
+        Release release = releaseWithBundles(List.of(
+                bundled(ticket("ABC-1"), "Other"), bundled(ticket("ABC-2"), null)), List.of());
+
+        ReleaseView view = assembler.assemble(release, List.of(), GroupingDimension.BUNDLE);
+
+        assertThat(view.groups()).extracting(GroupView::groupName).containsExactly("Other", "Other");
+        assertThat(view.groups().get(0).items()).extracting(ItemView::key).containsExactly("ABC-1");
+        assertThat(view.groups().get(1).items()).extracting(ItemView::key).containsExactly("ABC-2");
+    }
+
+    private static TicketDetail ticket(String key) {
+        return new TicketDetail(key, key + " summary", "Task", "Open", null, null, "Reporter Person",
+                List.of(), null, "", List.of(), 0, null, null, null, null, false);
+    }
+
+    private static ReleaseItem bundled(TicketDetail ticket, String bundle) {
+        return new ReleaseItem(ticket, Instant.now(), CodeLinks.notAttempted(), bundle);
+    }
+
+    private static Release releaseWithBundles(List<ReleaseItem> items, List<ManualItem> manualItems) {
+        return new Release(UUID.randomUUID(), "R", "1.0", ReleaseStatus.OPEN, "PRJ",
+                Instant.now(), "actor", null, null, null, null, items, manualItems, null);
+    }
+
+    @Test
+    void productNamesAreMappedInTheOrderGiven() {
+        ReleaseView view = assembler.assemble(releaseWith(List.of(BUG_TICKET), List.of()),
+                List.of("Billing", "core"), GroupingDimension.ISSUE_TYPE);
+
+        assertThat(view.products())
+                .containsExactly(new ProductView("Billing"), new ProductView("core"));
     }
 }

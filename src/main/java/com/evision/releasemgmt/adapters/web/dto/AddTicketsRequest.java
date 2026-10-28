@@ -10,5 +10,7 @@ public record AddTicketsRequest(
         @NotEmpty
         @Size(max = 500, message = "at most 500 tickets can be added in one request")
         List<@Pattern(regexp = "^[A-Z][A-Z0-9]*-[0-9]+$",
-                      message = "must be a Jira issue key such as CNV-1234") String> ticketKeys) {
+                      message = "must be a Jira issue key such as CNV-1234") String> ticketKeys,
+        @Size(max = 100)
+        @Pattern(regexp = "^[^\\p{Cntrl}]*$", message = "must not contain control characters") String bundle) {
 }

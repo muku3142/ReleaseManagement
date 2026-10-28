@@ -1,420 +1,209 @@
-# Requirements: ReleaseManagement
+| ASST-11 |  | Complete || PDASH-03 |  | Complete || PDASH-02 |  | Complete || PDASH-01 |  | Complete || PROMO-SKIP-03 |  | Complete || PROMO-SKIP-02 |  | Complete || PROMO-SKIP-01 |  | Complete || REL-UNFREEZE-03 |  | Complete || REL-UNFREEZE-02 |  | Complete || REL-UNFREEZE-01 |  | Complete |# Requirements: ReleaseManagement
 
-**Defined:** 2026-07-27
-**Core Value:** Given a set of Jira tickets, produce accurate and consistent release documentation plus a tracked deployment record — without anyone doing manual release bookkeeping in Jira.
+## Milestone v1.2 Requirements — Portfolio & Planning
 
-## v1 Requirements
+Defined 2026-10-20. Track which products and clients each release reaches, give technical product managers a
+RICE-ranked roadmap, show aggregate app usage, and add AI deployment notes and a daily plan. Research:
+`.planning/research/v1.2/SUMMARY.md`. Phase numbering continues at 15.
 
-Requirements for initial release. Each maps to exactly one roadmap phase.
+Decisions taken while scoping (2026-10-20):
+- A client can use several products (many-to-many).
+- An installation can be recorded only for a FROZEN release; if the release has not reached the Production stage, a warning is shown but the install is allowed.
+- The external AI provider is enabled by two keys: an ops `allowed-hosts` property (empty = off) and a Settings toggle any signed-in user can flip.
+- Usage tracking is aggregate only; no user identity is stored.
 
-### Authentication
+### Portfolio — Products and Clients
 
-- [x] **AUTH-01**: Release manager can sign in by supplying their Jira email and API token, which the system validates against Jira before granting access
-- [x] **AUTH-02**: All Jira reads are performed with the signed-in user's own credential, so the tool never sees tickets the user could not see in Jira
-- [x] **AUTH-03**: Stored Jira credentials are encrypted at rest and never returned to the client after being saved
-- [ ] **AUTH-04**: Release manager can replace an expired or revoked Jira token without losing existing releases, templates or history
+- [x] **PORT-01**: User can create, rename and archive products
+- [x] **PORT-02**: User can create, rename and archive clients and link each client to one or more products
+- [x] **PORT-03**: User can assign one or more products to a release (at least one is required); existing releases get a product per Jira project during migration
+- [x] **PORT-04**: User can record that a client installed a release for one of its products, with a back-datable install time and a note; only releases covering that product and in FROZEN state are accepted, with a warning if the release has not reached the Production stage
+- [x] **PORT-05**: User can correct a wrong installation record; the original stays in history (append-only, superseded), and promotion history is never touched
+- [x] **PORT-06**: User can see, per client, which release it currently runs for each product, derived from installation history
+- [x] **PORT-07**: User can record one release as installed for several clients at once (bulk install)
+- [x] **PORT-08**: Generated document templates can reach the release's product names
 
-### Jira Integration
+### Portfolio — Dashboard
 
-- [x] **JIRA-01**: Release manager can configure which Jira Cloud site the system reads from
-- [ ] **JIRA-02**: Release manager can browse candidate tickets filtered by project, sprint, and JQL — sprint is optional (a project may have no scrum board). Superseded 2026-08-04: originally "project, fix version, and JQL"; sprint replaced fix version because releases here are scoped by sprint. Fix-version filtering was removed entirely, so this now requires Jira's Agile API — see the PROJECT.md note reversing that exclusion
-- [ ] **JIRA-03**: Release manager sees the complete ticket set matching a filter, with paging handled to exhaustion rather than silently truncating at the first page
-- [ ] **JIRA-04**: Release manager sees the fields the tool needs even on Jira instances with differing custom-field configurations, because custom fields are resolved by name through field metadata rather than hardcoded IDs
-- [ ] **JIRA-05**: Jira rich-text fields arrive as Atlassian Document Format and are rendered as readable text suitable for inclusion in generated documents
-- [ ] **JIRA-06**: Release manager gets a clear, actionable error when Jira is unreachable, rate-limits the request, or rejects the credential — distinguishable from "no results"
-- [ ] **JIRA-07**: Release manager can filter candidate tickets by status category (To Do / In Progress / Done), with only Done tickets shown by default
+- [x] **PDASH-01**: User can see releases grouped by product on the dashboard, and filter the dashboard by product; a release in two products is never double-counted in totals
+- [x] **PDASH-02**: User can see a client x product matrix showing the release each client runs
+- [x] **PDASH-03**: User can see which clients are behind the newest installable release of their product
 
-### Release Assembly
+### Release lifecycle — Unfreeze and flexible promotion (Phase 15.1, inserted 2026-10-22)
 
-- [ ] **REL-01**: Release manager can create a named, versioned release
-- [ ] **REL-02**: Release manager can add and remove Jira tickets on a release while it is still open
-- [ ] **REL-03**: Release manager can freeze a release, which snapshots its exact ticket set at that moment
-- [ ] **REL-04**: Release manager can open any release and see its ticket set with per-ticket detail
-- [ ] **REL-05**: Release manager can list and search all releases
-- [ ] **REL-08**: Release manager can add a manual item to an open release — one not backed by a Jira ticket, such as a config change, database script or infrastructure task — carrying at minimum a title, description and category, and appearing in generated documents alongside ticket-backed items
+- [x] **REL-UNFREEZE-01**: User can unfreeze a FROZEN release that has no promotion entries and no client install records; it returns to OPEN with its frozen time and frozen-by cleared, its tickets can be changed, and freezing again stamps a new frozen time
+- [x] **REL-UNFREEZE-02**: Unfreeze is rejected with a reason the UI shows (not frozen / has promotions / has installs) once any promotion or install row exists, including failed, voided and superseded ones; the check is race-free against a concurrent promotion or install
+- [x] **REL-UNFREEZE-03**: A frozen release's documents read as out of date when they were generated before its last refresh, or before a ticket-set change made before the freeze; product edits after freezing never make documents out of date
+- [x] **PROMO-SKIP-01**: User can record a promotion to the current stage (redeploy) or any later active stage, skipping stages, including as the first entry, with no reason required
+- [x] **PROMO-SKIP-02**: A promotion to a stage earlier than the current stage is rejected; rollback on the current stage remains the way back
+- [x] **PROMO-SKIP-03**: Correction replay and every dashboard metric accept releases that skipped stages
 
-### Template Authoring
+### Releases — Product first (Phase 17.2, inserted 2026-10-26)
 
-- [ ] **TMPL-01**: Release manager can create and edit a separate template for each document type — release notes, deployment runbook, approval document
-- [ ] **TMPL-02**: Templates use `{{ }}`-style placeholders that resolve against a documented, fixed view-model of release, ticket and code-reference data, with no expression language, method invocation or arbitrary property traversal available to the template
-- [ ] **TMPL-03**: Release manager can browse a catalog of every available placeholder while authoring, with a description of what each resolves to
-- [ ] **TMPL-04**: System validates a template when it is saved by rendering it against a sample context that includes a ticket with no linked code, and reports unknown placeholders as errors rather than silently blanking them at generation time
-- [ ] **TMPL-05**: Template rendering is bounded by an execution timeout and a collection-size limit, so no template can hang or exhaust the server
-- [ ] **TMPL-06**: Release manager can preview a template against a real selected release's actual data while editing
-- [ ] **TMPL-08**: Release manager can define a template's document chrome through structured fields — cover page on/off, cover title and subtitle, running header text, footer text, and page numbering — each accepting the same `{{ }}` placeholders as the body, so no new expression surface is introduced
-- [ ] **TMPL-09**: Release manager can upload and manage a logo image for use in document chrome, restricted to raster formats with validated type, size and dimensions
+- [ ] **REL-PF-01**: User creates a release by choosing its product first; the ticket browser then searches every Jira project mapped to that product (Portfolio › Products)
+- [ ] **REL-PF-02**: Both entry points (Releases page "New release" and the Tickets page) start from a product instead of a free Jira project choice
+- [ ] **REL-PF-03**: A release has exactly one product, enforced in storage, and existing portfolio, install, "clients behind" and assistant behaviour keeps working
+- [ ] **REL-PF-04**: A product with no mapped Jira project blocks release creation with a message linking to Portfolio › Products
 
-### Document Generation
+### Roadmap — RICE
 
-- [ ] **DOC-01**: Release manager can generate release notes for a release from its template
-- [ ] **DOC-02**: Release notes group tickets by issue type by default, and a template can group by component instead. Narrowed 2026-08-10 by D-05-02: the original wording also named epic and label; both are out of scope for v1 — see the Phase 5 note below
-- [ ] **DOC-03**: Release manager can generate a deployment runbook with distinct, clearly-labelled sections for deploy steps, post-deploy validation, and rollback with explicit trigger conditions — authored as template content. Superseded 2026-08-10: originally "whose data model provides distinct places for…"; see the Phase 5 note below
-- [ ] **DOC-04**: Release manager can generate an approval/change document with clearly-labelled risk, impact and backout-plan sections — authored as template content. Superseded 2026-08-10: originally "whose data model provides risk, impact and backout-plan fields"; see the Phase 5 note below
-- [ ] **DOC-05**: Release manager can export any generated document as PDF
-- [ ] **DOC-06**: Release manager can export any generated document as DOCX
-- [x] **DOC-07**: Each generated document is stored as an immutable snapshot recording the template version, content and generation timestamp, so regenerating creates a new revision instead of altering the previous one
-- [ ] **DOC-08**: Both the PDF and DOCX export of a document render that template's cover page, running header, footer and page numbering, with the two formats visually equivalent rather than merely both present
-- [x] **DOC-09**: Release manager can see across all releases which of the three documents have been generated, which are **stale** relative to the release's current ticket set, and which were never generated — so outstanding release paperwork is visible without opening each release one at a time
+- [ ] **ROAD-01**: User can add roadmap items from Jira tickets (by key or JQL search via the existing provider) and add manual items
+- [ ] **ROAD-02**: User can set Reach, Impact (0.25 / 0.5 / 1 / 2 / 3), Confidence (0-100%) and Effort (> 0) on each item, with documented units and rubric shown in the UI
+- [ ] **ROAD-03**: User can see items ranked by RICE score computed by the app; items with missing inputs sort last with a deterministic tie-break
+- [ ] **ROAD-04**: Refreshing a Jira item updates its Jira fields (summary, status) and shows when they were fetched, without overwriting local RICE inputs; an item whose Jira issue becomes unavailable is kept and flagged
+- [ ] **ROAD-05**: User can optionally link a roadmap item to a product and filter the roadmap by product
+- [ ] **ROAD-06**: User can see the change history of an item's RICE inputs (who, when, old to new)
+- [ ] **ROAD-07**: User can export the ranked roadmap as CSV
 
-### Azure DevOps Enrichment
+### Release packages link (added to Phase 17, 2026-10-25)
 
-- [ ] **ADO-01**: Where a Jira ticket links to Azure DevOps, release manager sees that ticket's linked commits and pull requests
-- [ ] **ADO-02**: Tickets with no Azure DevOps link display and generate documents normally — no error, no empty sections, no failed generation
-- [ ] **ADO-03**: Release manager can tell the difference between a ticket that has no Azure DevOps link and one whose enrichment was attempted and failed
-- [ ] **ADO-04**: Azure DevOps access uses an org-scoped credential with a tracked expiry date, and the release manager is warned before it expires
-- [ ] **ADO-05**: Enriching a release containing many tickets completes in bounded time through parallel, cached lookups rather than one sequential call per ticket
+- [ ] **PKG-01**: User can set, change or clear one packages link (a OneDrive/SharePoint URL) on a release from its detail page, whether the release is OPEN or FROZEN, and open it from there
+- [ ] **PKG-02**: The assistant can answer where a release's packages are, returning the stored link
 
-### Deployment Tracking
+### Product briefings — Claude fallback (Phase 17.1, inserted 2026-10-25)
 
-- [ ] **DEPL-01**: Release manager can see the fixed environment ladder and which stage each release currently sits at
-- [ ] **DEPL-02**: Release manager can record the promotion of a release to the next environment in the ladder
-- [ ] **DEPL-03**: Every promotion is recorded as an immutable entry capturing target environment, timestamp, actor and outcome
-- [ ] **DEPL-04**: Release manager can attach a free-text note to a promotion
+- [ ] **BRIEF-01**: When Claude's result for a scheduled briefing slot is missing after a grace period, the app produces that briefing itself for each active product not covered by Claude, and skips covered products
+- [ ] **BRIEF-02**: Daily Jira digest per product (Sun-Thu): blockers, stale in-progress issues (3+ working days), not-ready stories, changes since the last run, due within 5 days or overdue
+- [ ] **BRIEF-03**: Weekly sprint backlog check per product: next sprint or top-ranked backlog items scored by readiness field checks, with what is missing per item
+- [ ] **BRIEF-04**: Weekly status update per product: this week's completed, in progress, blocked and newly added work, sprint committed vs done, overdue items, as an executive and an engineering draft
+- [ ] **BRIEF-05**: Briefings are computed from Jira fields with no Anthropic dependency; the self-hosted model, when enabled, adds only a headline/summary and its failure never fails a run
+- [ ] **BRIEF-06**: A Briefings page shows each task's runs per product, Claude's or the app's, with status, headline, attention count and the full briefing
+- [ ] **BRIEF-07**: An admin configures schedules, grace period, enabled tasks and the user whose stored Jira credential the scheduler uses, and can run a task now; a missing credential is recorded as a run status
+- [ ] **BRIEF-08**: A read-only Briefings page shows the latest result and run history of all five Claude briefings (including regulation watch and Gulf investment brief) from `briefings/data/<id>.json`; only the five fixed ids are read, oversized or malformed files show a read error and never a server error
 
-### Audit Trail
+### Usage — Analytics
 
-- [ ] **AUDIT-01**: Release manager can view the complete promotion history of a release, not just its current stage
-- [ ] **AUDIT-02**: Release manager can view every document generated for a release, including superseded revisions
-- [ ] **AUDIT-03**: Release and promotion history is append-only — a correction adds a new entry rather than editing or deleting an existing one
-- [ ] **AUDIT-04**: Release manager can view deployment history across all releases on one screen — filterable by environment and date range — not only per-release, so "what went to Production and when" is answerable without opening each release
+- [ ] **USAGE-01**: An admin can add analytics connections (GA4 service account, or Umami URL + API token) in Settings; secrets are encrypted at rest, never returned after save, and each connection can be tested
+- [ ] **USAGE-02**: Each client + product can be mapped to a connection and a GA4 property id or Umami website id; the app only reads from providers and degrades gracefully when one is unreachable or unauthorised
+- [ ] **USAGE-03**: A daily sync stores only aggregate daily figures per mapping (active users, sessions, page views, top pages/events), backfilling 90 days on first mapping; no user-, session- or IP-level data is stored
+- [ ] **USAGE-04**: User sees a usage panel on client detail (period totals, trend, top pages/events) and a usage column on the portfolio dashboard, labelled approximate, with "last synced" and "No analytics source" states
+- [ ] **USAGE-05**: User sees usage around a release: average daily active users and sessions in the 14 days before vs after its install at that client
 
-### Release Insights
+### AI Deployment Notes — Runbook Recommend
 
-Added 2026-08-11. These are the two insight areas the release manager asked for that no existing
-requirement covered. They are deliberately **not** Jira's agile reports, which stay out of scope
-(`PROJECT.md` Out of Scope): both measure this system's own release process, which Jira cannot compute
-because Jira does not know when a release was frozen or deployed here.
+- [ ] **RECO-01**: User can run a Recommend mode on a release's deployment runbook that proposes deploy steps, configuration and database changes, risks and validation checks
+- [ ] **RECO-02**: Recommend reads the release's stored Azure DevOps commit messages and PR titles/status (no live ADO call) and shows how many tickets, commits and PRs were included; with no ADO data it is disabled with an explanation
+- [ ] **RECO-03**: Every suggestion cites a ticket key, PR id or commit id; the server drops or flags citations not present in the evidence
+- [ ] **RECO-04**: A deterministic pre-scan of commit and PR text flags likely migration and configuration changes and passes them to the model as hints
+- [ ] **RECO-05**: User reviews the suggestions and saves them as an AI-assisted runbook revision; nothing is saved automatically
+- [ ] **RECO-06**: Recommend always runs on the self-hosted model, never an external provider, and resists instructions embedded in commit or PR text (measured on a golden set including injection cases before sign-off)
 
-- [ ] **INSIGHT-01**: Release manager can see how long releases take through their own lifecycle — created to frozen, and frozen to production — computed from timestamps this system already owns, so slow releases are visible without manual bookkeeping
-- [ ] **INSIGHT-02**: Release manager can see each release's composition on one screen — ticket count, manual versus ticket-backed split, and what share of tickets carry linked Azure DevOps commits or pull requests — so gaps in traceability are visible before the release ships
-- [ ] **INSIGHT-03**: Release manager can see, per ticket and summarised per release, how many commits it took to reach Done (development churn) separately from how often it was reopened after Done and the commits made after first Done (testing rework) — so development problems and testing problems are distinguishable. Done means Jira status category Done; history comes from a scoped, cached read of the ticket's status changes (`/changelog`), not a velocity or cycle-time report (added 2026-10-07; caused-by bug count dropped the same day because bugs are not linked consistently in Jira)
-- [x] **INSIGHT-04**: Release manager can see the total story points of each release on the dashboard, summed from the Jira story-point field of the release's tickets (resolved by field name per site), with tickets that have no estimate counted and shown separately so a low total is not mistaken for a small release. Only the per-release total is in scope: no velocity, per-sprint points or burndown (added 2026-10-14, partial reversal recorded in PROJECT.md)
+### Planning — Daily Planner
 
-### Cross-cutting UX
+- [ ] **PLAN-01**: User can open a daily planning page that proposes what to work on today, drawn from releases in flight, pending promotions, documents not ready, clients behind and top RICE items
+- [ ] **PLAN-02**: The plan only contains items from the app's own candidate set, each with a one-line reason; unknown items from the model are dropped
+- [ ] **PLAN-03**: The page still shows a rule-based plan when the model is unavailable
+- [ ] **PLAN-04**: An external OpenAI-compatible provider can be enabled only when the ops allow-list permits its host and a user turns it on in Settings; the API key is write-only and encrypted
+- [ ] **PLAN-05**: While the external provider is on, the planner shows a persistent banner naming the host data is sent to, each enable/disable is recorded in the audit trail, and there is no silent fallback between providers
+- [ ] **PLAN-06**: Only a minimal, allowlisted set of fields (no commit text, ticket descriptions or document text) is sent to an external provider
 
-Quality attributes that apply across every screen rather than mapping to a single phase.
+### Assistant
 
-- [x] **UX-01**: RESOLVED 2026-08-10 — moved to v2. Originally: "The interface supports drag-and-drop wherever ordering or moving is the natural gesture — reordering deploy steps in a runbook, reordering template sections, and moving items into or between groupings on a release — with a keyboard-accessible equivalent for every drag interaction." No surface in v1 has a consumer for a stored order; see the Phase 5 note below
+- [x] **ASST-11**: User can ask the assistant which release a client runs for a product, and which clients run a given release
 
-## Milestone v1.1 Requirements — Release Assistant
+### UI — Enhancement & Logo (Phases 23 and 23.1, defined 2026-10-26)
 
-Defined 2026-10-13. A read-only assistant that answers plain-language questions from this system's own data, using a self-hosted Ollama model (no data egress). Research: `.planning/research/v1.1/SUMMARY.md`. Phase numbering continues at 9.
+- [ ] **UI-01**: The app is branded "ProductOps" with the tagline "The product delivery platform": a chosen SVG logo (icon + wordmark) and favicon appear in the header, login page and browser tab
+- [ ] **UI-02**: User can switch between light and dark themes (defaulting to the OS setting); the choice is remembered per browser and every themed surface stays legible
+- [ ] **UI-03**: Colours come from brand and semantic design tokens, and the UI is built from owned shadcn/ui components
+- [ ] **UI-04**: Feedback is shown as toasts, loading as skeletons, and motion respects the reduced-motion setting
+- [ ] **UI-05**: User can open a command palette (Ctrl/Cmd+K) to jump to releases, clients, products, roadmap items, settings and existing actions
+- [ ] **UI-06**: Shared DataTable (sort, filter, sticky header, column choice) and chart components are available to every page
+- [ ] **UI-07**: Every existing page is migrated to the tokens and shared components, in the priority order dashboard/portfolio, release detail, roadmap/briefings/settings, then the rest
+- [ ] **UI-08**: The dashboard and portfolio show real charts, and dense lists such as the roadmap use the shared DataTable
 
-### RAG Service — Index
+## Future Requirements
 
-- [x] **RAG-01**: An internal app with its own API key can create collections and push, replace or delete documents (text, title, URL, metadata) by its own ids, and sees only its own collections
-- [x] **RAG-02**: Pushed documents become searchable by meaning through a self-hosted embedding model; unchanged content is not re-embedded and deleted content never appears
-- [x] **RAG-03**: Ingestion is asynchronous and survives model-server outages — pushes are accepted while Ollama is down and indexed when it returns
-- [x] **RAG-04**: An app can re-index a collection and see each collection's indexing status and last-indexed time
-- [x] **RAG-05**: An app can search a collection with optional metadata filters and get ranked passages with their source references
-
-### RAG Service — Chat
-
-- [ ] **RAG-06**: An app can ask a question over one or more collections and receive a streamed (SSE) answer
-- [ ] **RAG-07**: Answers cite sources built by the service from passage metadata and tool-result sources, never from model text
-- [ ] **RAG-08**: An app can supply tool definitions; the service returns tool calls, the app runs them and returns results, and the service answers with them — the service never calls into apps
-- [ ] **RAG-09**: The service says it does not know when the sources do not support an answer
-- [x] **RAG-10**: The service API is published as an OpenAPI contract any internal app can integrate against
-- [ ] **RAG-11**: An app can send text with an instruction and receive the transformed text streamed back, with no retrieval involved (generic summarize/clean/rewrite)
-
-### RAG Service — Safety
-
-- [ ] **SAFE-01**: Every request is bounded — tool-round cap, deadline, and per-client concurrency limit
-- [ ] **SAFE-02**: Document text is treated as data, never instructions, and answers are plain text; the residual prompt-injection risk is accepted and documented
-- [ ] **SAFE-03**: Ollama is the only outbound call (no data leaves the machine), and logs record metadata only, never question or answer text
-- [ ] **SAFE-04**: Answer quality and the model choice are measured through the API on 30-50 representative questions (3 runs each, including injection and not-in-the-data cases) before v1.1 ships
-
-### ReleaseManagement Assistant
-
-- [ ] **ASST-01**: Ticket text, manual items, the latest generated documents and code-link text are pushed to the RAG service and kept current, without slowing v1 actions or breaking them when the service is down
-- [ ] **ASST-02**: The release manager asks questions on an Assistant screen behind ReleaseManagement's existing login and sees answers stream in; the browser never holds the service API key
-- [ ] **ASST-03**: Exact facts — stage, dates, counts, readiness, deployments, churn — come from ReleaseManagement's own read-only tools, which ReleaseManagement runs
-- [ ] **ASST-04**: ReleaseManagement's assistant tools are read-only, enforced by architecture tests
-- [ ] **ASST-05**: "Ask about this release" opens the assistant scoped to that release
-- [ ] **ASST-06**: A "how I answered" panel shows the tools and sources behind each answer
-- [ ] **ASST-07**: An empty chat offers starter questions, and follow-ups use the current session's turns only
-- [ ] **ASST-08**: The screen shows clear offline, busy and model-missing states, plus when the index was last updated
-- [ ] **ASST-09**: The release manager can send any generated document (release notes, runbook, approval) to the model to clean it up, summarize it, or apply a custom instruction, and sees the result stream in beside the original for comparison
-- [ ] **ASST-10**: The release manager can edit the AI result and save it as a new revision marked AI-assisted, with the instruction recorded; the original revision is never changed
-
-### v1.1 decisions (2026-10-13)
-
-- **Scoping: shared, like v1.** Local data already has no per-user filter, so the assistant answers from everything the app holds. It must never claim to honour per-user Jira permissions. A `project_key` is stored on each index chunk so filtering can be added later without re-indexing.
-- **Production hardware: unknown.** Build and test on the 4 GB dev GPU (`qwen3:4b`); the model is a config property; re-measure on the real host before shipping.
-- **Postgres: the compose Postgres.** The image switches to pgvector and the extension is created by migration.
-- **Phase order: service first** (9 RAG service foundation and index, 10 chat and citations, 11 tool-call protocol, 12 ReleaseManagement as first client, 13 assistant screen and quality gate).
-- **No saved conversations** in v1.1. **Index only what the screens show.** **Prompt-injection residual risk accepted.**
-- **Architecture: standalone reusable RAG service** (approved 2026-10-13) — see PROJECT.md Key Decisions; ReleaseManagement is the first client
-
-### v1.1 Out of Scope
-
-| Feature | Reason |
-|---------|--------|
-| Filtering answers by each user's Jira permissions | Decided shared like v1; `project_key` stored so it can be added later |
-| Saved conversations, feedback thumbs, admin re-index screen | Deferred — no stated need; a re-index endpoint covers ops |
-| Write or action tools | The assistant is advisory and read-only (ASST-04) |
-| Cloud LLM fallback | No data egress |
-| Agent frameworks, free-text-to-SQL | Over-engineering; a bounded loop over existing services is enough |
-| Service calling into client apps (callbacks/MCP) | Callers run their own tools; the service holds no app credentials |
-
-## v2 Requirements
-
-Deferred to future release. Tracked but not in the current roadmap.
-
-### Release Assembly
-
-- **REL-06**: Release manager can see a scope-change diff since cutoff — which tickets were added or removed after the freeze, and when
-- **REL-07**: Release manager sees advisory "not ready" flags on tickets whose resolution is unset, whose status is not done-like, or that have open blockers — as warnings that never block progress
-
-### Template Authoring
-
-- **TMPL-07**: Release manager can view template version history and see exactly which version produced a given historical document
-
-### Deployment Tracking
-
-- **DEPL-05**: Release manager can record a sign-off note naming who acknowledged each promotion step
-- **DEPL-06**: Release manager can view promotion history as a visual timeline per release
-
-### Provider Coverage
-
-- **PROV-01**: Additional ticket-source providers (Azure DevOps Boards, GitHub Issues, GitLab) implemented against the existing provider abstraction
-- **PROV-02**: Per-application configurable environment ladders rather than one standard ladder
-
-### Analytics — dropped, not deferred
-
-**Dropped 2026-07-31, deliberately and with reasoning recorded**, so nobody rebuilds them later
-without revisiting this.
-
-Velocity, cycle time and sprint scope change were briefly scoped as `ANLY-01..06` and then
-removed. Jira already ships those reports and ships them well. Rebuilding them would have cost
-a whole new Jira integration surface — the **Agile API** (`/rest/agile/1.0/board`, `/sprint`)
-for boards and sprints, plus paginated `/changelog` for status transitions, plus the
-story-point custom-field path that Phase 2 explicitly deferred (D-02-02) — to produce a worse
-version of a report the team can already open.
-
-**The positioning that replaced them:** this tool sits *beside* Jira, and its dashboards must
-answer what Jira structurally **cannot** — questions about release documentation, the
-environment ladder and promotion history, none of which Jira models at all. That is `DOC-09`,
-and unlike the dropped metrics it reads entirely from this system's own database and needs no
-new Jira integration.
-
-The one genuinely release-relevant idea from the dropped set survives as v2's **REL-06**
-(scope change against a *release freeze*, not a sprint start) — a diff Jira cannot compute,
-because it has fix versions but no freeze snapshot to diff against.
+- RICE scatter view and score history charts
+- Snoozing or completing daily plan items; persisted plans
+- Per-section regenerate in Recommend mode
+- Indexing client installations into the RAG collection
+- Per-client environment ladders (v2 PROV-02)
 
 ## Out of Scope
 
-Explicitly excluded. Documented to prevent scope creep.
-
 | Feature | Reason |
 |---------|--------|
-| Performing deployments | The tool records deployments; CI/CD systems execute them. Keeps the tool out of the delivery critical path and removes any need for deployment credentials |
-| Triggering CI/CD pipelines | Same boundary. Once the tool can trigger, it becomes a system of execution with a far larger blast radius |
-| Writing anything back to Jira — creating or releasing versions, transitioning issues, commenting | This app is the system of record for release state. Writing to Jira reintroduces two-way sync complexity and write-scope risk the design deliberately avoids |
-| Ingesting Azure DevOps build or pipeline run status | Deployment state is recorded here, not read from ADO. Deferred |
-| Azure DevOps work-item mirroring | Only commits and pull requests are linked; work items would duplicate what Jira already answers |
-| Multi-step CAB-style approval routing | Only one user role exists, so a routed multi-approver workflow has nobody to route to and would add a workflow engine for no present value. The approval document is generated for a human to sign outside the tool |
-| Automated release gates hitting external monitoring systems | Nothing is executed here, so there is nothing for a gate to guard |
-| Git-commit-driven changelog generation as the primary release-notes source | Jira is the source of truth for what is shipping. Commit-driven changelogs would create a second, disagreeing narrative of the same release and bypass ticket curation entirely. Commits enrich a ticket's entry; they never replace it |
-| Real-time multi-user collaboration — comments, mentions, notifications, concurrent editing | Single user role in v1. Approvers and stakeholders consume the generated documents; they are not users of the tool |
-| Built-in ITSM ticketing or change-window scheduling calendar | Outside the stated problem and duplicates the organisation's existing ITSM tooling. A change window can be a field on the release if needed |
-| FreeMarker, Pebble, Thymeleaf or Handlebars.java as the template engine | Templates are untrusted user input. All four have documented sandbox-bypass histories, including a CVSS 9.1 Thymeleaf bypass disclosed in 2026. A logic-less engine is used instead |
-| Microservices, event sourcing, CQRS, message broker | Single-role internal tool. A modular monolith with hexagonal package boundaries gives the isolation that matters at a fraction of the cost |
+| Per-client ladders | Breaks the unchanged shared ladder; deferred to v2 |
+| Auto-detecting client installs | The app records deployments; it does not observe them |
+| Timeline / Gantt / capacity / velocity planning | Beside-Jira positioning; Jira and PM tools own this |
+| Writing to Jira or Azure DevOps | Both remain read-only |
+| AI-generated RICE inputs | Scores are a TPM judgement; AI would make ranking unaccountable |
+| Alternative scoring frameworks or formula editor | A formula engine is an expression-language surface; RICE only |
+| Unique visitors, sessions or per-user usage | Decided aggregate-only |
+| Third-party analytics (SaaS or self-hosted) | No egress, no new stack for a counter table |
+| Auto-saved AI output | Every AI result is reviewed before saving |
+| External provider for Recommend, chat or doc assist | Those send commit/ticket/document text; external is planner-only |
+| Planner write actions | The planner suggests; it never promotes, installs or edits |
 
 ## Traceability
 
-Which phases cover which requirements. Populated during roadmap creation.
-
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AUTH-01 | Phase 1 | Complete |
-| AUTH-02 | Phase 1 | In Progress |
-| AUTH-03 | Phase 1 | Complete |
-| AUTH-04 | Phase 1 | In Progress |
-| JIRA-01 | Phase 1 | Complete |
-| JIRA-02 | Phase 2 | Pending |
-| JIRA-03 | Phase 2 | Pending |
-| JIRA-04 | Phase 2 | Pending |
-| JIRA-05 | Phase 2 | Pending |
-| JIRA-06 | Phase 2 | Pending |
-| JIRA-07 | Phase 2 | Pending |
-| REL-01 | Phase 3 | Pending |
-| REL-02 | Phase 3 | Pending |
-| REL-03 | Phase 3 | Pending |
-| REL-04 | Phase 3 | Pending |
-| REL-05 | Phase 3 | Pending |
-| REL-08 | Phase 3 | Pending |
-| TMPL-01 | Phase 4 | Pending |
-| TMPL-02 | Phase 4 | Pending |
-| TMPL-03 | Phase 4 | Pending |
-| TMPL-04 | Phase 4 | Pending |
-| TMPL-05 | Phase 4 | Pending |
-| TMPL-06 | Phase 4 | Pending |
-| TMPL-08 | Phase 4 | Pending |
-| TMPL-09 | Phase 4 | Pending |
-| DOC-01 | Phase 5 | Pending |
-| DOC-02 | Phase 5 | Pending |
-| DOC-03 | Phase 5 | Pending |
-| DOC-04 | Phase 5 | Pending |
-| DOC-05 | Phase 5 | Pending |
-| DOC-06 | Phase 5 | Pending |
-| DOC-07 | Phase 5 | Complete |
-| DOC-08 | Phase 5 | Pending |
-| DOC-09 | Phase 5 | Complete |
-| ADO-01 | Phase 6 | Pending |
-| ADO-02 | Phase 6 | Pending |
-| ADO-03 | Phase 6 | Pending |
-| ADO-04 | Phase 6 | Pending |
-| ADO-05 | Phase 6 | Pending |
-| DEPL-01 | Phase 7 | Pending |
-| DEPL-02 | Phase 7 | Pending |
-| DEPL-03 | Phase 7 | Pending |
-| DEPL-04 | Phase 7 | Pending |
-| AUDIT-01 | Phase 7 | Pending |
-| AUDIT-02 | Phase 7 | Pending |
-| AUDIT-03 | Phase 7 | Pending |
-| AUDIT-04 | Phase 8 | Pending |
-| INSIGHT-01 | Phase 8 | Pending |
-| INSIGHT-02 | Phase 8 | Pending |
-| INSIGHT-03 | Phase 8 (data captured in Phase 6) | Pending |
-| INSIGHT-04 | Quick task 261014-l33 | Complete |
-| UX-01 | Phase 5 (resolved) | Deferred to v2 |
-| RAG-01 | Phase 9 | Complete |
-| RAG-02 | Phase 9 | Complete |
-| RAG-03 | Phase 9 | Complete |
-| RAG-04 | Phase 9 | Complete |
-| RAG-05 | Phase 9 | Complete |
-| RAG-06 | Phase 10 | Pending |
-| RAG-07 | Phase 10 | Pending |
-| RAG-08 | Phase 11 | Pending |
-| RAG-09 | Phase 10 | Pending |
-| RAG-10 | Phase 9 | Complete |
-| SAFE-01 | Phase 10 | Pending |
-| SAFE-02 | Phase 10 | Pending |
-| SAFE-03 | Phase 10 | Pending |
-| SAFE-04 | Phase 13 | Pending |
-| ASST-01 | Phase 12 | Pending |
-| ASST-02 | Phase 13 | Pending |
-| ASST-03 | Phase 12 | Pending |
-| ASST-04 | Phase 12 | Pending |
-| ASST-05 | Phase 13 | Pending |
-| ASST-06 | Phase 13 | Pending |
-| ASST-07 | Phase 13 | Pending |
-| ASST-08 | Phase 13 | Pending |
-| RAG-11 | Phase 10 | Pending |
-| ASST-09 | Phase 14 | Pending |
-| ASST-10 | Phase 14 | Pending |
-
-**Coverage:**
-- v1 requirements: 47 total (AUTH 4 + JIRA 6 + REL 6 + TMPL 8 + DOC 9 + ADO 5 + DEPL 4 + AUDIT 4 + UX 1) — was 40; added 2026-07-31: TMPL-08/TMPL-09/DOC-08 (document chrome), REL-08 (manual release items), AUDIT-04 (cross-release deployment history), UX-01 (drag-and-drop). Plus DOC-09 (cross-release documentation readiness). Analytics (ANLY-01..06) was raised and then DROPPED the same day — Jira ships those reports; this tool must answer what Jira cannot.
-- 2026-10-07: INSIGHT-03 added (commits-to-done vs reopen rework), growing v1 to 50 with INSIGHT-01/02; AUDIT-04 remapped to Phase 8 per the Phase 8 ROADMAP note; INSIGHT-01..03 traceability rows were missing and are now added.
-- Mapped to phases: 47/47 ✓ (UX-01 resolved to v2 in Phase 5 — see the note below)
-- Unmapped: 0 ✓
-
-### Document chrome (added 2026-07-31)
-
-TMPL-08, TMPL-09 and DOC-08 close a real gap: every earlier TMPL requirement covered only
-**body content and placeholders**, and nothing specified cover pages, running headers, footers
-or page numbering.
-
-Decisions taken with the release manager:
-
-- **Structured fields, not free-form chrome templates.** A form per template (cover on/off,
-  title, subtitle, header text, footer text, page-number toggle), each field accepting the
-  same `{{ }}` placeholders as the body. Chosen for reliable PDF/DOCX parity and because it
-  adds **no new template-injection surface** — the placeholders resolve against the same fixed
-  view-model TMPL-02 already constrains.
-- **Cover page is a per-template toggle**, so no assumption is baked in about which document
-  types need one.
-- **A logo can be uploaded** (TMPL-09).
-
-Implementation consequence worth carrying into Phase 5: **PDF and DOCX share no mechanism for
-chrome.** PDF uses CSS `@page` with `counter(page)`/`counter(pages)` via openhtmltopdf; DOCX
-uses per-section header/footer parts with `PAGE`/`NUMPAGES` field codes via docx4j. DOC-08 is
-worded as "visually equivalent" rather than "both present" because two independent renderers
-drifting apart is the likely failure, and it needs asserting.
-
-Security note for TMPL-09: restrict uploads to **raster formats (PNG/JPEG) and reject SVG.**
-SVG is XML and can carry script and external entity references; openhtmltopdf's SVG support
-would process it. Template source is already untrusted input by project constraint, and an
-uploaded image is the same class of input — validate type by content rather than by extension,
-and bound dimensions and byte size.
-
-### Runbook and approval content (revised 2026-08-10)
-
-DOC-03 and DOC-04 originally required a **data model** providing runbook and approval fields. During
-the Phase 5 discussion the release manager chose to author that content as **static template text**
-instead — deploy steps, validation, rollback, risk, impact and backout plan are written into the
-runbook and approval templates as ordinary Markdown, not modelled as per-release data.
-
-Both requirements were reworded to match, rather than left as an indefinitely-unmet promise.
-
-**The cost, recorded deliberately so nobody rediscovers it as a surprise:** this content is
-**identical for every release** until someone edits the template. A generated approval document's
-"risk" and "backout plan" are therefore boilerplate, not an assessment of the release being approved.
-Two alternatives were considered and declined for v1 — structured fields on the release (a V5
-migration plus a form screen), and a narrower version adding only the three approval scalars.
-
-**v2 candidate:** per-release values for the approval scalars, which is the case where boilerplate is
-least defensible because a human signs the result.
-
-### Grouping dimensions and UX-01 (resolved 2026-08-10)
-
-**DOC-02 narrowed to component only.** D-05-02 takes `component` and nothing else. Component is a
-plain field on the Jira issue needing no parent-link resolution, and it is the dimension the release
-manager's real `Orchstro 4.2.0 Release Notes.docx` actually groups by ("Swift Day Screen",
-"Matching Module", "Security"). Epic needs a parent-link resolution step and label is a free-text
-multi-value field; neither has a document asking for it. Both remain additive if wanted later — the
-`{{#groups}}` / `{{groupName}}` shape does not change, only which field keys the grouping. DOC-02 was
-reworded rather than left partly unmet, the same way DOC-03 and DOC-04 were.
-
-**UX-01 moved to v2, decided rather than deferred again.** UX-01 was deferred from Phase 3 (D-03-04)
-and again from Phase 4 (D-04-04). D-05-11 required a decision this phase rather than a third
-deferral. The decision is to move it to v2, on three grounds:
-
-1. **Its last concretely-scoped consumer is gone.** D-05-01 made runbook deploy steps static template
-   text, so there is no structured list of steps to reorder.
-2. **The remaining candidate was already declined on reasoning that still holds.** D-03-04 declined
-   item reordering because "the ordering that actually matters is the ordering inside a generated
-   document, which is template-driven at generation time". That is now more true, not less: grouping
-   is a per-template setting (D-05-04) and within-group order is deterministic.
-3. **Nothing would read the output.** No stored item order exists in the view-model, in any template,
-   or in any generated document. Building a drag-and-drop reorder whose result nothing consumes is
-   precisely the speculative work CLAUDE.md's engineering principles rule out.
-
-**What v1 does owe, and does deliver:** every interactive element Phase 5 adds — readiness-pill
-links, Generate/Regenerate/Export buttons, the revision `<select>`, the revision-history disclosure —
-is a native HTML element, keyboard-operable with no custom gesture layer. **No drag interaction
-exists anywhere in v1**, so no keyboard equivalent is owed.
-
-**If v2 revives it,** the smallest correct shape is recorded in `05-UI-SPEC.md`: a `position` integer
-on `release_ticket_item`/`release_manual_item`, a reorder endpoint, and per-row "Move up"/"Move down"
-buttons (`aria-label="Move {item} up"`) shipped *alongside* any drag handle, never a drag-only
-control.
-
-### Evidence notes for Phase 1 requirements
-
-Phase 1 plans 01-01 through 01-07 are implemented and green (119 backend + 15 frontend
-tests). Three requirements had been marked Complete before the evidence supported it.
-**AUTH-01 closed 2026-07-30** on live-Jira confirmation; **AUTH-02** and **AUTH-04** remain
-`In Progress`. Do not re-tick those on the strength of a passing test suite alone — plan
-**01-08** (`01-08-UAT-RESULTS.md`) records exactly what is and is not evidenced.
-
-| ID | Verified today | Still unevidenced |
-|----|----------------|-------------------|
-| AUTH-01 | ✅ **Closed 2026-07-30.** Sign-in confirmed against `https://evisionegypt.atlassian.net` with the `stub-jira` profile off; real accountId `5f5f5f58aba9660071082b49` persisted, and an invalid token rejected live as `401 INVALID_CREDENTIALS`. See `01-08-UAT-RESULTS.md`. | — |
-| AUTH-02 | The mechanism: `JiraAccessContextService.currentContext()` resolves credentials only for the authenticated principal, with no `accountId` overload and so no code path to another user's credential | The claim is about "all Jira **reads**", and there are no ticket reads in the codebase yet. It is currently vacuously true; Phase 2 is where it becomes meaningful. |
-| AUTH-04 | `PUT /api/auth/credential` revalidates and replaces the stored token; `ACCOUNT_MISMATCH` blocks a different account's token from overwriting the credential | Replacement has not been exercised against a genuinely **revoked** real token — a stub cannot model revocation faithfully. "Without losing existing releases, templates or history" is also untestable until Phases 3-5 create those. |
-
-`AUTH-03` and `JIRA-01` are genuinely Complete and need no live Jira:
-- **AUTH-03** — ciphertext at rest is proven by `EncryptedTokenConverterTest` plus
-  `JiraCredentialPersistenceIT` against a real PostgreSQL 18 container, and token-free
-  responses by `AuthControllerIT`. A real Jira token is not cryptographically different from
-  a stub one, so 01-08 only re-confirms this.
-- **JIRA-01** — configuring and reading back the Jira site was verified end-to-end against a
-  running instance, including SSRF-rejecting validation. It does not depend on Jira
-  credentials at all.
+| PORT-01 | Phase 15 | Complete |
+| PORT-02 | Phase 15 | Complete |
+| PORT-03 | Phase 15 | Complete |
+| PORT-04 | Phase 15 | Complete |
+| PORT-05 | Phase 15 | Complete |
+| PORT-06 | Phase 15 | Complete |
+| PORT-07 | Phase 15 | Complete |
+| PORT-08 | Phase 15 | Complete |
+| REL-UNFREEZE-01 | Phase 15.1 | Pending |
+| REL-UNFREEZE-02 | Phase 15.1 | Pending |
+| REL-UNFREEZE-03 | Phase 15.1 | Pending |
+| PROMO-SKIP-01 | Phase 15.1 | Pending |
+| PROMO-SKIP-02 | Phase 15.1 | Pending |
+| PROMO-SKIP-03 | Phase 15.1 | Pending |
+| PDASH-01 | Phase 16 | Pending |
+| PDASH-02 | Phase 16 | Pending |
+| PDASH-03 | Phase 16 | Pending |
+| ASST-11 | Phase 16 | Pending |
+| REL-PF-01 | Phase 17.2 | Pending |
+| REL-PF-02 | Phase 17.2 | Pending |
+| REL-PF-03 | Phase 17.2 | Pending |
+| REL-PF-04 | Phase 17.2 | Pending |
+| ROAD-01 | Phase 17 | Pending |
+| ROAD-02 | Phase 17 | Pending |
+| ROAD-03 | Phase 17 | Pending |
+| ROAD-04 | Phase 17 | Pending |
+| ROAD-05 | Phase 17 | Pending |
+| ROAD-06 | Phase 17 | Pending |
+| ROAD-07 | Phase 17 | Pending |
+| PKG-01 | Phase 17 | Pending |
+| PKG-02 | Phase 17 | Pending |
+| BRIEF-01 | Phase 17.1 | Pending |
+| BRIEF-02 | Phase 17.1 | Pending |
+| BRIEF-03 | Phase 17.1 | Pending |
+| BRIEF-04 | Phase 17.1 | Pending |
+| BRIEF-05 | Phase 17.1 | Pending |
+| BRIEF-06 | Phase 17.1 | Pending |
+| BRIEF-07 | Phase 17.1 | Pending |
+| BRIEF-08 | Phase 17.1 | Pending |
+| USAGE-01 | Phase 18 | Pending |
+| USAGE-02 | Phase 18 | Pending |
+| USAGE-03 | Phase 18 | Pending |
+| USAGE-04 | Phase 18 | Pending |
+| USAGE-05 | Phase 18 | Pending |
+| RECO-01 | Phase 19 | Pending |
+| RECO-02 | Phase 19 | Pending |
+| RECO-03 | Phase 19 | Pending |
+| RECO-04 | Phase 19 | Pending |
+| RECO-05 | Phase 19 | Pending |
+| RECO-06 | Phase 19 | Pending |
+| PLAN-01 | Phase 20 | Pending |
+| PLAN-02 | Phase 20 | Pending |
+| PLAN-03 | Phase 20 | Pending |
+| PLAN-04 | Phase 20 | Pending |
+| PLAN-05 | Phase 20 | Pending |
+| PLAN-06 | Phase 20 | Pending |
+| UI-01 | Phase 23 | Pending |
+| UI-02 | Phase 23 | Pending |
+| UI-03 | Phase 23 | Pending |
+| UI-04 | Phase 23 | Pending |
+| UI-05 | Phase 23 | Pending |
+| UI-06 | Phase 23 | Pending |
+| UI-07 | Phase 23.1 | Pending |
+| UI-08 | Phase 23.1 | Pending |
 
 ---
-*Requirements defined: 2026-07-27*
-*Last updated: 2026-10-13 — milestone v1.1 requirements rewritten for the standalone RAG service architecture (RAG, SAFE, ASST; 22 requirements, Phases 9-13)*
+*Requirements defined: 2026-10-20*

@@ -1,22 +1,42 @@
-import { useMemo } from 'react';
+import { Suspense, lazy, useMemo, useState } from 'react';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { ApiError } from '../api/client';
-import { messageForReason } from '../api/auth';
+import { messageForReason } from '../api/reasonMessages';
 import {
   formatDuration,
+  missingDocuments,
+  outOfDateDocuments,
   paperworkCounts,
   useDashboardReleases,
   type DashboardData,
+  type DashboardDocsFilter,
+  type DashboardSearch,
   type DashboardReleaseRow,
 } from '../api/dashboard';
 import { readinessIndex, useDocumentReadiness, type ReadinessLookup } from '../api/documents';
 import { DOCUMENT_TYPES, DOCUMENT_TYPE_LABELS } from '../api/templates';
+import { FilterTile, Tile } from '../components/DashboardTiles';
 import { DeploymentHistory } from '../components/DeploymentHistory';
 import { LadderDots } from '../components/LadderDots';
+import { PortfolioTab } from '../components/PortfolioTab';
+import { ProductFilter } from '../components/ProductFilter';
 import { ReadinessPill } from '../components/ReadinessPill';
+import { useProducts, type Product } from '../api/products';
+import type { StageChartRow } from '../components/StageChart';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useEntranceStagger } from '@/hooks/useEntranceStagger';
+import { cn } from '@/lib/utils';
+
+const StageChart = lazy(() => import('../components/StageChart'));
 
 const TH = 'px-4 py-2 text-left font-semibold text-gray-700';
 const TD = 'whitespace-nowrap px-4 py-2 align-top';
+
+const TABS = [
+  { id: 'releases', label: 'Releases' },
+  { id: 'portfolio', label: 'Portfolio' },
+] as const;
+type DashboardTab = (typeof TABS)[number]['id'];
 
 const CODE_LINKS_TITLE = (manual: number) =>
   `Counts Jira-backed tickets only. ${manual} manual items are excluded. 'No data' means code links were never fetched for the ticket — it is not the same as 'no link'.`;
@@ -24,6 +44,20 @@ const STORY_POINTS_TITLE =
   "Sum of the Jira story-point estimates of this release's Jira tickets. Tickets with no estimate are counted separately, never as zero. 'Not read' tickets were snapshotted before story points were captured: refresh the release to read them (a frozen release keeps its snapshot). Manual items are excluded.";
 const CHURN_TITLE =
   "Median commits made before the ticket first reached a Done status. Tickets with no history or no linked commits are excluded and counted as 'no data', never as zero.";
+const DOCS_FILTER_LABELS: Record<DashboardDocsFilter, string> = {
+  missing: 'Releases missing documents',
+  stale: 'Documents out of date',
+};
+const DOCS_FILTER_TILE_IDS: Record<DashboardDocsFilter, string> = { missing: 'tile-missing', stale: 'tile-stale' };
+const MISSING_HELP =
+  'Releases with at least one document that has not been generated yet or is out of date. Document types that have no template are ignored.';
+const STALE_HELP =
+  'Releases with a document that is out of date because tickets changed after it was generated. A frozen release is only counted if it was unfrozen and its tickets changed.';
+const DOCS_UNAVAILABLE = 'Document status unavailable';
+const DOCS_EMPTY_BODIES: Record<DashboardDocsFilter, string> = {
+  missing: 'Every visible release has all of its documents generated and current.',
+  stale: 'Every visible release has up-to-date documents.',
+};
 const REWORK_TITLE =
   "Reopens are moves from a Done status back to a non-Done one. 'After Done' is the share of commits dated after the ticket first reached Done.";
 
@@ -40,13 +74,11 @@ function Spinner() {
   );
 }
 
-function Tile({ caption, children }: { caption: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded border border-gray-200 bg-white p-4">
-      <div className="text-lg font-semibold tabular-nums text-gray-900">{children}</div>
-      <div className="text-sm text-gray-600">{caption}</div>
-    </div>
-  );
+// One or two names are spelled out, more are counted.
+function productScope(ids: string[], products: Product[]): string | undefined {
+  if (ids.length === 0) return undefined;
+  const names = ids.map((id) => products.find((p) => p.id === id)?.name).filter(Boolean);
+  return ids.length <= 2 && names.length === ids.length ? names.join(', ') : `${ids.length} products`;
 }
 
 function MedianTile({ caption, seconds, count }: { caption: string; seconds: number | null; count: number }) {
@@ -63,17 +95,50 @@ function MedianTile({ caption, seconds, count }: { caption: string; seconds: num
 function SummaryStrip({
   data,
   counts,
+  scope,
+  docs,
+  onToggleDocs,
 }: {
   data: DashboardData;
   counts: { needPaperwork: number; stale: number } | undefined;
+  scope: string | undefined;
+  docs: DashboardDocsFilter | undefined;
+  onToggleDocs: (kind: DashboardDocsFilter) => void;
 }) {
   const { summary, stages } = data;
   const perStage = new Map(summary.releasesPerStage.map((s) => [s.stageId, s.count]));
+  const shownStages = stages.filter((s) => !s.retired || (perStage.get(s.id) ?? 0) > 0);
+  const chartRows: StageChartRow[] = [
+    ...shownStages.map((s) => ({
+      label: s.retired ? `${s.name} (retired)` : s.name,
+      count: perStage.get(s.id) ?? 0,
+      kind: 'stage' as const,
+    })),
+    { label: 'Not promoted', count: summary.notPromoted, kind: 'notPromoted' },
+  ];
   return (
     <section aria-label="Summary">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <Tile caption="Need paperwork">{counts?.needPaperwork ?? '—'}</Tile>
-        <Tile caption="Stale">{counts?.stale ?? '—'}</Tile>
+        <FilterTile
+          id="tile-missing"
+          caption={DOCS_FILTER_LABELS.missing}
+          figure={counts?.needPaperwork ?? '—'}
+          unit="releases"
+          pressed={docs === 'missing'}
+          onPress={() => onToggleDocs('missing')}
+          help={MISSING_HELP}
+          disabledNote={counts ? undefined : DOCS_UNAVAILABLE}
+        />
+        <FilterTile
+          id="tile-stale"
+          caption={DOCS_FILTER_LABELS.stale}
+          figure={counts?.stale ?? '—'}
+          unit="releases"
+          pressed={docs === 'stale'}
+          onPress={() => onToggleDocs('stale')}
+          help={STALE_HELP}
+          disabledNote={counts ? undefined : DOCS_UNAVAILABLE}
+        />
         <MedianTile
           caption="Median created → frozen"
           seconds={summary.medianCreatedToFrozenSeconds}
@@ -85,21 +150,22 @@ function SummaryStrip({
           count={summary.frozenToProductionCount}
         />
         <div className="rounded border border-gray-200 bg-white p-4">
-          <ul className="text-xs text-gray-700">
-            {stages
-              .filter((s) => !s.retired || (perStage.get(s.id) ?? 0) > 0)
-              .map((s) => (
-                <li key={s.id} className="tabular-nums">
-                  {s.name}
-                  {s.retired ? ' (retired)' : ''} {perStage.get(s.id) ?? 0}
-                </li>
-              ))}
+          <Suspense fallback={<Skeleton className="h-24" />}>
+            <StageChart rows={chartRows} />
+          </Suspense>
+          <ul className="sr-only">
+            {shownStages.map((s) => (
+              <li key={s.id} className="tabular-nums">
+                {s.name}
+                {s.retired ? ' (retired)' : ''} {perStage.get(s.id) ?? 0}
+              </li>
+            ))}
             <li className="tabular-nums">Not promoted {summary.notPromoted}</li>
           </ul>
           <div className="mt-1 text-sm text-gray-600">Releases per stage</div>
         </div>
       </div>
-      <p className="mt-2 text-xs text-gray-500">Over {summary.visibleReleases} visible releases.</p>
+      <p className="mt-2 text-xs text-gray-500">Over {summary.visibleReleases} visible releases{scope ? ` in ${scope}` : ''}.</p>
     </section>
   );
 }
@@ -224,15 +290,31 @@ function ReleaseMatrix({
   all,
   stateOf,
   readinessFailed,
+  productsFiltered,
+  docsFilter,
   onToggleAll,
+  onClearProducts,
+  onClearDocs,
 }: {
   data: DashboardData;
   all: boolean;
   stateOf: ReadinessLookup;
   readinessFailed: boolean;
+  productsFiltered: boolean;
+  docsFilter: DashboardDocsFilter | undefined;
   onToggleAll: (checked: boolean) => void;
+  onClearProducts: () => void;
+  onClearDocs: () => void;
 }) {
   const { summary, releases } = data;
+  const rows = releases.filter((r) =>
+    docsFilter === 'missing'
+      ? missingDocuments(r.id, stateOf)
+      : docsFilter === 'stale'
+        ? outOfDateDocuments(r.id, stateOf)
+        : true,
+  );
+  const stagger = useEntranceStagger(rows.length > 0);
   return (
     <section>
       <div className="flex items-center justify-between">
@@ -266,7 +348,23 @@ function ReleaseMatrix({
         </div>
       )}
 
-      {summary.totalReleases > 0 && releases.length === 0 && (
+      {productsFiltered && summary.totalReleases > 0 && releases.length === 0 && (
+        <div className="mt-4 rounded bg-gray-50 p-6 text-center">
+          <p className="text-base font-semibold text-gray-900">No releases for these products</p>
+          <p className="mt-2 text-sm text-gray-600">
+            Nothing in the selected products is open, frozen or in a stage short of Production, and nothing shipped in
+            the last 90 days.{' '}
+            <button type="button" onClick={onClearProducts} className="text-blue-600 underline">
+              Clear products
+            </button>{' '}
+            <button type="button" onClick={() => onToggleAll(true)} className="text-blue-600 underline">
+              Show all releases
+            </button>
+          </p>
+        </div>
+      )}
+
+      {!productsFiltered && summary.totalReleases > 0 && releases.length === 0 && (
         <div className="mt-4 rounded bg-gray-50 p-6 text-center">
           <p className="text-base font-semibold text-gray-900">No in-flight or recently shipped releases</p>
           <p className="mt-2 text-sm text-gray-600">
@@ -278,7 +376,30 @@ function ReleaseMatrix({
         </div>
       )}
 
-      {releases.length > 0 && (
+      {docsFilter && (
+        <div role="status" className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+          <span className="rounded border border-gray-300 bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">
+            Showing: {DOCS_FILTER_LABELS[docsFilter]} · {rows.length} of {releases.length} releases
+          </span>
+          <button type="button" onClick={onClearDocs} className="text-xs text-blue-600 hover:underline">
+            Clear filter
+          </button>
+        </div>
+      )}
+
+      {docsFilter && releases.length > 0 && rows.length === 0 && (
+        <div className="mt-4 rounded bg-gray-50 p-6 text-center">
+          <p className="text-base font-semibold text-gray-900">No releases match this filter</p>
+          <p className="mt-2 text-sm text-gray-600">
+            {DOCS_EMPTY_BODIES[docsFilter]}{' '}
+            <button type="button" onClick={onClearDocs} className="text-blue-600 underline">
+              Clear filter
+            </button>
+          </p>
+        </div>
+      )}
+
+      {rows.length > 0 && (
         <div className="mt-4 overflow-x-auto rounded border border-gray-200 bg-white">
           <table className="min-w-full text-sm">
             <thead className="border-b border-gray-200">
@@ -306,8 +427,12 @@ function ReleaseMatrix({
               </tr>
             </thead>
             <tbody>
-              {releases.map((r) => (
-                <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
+              {rows.map((r, index) => (
+                <tr
+                  key={r.id}
+                  className={cn('border-b border-gray-100 hover:bg-gray-50', stagger(index).className)}
+                  style={stagger(index).style}
+                >
                   <td className={`${TD} sticky left-0 bg-white`}>
                     <Link
                       to="/releases/$releaseId"
@@ -386,8 +511,12 @@ export function DashboardRoute() {
   const search = useSearch({ from: '/authenticated/' });
   const navigate = useNavigate();
   const all = search.all === true;
+  const tab: DashboardTab = search.tab ?? 'releases';
+  const productIds = search.products ?? [];
+  const products = useProducts().data?.products ?? [];
+  const [announcement, setAnnouncement] = useState('');
 
-  const dashboard = useDashboardReleases(all);
+  const dashboard = useDashboardReleases(all, productIds);
   // Independent on purpose: a readiness failure only blanks the document cells (T-05-60).
   const readiness = useDocumentReadiness();
   const stateOf = useMemo(() => readinessIndex(readiness.data?.entries), [readiness.data]);
@@ -397,10 +526,89 @@ export function DashboardRoute() {
     ? paperworkCounts(dashboard.data.releases.map((r) => r.id), stateOf)
     : undefined;
 
+  const docsFilter = readiness.isError ? undefined : search.docs;
+  const setDocs = (docs: DashboardDocsFilter | undefined) =>
+    navigate({ to: '/', search: (prev) => ({ ...(prev as DashboardSearch), docs }), replace: true });
+  const clearDocs = () => {
+    setDocs(undefined);
+    if (docsFilter) document.getElementById(DOCS_FILTER_TILE_IDS[docsFilter])?.focus();
+  };
+
+  const setProducts = (ids: string[]) => {
+    const scope = productScope(ids, products);
+    setAnnouncement(scope ? `Filtered to ${scope}.` : 'Showing all products.');
+    navigate({
+      to: '/',
+      search: (prev) => ({ ...(prev as DashboardSearch), products: ids.length ? ids : undefined }),
+      replace: true,
+    });
+  };
+
+  const goTab = (next: DashboardTab) =>
+    navigate({
+      to: '/',
+      search: (prev) => ({ ...(prev as DashboardSearch), tab: next === 'portfolio' ? 'portfolio' : undefined, docs: undefined }),
+      replace: true,
+    });
+  const onTabKeyDown = (event: React.KeyboardEvent, index: number) => {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    event.preventDefault();
+    const next = TABS[(index + (event.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length];
+    goTab(next.id);
+    document.getElementById(`dashboard-tab-${next.id}`)?.focus();
+  };
+
   return (
     <div className="space-y-8">
       <h2 className="text-base font-semibold text-gray-900">Dashboard</h2>
 
+      <ProductFilter products={products} selected={productIds} onChange={setProducts} />
+      <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {announcement}
+      </p>
+
+      <div role="tablist" aria-label="Dashboard views" className="flex gap-4 border-b border-gray-200">
+        {TABS.map((t, index) => {
+          const active = t.id === tab;
+          return (
+            <button
+              key={t.id}
+              id={`dashboard-tab-${t.id}`}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              aria-controls={`dashboard-panel-${t.id}`}
+              tabIndex={active ? 0 : -1}
+              onClick={() => goTab(t.id)}
+              onKeyDown={(e) => onTabKeyDown(e, index)}
+              className={`px-1 pb-2 text-sm ${
+                active
+                  ? '-mb-px border-b-2 border-blue-600 font-semibold text-gray-900'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <div role="tabpanel" id={`dashboard-panel-${tab}`} aria-labelledby={`dashboard-tab-${tab}`} className="space-y-8">
+      {tab === 'portfolio' ? (
+        <PortfolioTab
+          productIds={productIds}
+          archived={search.archived === true}
+          onProductsChange={setProducts}
+          onArchivedChange={(checked) =>
+            navigate({
+              to: '/',
+              search: (prev) => ({ ...(prev as DashboardSearch), archived: checked ? true : undefined }),
+              replace: true,
+            })
+          }
+        />
+      ) : (
+      <>
       {dashboard.isPending && (
         <div className="flex items-center gap-3">
           <Spinner />
@@ -425,14 +633,24 @@ export function DashboardRoute() {
 
       {dashboard.data && (
         <>
-          <SummaryStrip data={dashboard.data} counts={counts} />
+          <SummaryStrip
+            data={dashboard.data}
+            counts={counts}
+            scope={productScope(productIds, products)}
+            docs={docsFilter}
+            onToggleDocs={(kind) => setDocs(search.docs === kind ? undefined : kind)}
+          />
           <ReleaseMatrix
             data={dashboard.data}
             all={all}
             stateOf={stateOf}
             readinessFailed={readiness.isError}
+            productsFiltered={productIds.length > 0}
+            docsFilter={docsFilter}
+            onClearDocs={clearDocs}
+            onClearProducts={() => setProducts([])}
             onToggleAll={(checked) =>
-              navigate({ to: '/', search: (prev) => ({ ...prev, all: checked ? true : undefined }), replace: true })
+              navigate({ to: '/', search: (prev) => ({ ...(prev as DashboardSearch), all: checked ? true : undefined }), replace: true })
             }
           />
         </>
@@ -442,6 +660,9 @@ export function DashboardRoute() {
         search={search}
         onSearchChange={(next) => navigate({ to: '/', search: next, replace: true })}
       />
+      </>
+      )}
+      </div>
     </div>
   );
 }

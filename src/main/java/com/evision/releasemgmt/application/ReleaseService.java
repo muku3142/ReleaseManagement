@@ -2,15 +2,24 @@ package com.evision.releasemgmt.application;
 
 import com.evision.releasemgmt.domain.enrichment.CodeLinks;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
+import com.evision.releasemgmt.domain.portfolio.PortfolioEditRejectedException;
+import com.evision.releasemgmt.domain.portfolio.PortfolioEditRejection;
+import com.evision.releasemgmt.domain.portfolio.Product;
+import com.evision.releasemgmt.domain.portfolio.ProductNotFoundException;
+import com.evision.releasemgmt.domain.portfolio.ReleaseProduct;
 import com.evision.releasemgmt.domain.jira.TicketSearchCriteria;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.ManualItemCategory;
+import com.evision.releasemgmt.domain.release.PackagesUrl;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseNotFoundException;
 import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
+import com.evision.releasemgmt.domain.release.UnfreezeRejection;
+import com.evision.releasemgmt.ports.ProductRepository;
+import com.evision.releasemgmt.ports.ReleaseProductRepository;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,8 +27,11 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -41,25 +53,66 @@ public class ReleaseService {
     private final ReleaseRepository repository;
     private final TicketSearchService ticketSearchService;
     private final EnrichmentService enrichmentService;
+    private final ReleaseProductRepository releaseProducts;
+    private final ProductRepository products;
 
     public ReleaseService(ReleaseRepository repository, TicketSearchService ticketSearchService,
-                          EnrichmentService enrichmentService) {
+                          EnrichmentService enrichmentService, ReleaseProductRepository releaseProducts,
+                          ProductRepository products) {
         this.repository = repository;
         this.ticketSearchService = ticketSearchService;
         this.enrichmentService = enrichmentService;
+        this.releaseProducts = releaseProducts;
+        this.products = products;
     }
 
-    public AddTicketsResult createWithTickets(String name, String version, String jiraProjectKey,
-                                              List<String> ticketKeys, String actor) {
+    public List<ReleaseProduct> productsOf(UUID releaseId) {
+        return releaseProducts.productsOf(releaseId);
+    }
+
+    public Map<UUID, List<ReleaseProduct>> productsOfReleases(Collection<UUID> releaseIds) {
+        return releaseProducts.productsOfReleases(releaseIds);
+    }
+
+    // D-15-01: no requireOpen - a FROZEN release's product stays editable so v1.1 releases can be tagged and receive installs.
+    public Release setProduct(UUID releaseId, UUID productId) {
+        releaseProducts.setProduct(releaseId, productId);
+        return get(releaseId);
+    }
+
+    // D-17-21: no requireOpen - the packages link is editable in every status and is not release content.
+    public Release setPackagesUrl(UUID releaseId, String url) {
+        return repository.setPackagesUrl(releaseId, PackagesUrl.normalize(url));
+    }
+
+    public AddTicketsResult createWithTickets(String name, String version, List<String> ticketKeys,
+                                              UUID productId, String bundle, String actor) {
+        if (productId == null) {
+            throw new PortfolioEditRejectedException(PortfolioEditRejection.RELEASE_PRODUCT_REQUIRED);
+        }
+        Product product = products.findById(productId).orElseThrow(ProductNotFoundException::new);
+        if (product.archived()) {
+            throw new PortfolioEditRejectedException(PortfolioEditRejection.PRODUCT_ARCHIVED);
+        }
+        List<String> jiraProjectKeys = products.jiraProjectKeys().getOrDefault(productId, List.of());
+        if (jiraProjectKeys.isEmpty()) {
+            throw new PortfolioEditRejectedException(PortfolioEditRejection.PRODUCT_NO_JIRA_PROJECT);
+        }
         Instant now = Instant.now();
         List<String> requested = distinct(ticketKeys);
         List<TicketDetail> fetched = fetchTickets(requested);
+        String bundleName = bundleName(bundle, List.of());
         List<ReleaseItem> items = fetched.stream()
-                .map(ticket -> new ReleaseItem(ticket, now, CodeLinks.notAttempted()))
+                .map(ticket -> new ReleaseItem(ticket, now, CodeLinks.notAttempted(), bundleName))
                 .toList();
-        Release release = Release.create(name.trim(), version.trim(), blankToNull(jiraProjectKey),
-                actor, now);
+        Release release = Release.create(name.trim(), version.trim(), jiraProjectKeys.get(0), actor, now);
         Release created = repository.create(release, items);
+        try {
+            releaseProducts.setProduct(created.id(), productId);
+        } catch (RuntimeException e) {
+            repository.delete(created.id());   // D-15-18: a just-created OPEN release must not survive without products
+            throw e;
+        }
         enrichQuietly(created.id(), fetched);
         return new AddTicketsResult(get(created.id()), items.size(), 0, requested.size() - items.size());
     }
@@ -76,9 +129,10 @@ public class ReleaseService {
         return repository.releasesContaining(ticketKey);
     }
 
-    public AddTicketsResult addTickets(UUID releaseId, List<String> ticketKeys) {
+    public AddTicketsResult addTickets(UUID releaseId, List<String> ticketKeys, String bundle) {
         Release release = get(releaseId);
         release.requireOpen();
+        String bundleName = bundleName(bundle, release.items());
 
         List<String> requested = distinct(ticketKeys);
         Set<String> present = Set.copyOf(repository.findTicketKeys(releaseId));
@@ -100,7 +154,7 @@ public class ReleaseService {
                 .filter(ticket -> !present.contains(ticket.key()))
                 .toList();
         List<ReleaseItem> items = inserted.stream()
-                .map(ticket -> new ReleaseItem(ticket, now, CodeLinks.notAttempted()))
+                .map(ticket -> new ReleaseItem(ticket, now, CodeLinks.notAttempted(), bundleName))
                 .toList();
         Release updated = release;
         if (!items.isEmpty()) {
@@ -112,9 +166,25 @@ public class ReleaseService {
                 alreadyPresent + (fetched.size() - items.size()), toFetch.size() - fetched.size());
     }
 
-    public Release removeTicket(UUID releaseId, String ticketKey) {
-        get(releaseId).requireOpen();          // REL-02: removal only while OPEN
-        return repository.removeItem(releaseId, ticketKey);
+    public Release removeTicket(UUID releaseId, String ticketKey, boolean withBundle) {
+        Release release = get(releaseId);
+        release.requireOpen();                 // REL-02: removal only while OPEN
+        String bundle = withBundle ? release.items().stream()
+                .filter(item -> item.ticketKey().equals(ticketKey))
+                .findFirst().map(ReleaseItem::bundle).orElse(null) : null;
+        return bundle == null ? repository.removeItem(releaseId, ticketKey) : repository.removeBundle(releaseId, bundle);
+    }
+
+    // Reuses an existing bundle's spelling so one bundle cannot split into two by case or spacing.
+    private static String bundleName(String raw, List<ReleaseItem> existing) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String name = raw.strip();
+        return existing.stream()
+                .map(ReleaseItem::bundle)
+                .filter(name::equalsIgnoreCase)
+                .findFirst().orElse(name);
     }
 
     public Release refresh(UUID releaseId) {
@@ -151,10 +221,22 @@ public class ReleaseService {
     }
 
     public Release freeze(UUID id, String actor) {
-        // D-03-10: freeze is a one-way door, so freezing an already-frozen release is a
-        // conflict, not a no-op - silently succeeding would hide a stale UI.
+        // D-03-10: freezing an already-frozen release is a conflict, not a no-op - silently succeeding would hide a stale UI.
         get(id).requireOpen();
         return repository.freeze(id, actor, Instant.now());
+    }
+
+    // D-15.1-01/02: the adapter checks status and both ledgers under the release row lock; this layer only records who did it
+    // (an INFO line is the record - there is no audit table, and Phase 15 recorded none for product or client edits).
+    public Release unfreeze(UUID id, String actor) {
+        Release release = repository.unfreeze(id);
+        log.info("Release {} unfrozen by {}", id, actor);
+        return release;
+    }
+
+    // Drives the blocked Unfreeze button only; unfreeze itself never trusts this read.
+    public Optional<UnfreezeRejection> unfreezeBlocker(Release release) {
+        return release.isFrozen() ? repository.unfreezeBlocker(release.id()) : Optional.empty();
     }
 
     public void delete(UUID id) {
@@ -218,9 +300,5 @@ public class ReleaseService {
 
     private static List<String> distinct(List<String> keys) {
         return keys == null ? List.of() : keys.stream().filter(Objects::nonNull).distinct().toList();
-    }
-
-    private static String blankToNull(String value) {
-        return value == null || value.isBlank() ? null : value.trim();
     }
 }

@@ -5,11 +5,14 @@ import com.evision.releasemgmt.domain.release.ManualItem;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseSummary;
+import com.evision.releasemgmt.domain.release.UnfreezeRejection;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface ReleaseRepository {
@@ -33,9 +36,15 @@ public interface ReleaseRepository {
 
     List<String> findTicketKeys(UUID releaseId);
 
+    /** Which of these keys are on any release, whatever its status (D-17.2-06). */
+    Set<String> ticketKeysInAnyRelease(Collection<String> ticketKeys);
+
     Release addItems(UUID releaseId, List<ReleaseItem> items);
 
     Release removeItem(UUID releaseId, String ticketKey);
+
+    /** D-17.2-07: deletes every item of the bundle under the release lock; no-op for an unknown name; ReleaseFrozenException when frozen. */
+    Release removeBundle(UUID releaseId, String bundle);
 
     /** D-03-07: replaces the stored snapshot of every supplied item and stamps last_refreshed_at. */
     Release replaceItemSnapshots(UUID releaseId, List<ReleaseItem> items, Instant refreshedAt);
@@ -49,6 +58,19 @@ public interface ReleaseRepository {
     Release saveEnrichment(UUID releaseId, Map<String, CodeLinks> codeLinksByTicketKey);
 
     Release freeze(UUID releaseId, String actor, Instant at);
+
+    /**
+     * D-15.1-01/02: FROZEN back to OPEN under the release row lock; clears frozen_at and frozen_by, leaves items_changed_at alone.
+     *
+     * @throws com.evision.releasemgmt.domain.release.UnfreezeRejectedException when the release is not frozen or any promotion or install row exists
+     */
+    Release unfreeze(UUID releaseId);
+
+    /** D-17-21: any status; never stamps items_changed_at. Null clears. ReleaseNotFoundException when absent. */
+    Release setPackagesUrl(UUID releaseId, String packagesUrl);
+
+    /** Read-only: which ledger would block an unfreeze, promotions first; empty when neither has a row. Ignores status. */
+    Optional<UnfreezeRejection> unfreezeBlocker(UUID releaseId);
 
     void delete(UUID releaseId);
 

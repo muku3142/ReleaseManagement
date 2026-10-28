@@ -13,10 +13,30 @@ type LinkProps = {
 };
 
 let searchParams: { revision?: number } = {};
+let documentTypeParam = 'RELEASE_NOTES';
 const navigate = vi.fn();
 
+vi.mock('../../src/components/AiAssistPanel', () => ({
+  AiAssistPanel: (props: {
+    document: { revision: number };
+    children: ReactNode;
+    onResultOpenChange: (open: boolean) => void;
+    onSaved: (revision: number) => void;
+  }) => (
+    <div data-testid="panel" data-revision={props.document.revision}>
+      <button type="button" onClick={() => props.onResultOpenChange(true)}>
+        open-result
+      </button>
+      <button type="button" onClick={() => props.onSaved(5)}>
+        save-result
+      </button>
+      {props.children}
+    </div>
+  ),
+}));
+
 vi.mock('@tanstack/react-router', () => ({
-  useParams: () => ({ releaseId: 'r1', documentType: 'RELEASE_NOTES' }),
+  useParams: () => ({ releaseId: 'r1', documentType: documentTypeParam }),
   useSearch: () => searchParams,
   useNavigate: () => navigate,
   Link: (props: LinkProps) => {
@@ -60,6 +80,9 @@ function generatedDocument(overrides: Record<string, unknown> = {}) {
     chrome: CHROME,
     generatedAt: '2026-08-10T09:00:00Z',
     generatedBy: 'rm@acme.com',
+    aiAssisted: false,
+    aiMode: null,
+    aiInstruction: null,
     ...overrides,
   };
 }
@@ -103,7 +126,7 @@ function mockFetch(fixture: Fixture) {
     if (url.includes('/export.pdf') || url.includes('/export.docx')) {
       return new Response(new Blob(['bytes']), { status: 200 });
     }
-    if (url.startsWith('/api/releases/r1/documents/RELEASE_NOTES')) {
+    if (url.startsWith(`/api/releases/r1/documents/${documentTypeParam}`)) {
       if (fixture.documentResponse) return fixture.documentResponse();
       return json(200, generatedDocument());
     }
@@ -142,6 +165,7 @@ describe('DocumentViewerRoute', () => {
 
   beforeEach(() => {
     searchParams = {};
+    documentTypeParam = 'RELEASE_NOTES';
     navigate.mockClear();
     container = document.createElement('div');
     document.body.appendChild(container);
@@ -309,5 +333,102 @@ describe('DocumentViewerRoute', () => {
     await flush();
 
     expect(requested.some((u) => u.includes('export.pdf') && u.includes('revision=1'))).toBe(true);
+  });
+
+  describe('AI-assisted revisions', () => {
+    const aiDoc = (overrides: Record<string, unknown> = {}) =>
+      generatedDocument({
+        aiAssisted: true,
+        aiMode: 'CLEAN_UP',
+        aiInstruction: 'Tidy <b>this</b> up',
+        generatedBy: 'amr@acme.com',
+        markdown: 'Body ![tracker](http://evil.example/x.png)',
+        ...overrides,
+      });
+
+    it('aGeneratedRevisionShowsNoAiBannerAndKeepsImages', async () => {
+      mockFetch({ documentResponse: () => json(200, generatedDocument({ markdown: '![pic](http://x.example/a.png)' })) });
+      await renderRoute();
+
+      expect(container.querySelector('#ai-revision-banner')).toBeNull();
+      expect(container.textContent).not.toContain('Verify steps before use.');
+      expect(container.querySelector('img')).not.toBeNull();
+    });
+
+    it('anAiRunbookRevisionShowsBothBannersAfterTheSupersededBannerWithImagesBlocked', async () => {
+      documentTypeParam = 'RUNBOOK';
+      searchParams = { revision: 2 };
+      mockFetch({ documentResponse: () => json(200, aiDoc({ documentType: 'RUNBOOK', revision: 2, latestRevision: 3 })) });
+      await renderRoute();
+
+      const banner = container.querySelector('#ai-revision-banner') as HTMLElement;
+      expect(banner.getAttribute('role')).toBe('note');
+      expect(banner.tabIndex).toBe(-1);
+      expect(banner.textContent).toContain('AI-assisted revision.');
+      expect(banner.textContent).toContain('This revision was Cleaned up with the AI model and saved by amr@acme.com.');
+      const details = banner.querySelector('details') as HTMLDetailsElement;
+      expect(details.open).toBe(false);
+      expect(details.textContent).toContain('Instruction used');
+      expect(details.textContent).toContain('Tidy <b>this</b> up');
+      expect(details.querySelector('b')).toBeNull();
+
+      const text = container.textContent ?? '';
+      expect(text).toContain('Verify steps before use.');
+      expect(text.indexOf('superseded by')).toBeLessThan(text.indexOf('AI-assisted revision.'));
+      expect(text.indexOf('AI-assisted revision.')).toBeLessThan(text.indexOf('Verify steps before use.'));
+      expect(container.querySelector('img')).toBeNull();
+      expect(text).toContain('[image: tracker]');
+    });
+
+    it('aCustomReleaseNotesRevisionSaysCustomAndHasNoVerifyBanner', async () => {
+      mockFetch({ documentResponse: () => json(200, aiDoc({ aiMode: 'CUSTOM' })) });
+      await renderRoute();
+
+      expect(container.querySelector('#ai-revision-banner')?.textContent).toContain('edited with a custom instruction');
+      expect(container.textContent).not.toContain('Verify steps before use.');
+    });
+
+    it('theBannersAreNotInsideTheRenderedDocumentBody', async () => {
+      mockFetch({ documentResponse: () => json(200, aiDoc()) });
+      await renderRoute();
+
+      const panel = container.querySelector('[data-testid="panel"]') as HTMLElement;
+      expect(panel.textContent).not.toContain('AI-assisted revision.');
+    });
+
+    it('disablesTheRevisionSelectWhileAResultIsOpen', async () => {
+      mockFetch({});
+      await renderRoute();
+      const select = () => container.querySelector('select[aria-label="Revision"]') as HTMLSelectElement;
+      expect(select().disabled).toBe(false);
+
+      await act(async () => ([...container.querySelectorAll('button')].find((b) => b.textContent === 'open-result') as HTMLButtonElement).click());
+
+      expect(select().disabled).toBe(true);
+      expect(select().title).toBe('Save or discard the AI result first.');
+    });
+
+    it('onSavedClearsTheRevisionParamAndFocusesTheBannerOnceTheNewRevisionLoads', async () => {
+      searchParams = { revision: 4 };
+      mockFetch({
+        documentResponse: () =>
+          searchParams.revision === undefined
+            ? json(200, aiDoc({ revision: 5, latestRevision: 5 }))
+            : json(200, generatedDocument({ revision: 4, latestRevision: 4 })),
+      });
+      navigate.mockImplementation(() => {
+        searchParams = {};
+      });
+      await renderRoute();
+      expect(container.querySelector('#ai-revision-banner')).toBeNull();
+
+      await act(async () => ([...container.querySelectorAll('button')].find((b) => b.textContent === 'save-result') as HTMLButtonElement).click());
+      expect(navigate).toHaveBeenCalledWith(expect.objectContaining({ search: { revision: undefined } }));
+
+      await renderRoute();
+      const banner = container.querySelector('#ai-revision-banner');
+      expect(banner).not.toBeNull();
+      expect(document.activeElement).toBe(banner);
+    });
   });
 });

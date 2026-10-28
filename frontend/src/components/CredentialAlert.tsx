@@ -1,16 +1,19 @@
 import { Link } from '@tanstack/react-router';
 import { useCredentialInvalid } from '../api/credentialStatus';
+import { Alert } from '@/components/ui/alert';
 
 export function CredentialAlert() {
   const invalid = useCredentialInvalid();
   if (!invalid) return null;
 
   return (
-    <div role="alert" data-reason="INVALID_CREDENTIALS" className="border-b border-amber-300 bg-amber-50 px-6 py-3 text-sm text-amber-900">
-      Your Jira credential is no longer valid.{' '}
-      <Link to="/settings" className="font-medium underline">
-        Replace your Jira API token
-      </Link>
-    </div>
+    <Alert variant="warning" role="alert" data-reason="INVALID_CREDENTIALS" className="mx-6 mt-4 w-auto lg:mx-8">
+      <div>
+        Your Jira credential is no longer valid.{' '}
+        <Link to="/settings" className="font-semibold underline underline-offset-4">
+          Replace your Jira API token
+        </Link>
+      </div>
+    </Alert>
   );
 }

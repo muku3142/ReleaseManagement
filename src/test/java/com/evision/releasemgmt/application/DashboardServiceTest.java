@@ -22,6 +22,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
@@ -31,6 +32,7 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -66,7 +68,7 @@ class DashboardServiceTest {
     private DashboardService.DashboardView view(boolean all) {
         when(repository.loadLedger()).thenReturn(new DashboardLedger(releases, ladder, promotions));
         when(repository.findChurnItems(anyCollection())).thenReturn(List.of());
-        return service.releases(all);
+        return service.releases(all, Set.of());
     }
 
     private DashboardRelease shippedDaysAgo(long days) {
@@ -102,7 +104,7 @@ class DashboardServiceTest {
         assertThat(byDefault.summary().totalReleases()).isEqualTo(2);
         assertThat(byDefault.summary().visibleReleases()).isEqualTo(1);
 
-        assertThat(contains(service.releases(true), old)).isTrue();
+        assertThat(contains(service.releases(true, Set.of()), old)).isTrue();
     }
 
     @Test
@@ -125,6 +127,35 @@ class DashboardServiceTest {
     }
 
     @Test
+    void aReleaseThatSkippedStagesReportsItsHighestStageAndShippedTime() {
+        Instant frozen = NOW.minus(Duration.ofDays(10));
+        DashboardRelease r = release(frozen.minus(Duration.ofDays(1)), frozen);
+        Instant prodAt = NOW.minus(Duration.ofDays(2));
+        promote(r, dev, PromotionOutcome.SUCCESS, NOW.minus(Duration.ofDays(5)));
+        promote(r, prod, PromotionOutcome.SUCCESS, prodAt);
+
+        DashboardService.DashboardView view = view(false);
+
+        DashboardService.ReleaseMetrics m = view.releases().getFirst();
+        assertThat(m.currentStageId()).isEqualTo(prod.id());
+        assertThat(m.shippedAt()).isEqualTo(prodAt);
+        assertThat(m.frozenToProductionSeconds()).isEqualTo(Duration.between(frozen, prodAt).getSeconds());
+        assertThat(view.summary().notPromoted()).isZero();
+    }
+
+    @Test
+    void aFirstPromotionStraightToProductionCountsAsShipped() {
+        Instant frozen = NOW.minus(Duration.ofDays(10));
+        DashboardRelease r = release(frozen.minus(Duration.ofDays(1)), frozen);
+        promote(r, prod, PromotionOutcome.SUCCESS, NOW.minus(Duration.ofDays(2)));
+
+        DashboardService.ReleaseMetrics m = view(false).releases().getFirst();
+
+        assertThat(m.currentStageId()).isEqualTo(prod.id());
+        assertThat(m.shippedAt()).isNotNull();
+    }
+
+    @Test
     void lastFailedStageClearsOnALaterSuccess() {
         DashboardRelease r = release(NOW.minus(Duration.ofDays(5)), NOW.minus(Duration.ofDays(4)));
         promote(r, dev, PromotionOutcome.SUCCESS, NOW.minus(Duration.ofDays(3)));
@@ -134,7 +165,7 @@ class DashboardServiceTest {
 
         promote(r, test, PromotionOutcome.SUCCESS, NOW.minus(Duration.ofDays(1)));
 
-        assertThat(service.releases(false).releases().getFirst().lastFailedStageId()).isNull();
+        assertThat(service.releases(false, Set.of()).releases().getFirst().lastFailedStageId()).isNull();
     }
 
     @Test
@@ -204,20 +235,87 @@ class DashboardServiceTest {
         when(repository.loadLedger()).thenReturn(new DashboardLedger(releases, ladder, promotions));
         when(repository.findChurnItems(anyCollection())).thenReturn(List.of(item(withItems.id(), "A-1"), item(withItems.id(), "A-2")));
 
-        List<DashboardService.ReleaseMetrics> rows = service.releases(false).releases();
+        List<DashboardService.ReleaseMetrics> rows = service.releases(false, Set.of()).releases();
 
         assertThat(rows.get(0).churn().tickets()).isEqualTo(2);
         assertThat(rows.get(1).release()).isEqualTo(without);
         assertThat(rows.get(1).churn()).isEqualTo(ReleaseChurn.of(List.of()));
     }
 
+    // R covers {A,B} and shipped, S covers {A} and is open, T covers {B}, frozen, never promoted.
+    private final UUID productA = UUID.randomUUID();
+    private final UUID productB = UUID.randomUUID();
+
+    private DashboardRelease[] productFixture() {
+        DashboardRelease r = shippedDaysAgo(10);
+        DashboardRelease s = release(NOW.minus(Duration.ofDays(3)), null);
+        DashboardRelease t = release(NOW.minus(Duration.ofDays(4)), NOW.minus(Duration.ofDays(2)));
+        when(repository.releaseIdsCoveringAny(Set.of(productA, productB))).thenReturn(Set.of(r.id(), s.id(), t.id()));
+        when(repository.releaseIdsCoveringAny(Set.of(productA))).thenReturn(Set.of(r.id(), s.id()));
+        when(repository.releaseIdsCoveringAny(Set.of(productB))).thenReturn(Set.of(r.id(), t.id()));
+        when(repository.loadLedger()).thenReturn(new DashboardLedger(releases, ladder, promotions));
+        when(repository.findChurnItems(anyCollection())).thenReturn(List.of());
+        return new DashboardRelease[] {r, s, t};
+    }
+
+    @Test
+    void aReleaseCoveringTwoSelectedProductsIsCountedOnce() {
+        DashboardRelease[] f = productFixture();
+
+        DashboardService.DashboardView view = service.releases(true, Set.of(productA, productB));
+
+        assertThat(view.releases()).extracting(m -> m.release().id())
+                .containsExactlyInAnyOrder(f[0].id(), f[1].id(), f[2].id());
+        DashboardService.Summary summary = view.summary();
+        assertThat(summary.visibleReleases()).isEqualTo(3);
+        assertThat(summary.notPromoted()).isEqualTo(2);
+        assertThat(summary.releasesPerStage()).containsOnlyKeys(prod.id()).containsEntry(prod.id(), 1L);
+        assertThat(summary.frozenToProductionCount()).isEqualTo(1);
+    }
+
+    @Test
+    void eachSingleProductNarrowsToItsOwnReleases() {
+        DashboardRelease[] f = productFixture();
+
+        assertThat(service.releases(true, Set.of(productA)).releases()).extracting(m -> m.release().id())
+                .containsExactlyInAnyOrder(f[0].id(), f[1].id());
+        assertThat(service.releases(true, Set.of(productB)).releases()).extracting(m -> m.release().id())
+                .containsExactlyInAnyOrder(f[0].id(), f[2].id());
+    }
+
+    @Test
+    void noProductFilterMeansAllReleasesWithoutAScopeQuery() {
+        productFixture();
+
+        DashboardService.DashboardView view = service.releases(true, Set.of());
+
+        assertThat(view.releases()).hasSize(3);
+        verify(repository, never()).releaseIdsCoveringAny(anyCollection());
+    }
+
+    @Test
+    void totalReleasesStaysTheUnfilteredCountWhenFiltered() {
+        productFixture();
+
+        assertThat(service.releases(true, Set.of(productA)).summary().totalReleases()).isEqualTo(3);
+        assertThat(service.releases(true, Set.of(productA)).summary().visibleReleases()).isEqualTo(2);
+    }
+
+    @Test
+    void deploymentsPassTheProductFilterThrough() {
+        Set<UUID> products = Set.of(productA, productB);
+        when(repository.findDeployments(null, NOW.minusSeconds(1), NOW, 51, 0, products)).thenReturn(rows(2));
+
+        assertThat(service.deployments(null, NOW.minusSeconds(1), NOW, 50, 0, products).entries()).hasSize(2);
+    }
+
     @Test
     void deploymentsFetchesOneExtraRowToDetectMore() {
         Instant from = NOW.minus(Duration.ofDays(30));
         UUID stage = UUID.randomUUID();
-        when(repository.findDeployments(stage, from, NOW, 51, 0)).thenReturn(rows(51));
+        when(repository.findDeployments(stage, from, NOW, 51, 0, Set.of())).thenReturn(rows(51));
 
-        DashboardService.DeploymentPage page = service.deployments(stage, from, NOW, 50, 0);
+        DashboardService.DeploymentPage page = service.deployments(stage, from, NOW, 50, 0, Set.of());
 
         assertThat(page.entries()).hasSize(50);
         assertThat(page.hasMore()).isTrue();
@@ -225,9 +323,9 @@ class DashboardServiceTest {
 
     @Test
     void deploymentsWithoutSurplusHasNoMore() {
-        when(repository.findDeployments(eq(null), any(), any(), anyInt(), anyInt())).thenReturn(rows(30));
+        when(repository.findDeployments(eq(null), any(), any(), anyInt(), anyInt(), any())).thenReturn(rows(30));
 
-        DashboardService.DeploymentPage page = service.deployments(null, NOW.minusSeconds(1), NOW, 50, 0);
+        DashboardService.DeploymentPage page = service.deployments(null, NOW.minusSeconds(1), NOW, 50, 0, Set.of());
 
         assertThat(page.entries()).hasSize(30);
         assertThat(page.hasMore()).isFalse();

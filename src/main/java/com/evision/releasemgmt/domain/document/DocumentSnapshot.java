@@ -22,16 +22,43 @@ import java.util.UUID;
 // HTML. PdfExportAdapter and DocxExportAdapter both parse it with parseMarkdown, and the document
 // viewer renders it with markdown-it. Anything that puts HTML here makes every export and the
 // viewer display literal escaped tags.
+//
+// D-14-01: an AI revision copies the source's template fields and chrome and carries the source's
+// staleness basis, so readiness keeps comparing against the original generation time.
 public record DocumentSnapshot(UUID id, UUID releaseId, TemplateDocumentType documentType,
                                int revision, String markdown, UUID templateId, String templateName,
                                String templateBody, ChromeFields chrome,
-                               Instant generatedAt, String generatedBy) {
+                               Instant generatedAt, String generatedBy, AiAssist aiAssist) {
 
     public static DocumentSnapshot create(UUID releaseId, TemplateDocumentType documentType,
                                           int revision, String markdown, UUID templateId,
                                           String templateName, String templateBody,
                                           ChromeFields resolvedChrome, String actor, Instant now) {
         return new DocumentSnapshot(UUID.randomUUID(), releaseId, documentType, revision, markdown,
-                templateId, templateName, templateBody, resolvedChrome, now, actor);
+                templateId, templateName, templateBody, resolvedChrome, now, actor, null);
+    }
+
+    public static DocumentSnapshot createAiRevision(DocumentSnapshot source, int revision, String markdown,
+                                                    AiMode mode, String instruction, String actor, Instant now) {
+        AiAssist assist = new AiAssist(mode, instruction, source.revision(), source.stalenessBasis());
+        return new DocumentSnapshot(UUID.randomUUID(), source.releaseId(), source.documentType(), revision,
+                markdown, source.templateId(), source.templateName(), source.templateBody(), source.chrome(),
+                now, actor, assist);
+    }
+
+    public boolean aiAssisted() {
+        return aiAssist != null;
+    }
+
+    public Instant stalenessBasis() {
+        return aiAssist == null ? generatedAt : aiAssist.basisGeneratedAt();
+    }
+
+    // SAFE-03: markdown and template text are release content, so print sizes only.
+    @Override
+    public String toString() {
+        return "DocumentSnapshot[id=" + id + ", releaseId=" + releaseId + ", documentType=" + documentType
+                + ", revision=" + revision + ", markdownChars=" + (markdown == null ? 0 : markdown.length())
+                + ", templateId=" + templateId + ", generatedAt=" + generatedAt + ", aiAssist=" + aiAssist + "]";
     }
 }

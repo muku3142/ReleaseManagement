@@ -1,2 +1,264 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 @plugin "@tailwindcss/typography";
+
+/* .paper keeps documents and unmigrated pages light inside a dark shell (D-23-06, removed for pages by the last 23.1 plan). */
+@custom-variant dark (&:where(.dark, .dark *):not(.paper, .paper *));
+
+@theme {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  --font-brand: "Nunito Variable", ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-muted: var(--destructive-muted);
+  --color-success: var(--success);
+  --color-success-muted: var(--success-muted);
+  --color-warning: var(--warning);
+  --color-warning-muted: var(--warning-muted);
+  --color-info: var(--info);
+  --color-info-muted: var(--info-muted);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-brand-from: var(--brand-from);
+  --color-brand-to: var(--brand-to);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* .paper redeclares every variable, including the var() ones, so they re-resolve light inside a dark <html>. */
+:root,
+.paper {
+  color-scheme: light;
+  --background: oklch(98.5% 0 0);
+  --foreground: oklch(14.1% 0.005 285.823);
+  --card: oklch(100% 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(100% 0 0);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(54.1% 0.281 293.009);
+  --primary-foreground: oklch(100% 0 0);
+  --secondary: oklch(96.7% 0.001 286.375);
+  --secondary-foreground: var(--foreground);
+  --muted: oklch(96.7% 0.001 286.375);
+  --muted-foreground: oklch(44.2% 0.017 285.786);
+  --accent: oklch(96.7% 0.001 286.375);
+  --accent-foreground: var(--foreground);
+  --destructive: oklch(50.5% 0.213 27.518);
+  --destructive-foreground: oklch(100% 0 0);
+  --destructive-muted: oklch(97.1% 0.013 17.38);
+  --success: oklch(52.7% 0.154 150.069);
+  --success-muted: oklch(98.2% 0.018 155.826);
+  --warning: oklch(55.5% 0.163 48.998);
+  --warning-muted: oklch(98.7% 0.022 95.277);
+  --info: oklch(50% 0.134 242.749);
+  --info-muted: oklch(97.7% 0.013 236.62);
+  --border: oklch(92% 0.004 286.32);
+  --input: oklch(87.1% 0.006 286.286);
+  --ring: var(--primary);
+  --chart-1: oklch(54.1% 0.281 293.009);
+  --chart-2: oklch(59.1% 0.293 322.896);
+  --chart-3: oklch(58.8% 0.158 241.966);
+  --chart-4: oklch(59.6% 0.145 163.225);
+  --chart-5: oklch(64.6% 0.222 41.116);
+  --sidebar: var(--background);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
+  --brand-from: #6d5bf5;
+  --brand-to: #a78bfa;
+  --radius: 0.625rem;
+  --ladder-reached: var(--primary);
+  --ladder-ahead: var(--muted-foreground);
+  --ladder-failed: var(--destructive);
+  --ladder-current-ring: color-mix(in oklch, var(--primary) 40%, transparent);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(14.1% 0.005 285.823);
+  --foreground: oklch(98.5% 0 0);
+  --card: oklch(21% 0.006 285.885);
+  --popover: oklch(21% 0.006 285.885);
+  --primary: oklch(70.2% 0.183 293.541);
+  --primary-foreground: oklch(28.3% 0.141 291.089);
+  --secondary: oklch(27.4% 0.006 286.033);
+  --muted: oklch(27.4% 0.006 286.033);
+  --muted-foreground: oklch(70.5% 0.015 286.067);
+  --accent: oklch(27.4% 0.006 286.033);
+  --destructive: oklch(70.4% 0.191 22.216);
+  --destructive-foreground: oklch(25.8% 0.092 26.042);
+  --destructive-muted: color-mix(in oklch, var(--destructive) 15%, var(--card));
+  --success: oklch(79.2% 0.209 151.711);
+  --success-muted: color-mix(in oklch, var(--success) 15%, var(--card));
+  --warning: oklch(82.8% 0.189 84.429);
+  --warning-muted: color-mix(in oklch, var(--warning) 15%, var(--card));
+  --info: oklch(74.6% 0.16 232.661);
+  --info-muted: color-mix(in oklch, var(--info) 15%, var(--card));
+  --border: oklch(100% 0 0 / 10%);
+  --input: oklch(100% 0 0 / 15%);
+  --chart-1: oklch(70.2% 0.183 293.541);
+  --chart-2: oklch(74% 0.238 322.16);
+  --chart-3: oklch(74.6% 0.16 232.661);
+  --chart-4: oklch(76.5% 0.177 163.223);
+  --chart-5: oklch(82.8% 0.189 84.429);
+}
+
+/* Plain :root, not @theme, so Tailwind never prunes these; --ease-out also retargets Tailwind's ease-out utility at the spec curve. */
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 600ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@keyframes status-pulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--primary) 45%, transparent);
+  }
+  50% {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 45%, transparent);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+@keyframes mark-link {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes mark-node {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+@utility animate-page-in {
+  animation: page-in var(--motion-base) var(--ease-out) both;
+}
+
+@utility animate-row-in {
+  animation: row-in var(--motion-base) var(--ease-out) both;
+}
+
+@utility animate-status-pulse {
+  animation: status-pulse var(--motion-slow) var(--ease-out) 1;
+}
+
+@utility animate-mark-link {
+  stroke-dasharray: 1;
+  animation: mark-link 300ms var(--ease-out) both;
+}
+
+@utility animate-mark-node {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: mark-node 300ms var(--ease-out) 300ms both;
+}
+
+@utility link-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 0% 1px;
+  transition: background-size var(--motion-base) var(--ease-out);
+  &:hover {
+    background-size: 100% 1px;
+  }
+}
+
+/* The counting number is a pseudo-element, so the element's text stays the real value for screen readers and tests. */
+@utility count-up {
+  position: relative;
+  &[data-count-display] {
+    -webkit-text-fill-color: transparent;
+  }
+  &[data-count-display]::after {
+    content: attr(data-count-display);
+    position: absolute;
+    inset: 0;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+/* No outline-ring/50 here: a half-transparent outline would weaken the UA focus ring unmigrated pages rely on. */
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

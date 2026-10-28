@@ -49,6 +49,7 @@ function sampleView(overrides: Partial<ReleaseView> = {}): ReleaseView {
     lastRefreshedAt: '2026-08-05T00:00:00Z',
     items: [ticketItem()],
     groups: [],
+    products: [],
     ...overrides,
   };
 }

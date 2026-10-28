@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/tickets")
 public class TicketController {
@@ -32,12 +34,19 @@ public class TicketController {
 
     @PostMapping("/search")
     public TicketSearchResponse search(@Valid @RequestBody TicketSearchRequest request) {
-        TicketSearchCriteria criteria = request.jql() != null && !request.jql().isBlank()
-                ? TicketSearchCriteria.byJql(request.jql())
-                : TicketSearchCriteria.byProject(request.projectId(), request.sprintId(),
-                        request.statusCategories());
-        return new TicketSearchResponse(
-                service.search(criteria, request.releaseId()).stream().map(TicketController::toResponse).toList());
+        List<TicketDetail> tickets;
+        if (request.productId() != null) {
+            tickets = service.searchProduct(request.productId(), request.statusCategories(), request.releaseId(),
+                    request.hidesAlreadyInRelease());
+        } else {
+            // Advanced JQL stays unscoped (D-17.2-05): Jira's own permissions are the boundary.
+            TicketSearchCriteria criteria = request.jql() != null && !request.jql().isBlank()
+                    ? TicketSearchCriteria.byJql(request.jql())
+                    : TicketSearchCriteria.byProject(request.projectId(), request.sprintId(),
+                            request.statusCategories());
+            tickets = service.search(criteria, request.releaseId(), request.hidesAlreadyInRelease());
+        }
+        return new TicketSearchResponse(tickets.stream().map(TicketController::toResponse).toList());
     }
 
     // Live, read-only lookup for the ticket browser; stores nothing (D-06-01 governs release reads, not this).

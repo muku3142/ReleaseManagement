@@ -7,6 +7,26 @@ import type { ChromeFields } from '../api/templates';
 // raw HTML as a blocking library-selection defect, so this option is not negotiable.
 export const md = new MarkdownIt({ html: false, linkify: false, typographer: false });
 
+// Model output can carry a remote image URL that exfiltrates data the moment it renders, so AI text
+// is rendered with env.blockImages: images become text and links open without opener access.
+// Other callers pass no env and get markdown-it's default output.
+const defaultImage = md.renderer.rules.image;
+md.renderer.rules.image = (tokens, idx, options, env, self) => {
+  if ((env as { blockImages?: boolean } | undefined)?.blockImages) {
+    return `[image: ${md.utils.escapeHtml(tokens[idx].content)}]`;
+  }
+  return defaultImage ? defaultImage(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+};
+
+const defaultLinkOpen = md.renderer.rules.link_open;
+md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
+  if ((env as { blockImages?: boolean } | undefined)?.blockImages) {
+    tokens[idx].attrSet('rel', 'noopener noreferrer');
+    tokens[idx].attrSet('target', '_blank');
+  }
+  return defaultLinkOpen ? defaultLinkOpen(tokens, idx, options, env, self) : self.renderToken(tokens, idx, options);
+};
+
 // markdown-it has already escaped <, >, & and " in every text node, so the captured token is safe to
 // interpolate. This is the one place this app builds HTML by hand, and it is confined to replacing a
 // literal marker the renderer itself produced.
@@ -16,6 +36,27 @@ export function chipUnknownMarkers(html: string): string {
     (_m, token: string) =>
       `<code class="rounded bg-amber-100 px-1 py-0.5 font-mono text-xs text-amber-900">[[unknown: ${token}]]</code>`,
   );
+}
+
+// The snapshot is already Mustache-resolved (D-05-05), so this needs markdown-it only. A render
+// failure here is defensive, not an expected path - DOC generation only succeeds from a template
+// that already passed save-time validation - so it falls back to TemplatePreview's own neutral panel.
+export function MarkdownBody({ markdown, blockImages = false }: { markdown: string; blockImages?: boolean }) {
+  try {
+    const html = chipUnknownMarkers(md.render(markdown, { blockImages }));
+    return (
+      <div
+        className="paper prose prose-gray max-w-none bg-white p-4 text-zinc-950"
+        dangerouslySetInnerHTML={{ __html: html }}
+      />
+    );
+  } catch {
+    return (
+      <div className="m-4 bg-gray-50 p-4 text-sm text-gray-600">
+        Preview unavailable — check your template syntax (e.g., every {'{{#x}}'} needs a matching {'{{/x}}'}).
+      </div>
+    );
+  }
 }
 
 // The React-children counterpart of chipUnknownMarkers: chrome strings are rendered as plain text
@@ -55,8 +96,9 @@ export function RenderedDocument(props: { chrome: ChromeFields; logoUrl: string 
   const headerVisible = chrome.headerText.trim() !== '';
   const footerVisible = chrome.footerText.trim() !== '';
 
+  // D-23-06: a generated document is never themed, so it stays light paper inside a dark app.
   return (
-    <>
+    <div className="paper border border-border bg-white text-zinc-950 shadow-xs">
       {chrome.coverEnabled && (
         <div className="mb-6 rounded border border-gray-300 bg-white p-8 text-center shadow-sm">
           {/* Inline style rather than a class: Tailwind's max-h-* scale is fixed steps with no mm unit,
@@ -93,6 +135,6 @@ export function RenderedDocument(props: { chrome: ChromeFields; logoUrl: string 
           {chrome.pageNumbersEnabled && !headerVisible && PAGE_NUMBER_PLACEHOLDER}
         </div>
       )}
-    </>
+    </div>
   );
 }

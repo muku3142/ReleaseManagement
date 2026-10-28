@@ -7,6 +7,9 @@ export type ProblemDetail = {
   detail?: string;
   reason: string;
   fieldErrors?: Record<string, string>;
+  key?: string;
+  productName?: string;
+  clients?: { clientId: string; name: string | null; reason: 'NOT_LINKED' | 'ARCHIVED' }[];
 };
 
 export class ApiError extends Error {
@@ -20,7 +23,7 @@ function readCookie(name: string): string | null {
   return match ? decodeURIComponent(match[2]) : null;
 }
 
-async function rawFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+function buildInit(init: RequestInit): RequestInit {
   const method = (init.method ?? 'GET').toUpperCase();
   const headers = new Headers(init.headers);
   // A FormData body carries its own multipart/form-data content type with a generated boundary.
@@ -32,12 +35,18 @@ async function rawFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
     const csrf = readCookie('XSRF-TOKEN');
     if (csrf) headers.set('X-XSRF-TOKEN', csrf);
   }
-  const response = await fetch(path, { ...init, headers, credentials: 'same-origin' });
+  return { ...init, headers, credentials: 'same-origin' };
+}
+
+async function failure(response: Response): Promise<ApiError> {
+  const problem = await response.json().catch(() => ({ status: response.status, reason: 'UNKNOWN' }));
+  return new ApiError({ ...problem, status: response.status, reason: problem.reason ?? 'UNKNOWN' });
+}
+
+async function rawFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, buildInit(init));
   if (response.status === 204) return undefined as T;
-  if (!response.ok) {
-    const problem = await response.json().catch(() => ({ status: response.status, reason: 'UNKNOWN' }));
-    throw new ApiError({ ...problem, status: response.status, reason: problem.reason ?? 'UNKNOWN' });
-  }
+  if (!response.ok) throw await failure(response);
   return (await response.json()) as T;
 }
 
@@ -78,6 +87,18 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}, retried 
     }
     throw error;
   }
+}
+
+// For streamed responses (SSE): same headers, XSRF echo and session refresh-then-retry as apiFetch,
+// but the successful Response is returned unread so the caller owns the body.
+export async function apiFetchRaw(path: string, init: RequestInit = {}, retried = false): Promise<Response> {
+  const response = await fetch(path, buildInit(init));
+  if (response.ok) return response;
+  const error = await failure(response);
+  if (SESSION_REASONS.has(error.problem.reason) && path !== REFRESH_PATH && !retried && (await attemptRefresh())) {
+    return apiFetchRaw(path, init, true);
+  }
+  throw error;
 }
 
 // Every other apiFetch call expects a JSON body; export downloads are the one binary response in

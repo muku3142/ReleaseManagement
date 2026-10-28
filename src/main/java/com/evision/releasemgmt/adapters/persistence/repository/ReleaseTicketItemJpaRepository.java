@@ -2,7 +2,10 @@ package com.evision.releasemgmt.adapters.persistence.repository;
 
 import com.evision.releasemgmt.adapters.persistence.entity.ReleaseTicketItemEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,4 +21,9 @@ public interface ReleaseTicketItemJpaRepository extends JpaRepository<ReleaseTic
     List<ReleaseTicketItemEntity> findByTicketKey(String ticketKey);
 
     long deleteByReleaseIdAndTicketKey(UUID releaseId, String ticketKey);
+
+    long deleteByReleaseIdAndBundle(UUID releaseId, String bundle);
+
+    @Query("select distinct i.ticketKey from ReleaseTicketItemEntity i where i.ticketKey in :keys")
+    List<String> findTicketKeysIn(@Param("keys") Collection<String> keys);
 }

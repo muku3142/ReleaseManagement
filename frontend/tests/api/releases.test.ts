@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, apiFetch } from '../../src/api/client';
-import { messageForReason } from '../../src/api/auth';
+import { messageForReason } from '../../src/api/reasonMessages';
 import * as releasesModule from '../../src/api/releases';
 import {
   MANUAL_ITEM_CATEGORIES,
@@ -118,6 +118,7 @@ describe('releases API client', () => {
       frozenBy: null,
       lastRefreshedAt: null,
       itemCount: 0,
+      products: [],
       ...overrides,
     };
   }
@@ -131,7 +132,7 @@ describe('releases API client', () => {
   });
 
   it('resolves a mocked 201 on POST /api/releases to { release, added, alreadyPresent }', async () => {
-    const release: Release = { ...summary({ id: '1' }), items: [], manualItems: [] };
+    const release: Release = { ...summary({ id: '1' }), items: [], manualItems: [], unfreezeBlockedReason: null, packagesUrl: null };
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse(201, { release, added: 2, alreadyPresent: 0, notFound: 0 }),
     );
@@ -180,7 +181,7 @@ describe('releases API client', () => {
   });
 
   it('resolves a mocked 200 on POST /api/releases/{id}/items with every count, including the all-duplicate case as a success', async () => {
-    const release: Release = { ...summary({ id: '1' }), items: [], manualItems: [] };
+    const release: Release = { ...summary({ id: '1' }), items: [], manualItems: [], unfreezeBlockedReason: null, packagesUrl: null };
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse(200, { release, added: 0, alreadyPresent: 3, notFound: 0 }),
     );
@@ -213,6 +214,9 @@ describe('releases API client', () => {
       ...summary({ id: '1', lastRefreshedAt: '2026-08-05T12:00:00Z' }),
       items: [],
       manualItems: [],
+      unfreezeBlockedReason: null,
+
+      packagesUrl: null,
     };
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, release));
 
@@ -222,7 +226,7 @@ describe('releases API client', () => {
   });
 
   it('resolves a mocked 200 on POST /api/releases/{id}/freeze to a Release with status FROZEN', async () => {
-    const release: Release = { ...summary({ id: '1', status: 'FROZEN' }), items: [], manualItems: [] };
+    const release: Release = { ...summary({ id: '1', status: 'FROZEN' }), items: [], manualItems: [], unfreezeBlockedReason: null, packagesUrl: null };
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, release));
 
     const result = await apiFetch<Release>('/api/releases/1/freeze', { method: 'POST' });
@@ -259,7 +263,7 @@ describe('releases API client', () => {
   });
 
   it('resolves a mocked 200 on DELETE /api/releases/{id}/items/CNV-1 to a Release', async () => {
-    const release: Release = { ...summary({ id: '1' }), items: [], manualItems: [] };
+    const release: Release = { ...summary({ id: '1' }), items: [], manualItems: [], unfreezeBlockedReason: null, packagesUrl: null };
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, release));
 
     const result = await apiFetch<Release>('/api/releases/1/items/CNV-1', { method: 'DELETE' });
@@ -280,6 +284,9 @@ describe('releases API client', () => {
           addedAt: '2026-08-05T00:00:00Z',
         },
       ],
+      unfreezeBlockedReason: null,
+
+      packagesUrl: null,
     };
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(201, release));
 
@@ -310,9 +317,78 @@ describe('releases API client', () => {
     );
   });
 
+  it('useSetPackagesUrl PUTs the url, sets the release cache and invalidates nothing else', async () => {
+    const url = 'https://contoso.sharepoint.com/packages';
+    const release: Release = {
+      ...summary({ id: 'r1' }),
+      items: [],
+      manualItems: [],
+      unfreezeBlockedReason: null,
+      packagesUrl: url,
+    };
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, release));
+    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(['documents', 'r1'], {});
+    queryClient.setQueryData(['dashboard', 'releases'], {});
+    const root = createRoot(document.createElement('div'));
+    function Probe() {
+      const mutation = releasesModule.useSetPackagesUrl('r1');
+      useEffect(() => mutation.mutate(url), []); // eslint-disable-line react-hooks/exhaustive-deps
+      return null;
+    }
+    await act(async () => {
+      root.render(createElement(QueryClientProvider, { client: queryClient }, createElement(Probe)));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => root.unmount());
+    const [requestUrl, init] = fetchSpy.mock.calls.at(-1)!;
+    expect(String(requestUrl)).toBe('/api/releases/r1/packages-url');
+    expect(init?.method).toBe('PUT');
+    expect(JSON.parse(String(init?.body))).toEqual({ url });
+    expect(queryClient.getQueryData(releaseQueryKey('r1'))).toEqual(release);
+    expect(queryClient.getQueryState(['documents', 'r1'])?.isInvalidated).toBe(false);
+    expect(queryClient.getQueryState(['dashboard', 'releases'])?.isInvalidated).toBe(false);
+  });
+
+  it('has a specific message for the Phase 17 reasons', () => {
+    expect(messageForReason({ status: 400, reason: 'ROADMAP_ITEM_NOT_FOUND' })).toBe(
+      'That roadmap item no longer exists. Reload the page.',
+    );
+    expect(messageForReason({ status: 400, reason: 'RELEASE_PACKAGES_URL_INVALID' })).toContain('OneDrive or SharePoint');
+  });
+
+  it('useCreateRelease posts exactly { name, version, ticketKeys, productId }', async () => {
+    const release: Release = { ...summary({ id: 'r1' }), items: [], manualItems: [], unfreezeBlockedReason: null, packagesUrl: null };
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(jsonResponse(201, { release, added: 1, alreadyPresent: 0, notFound: 0 }));
+    (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const root = createRoot(document.createElement('div'));
+    function Probe() {
+      const mutation = releasesModule.useCreateRelease();
+      useEffect(() => mutation.mutate({ name: 'R1', version: '1.0', groups: [{ ticketKeys: ['ABC-1'] }], productId: 'p1' }), []); // eslint-disable-line react-hooks/exhaustive-deps
+      return null;
+    }
+    await act(async () => {
+      root.render(createElement(QueryClientProvider, { client: new QueryClient() }, createElement(Probe)));
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => root.unmount());
+
+    const [url, init] = fetchSpy.mock.calls.at(-1)!;
+    expect(String(url)).toBe('/api/releases');
+    expect(init?.method).toBe('POST');
+    expect(JSON.parse(String(init?.body))).toEqual({ name: 'R1', version: '1.0', ticketKeys: ['ABC-1'], productId: 'p1' });
+  });
+
   describe('useRefreshCodeLinks', () => {
     async function runRefresh(vars: { releaseId: string; ticketKey?: string }): Promise<string> {
-      const release: Release = { ...summary({ id: 'r1' }), items: [], manualItems: [] };
+      const release: Release = { ...summary({ id: 'r1' }), items: [], manualItems: [], unfreezeBlockedReason: null, packagesUrl: null };
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, release));
       (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
       const container = document.createElement('div');
@@ -350,7 +426,219 @@ describe('releases API client', () => {
     });
   });
 
-  it('exports no hook whose name contains unfreeze (D-03-10)', () => {
-    expect(Object.keys(releasesModule).some((k) => /unfreeze/i.test(k))).toBe(false);
+  describe('useUnfreezeRelease', () => {
+    async function runUnfreeze(response: Response) {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response);
+      (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+      const client = new QueryClient();
+      const invalidate = vi.spyOn(client, 'invalidateQueries');
+      const container = document.createElement('div');
+      const root = createRoot(container);
+      function Probe() {
+        const mutation = releasesModule.useUnfreezeRelease();
+        useEffect(() => mutation.mutate('r1'), []); // eslint-disable-line react-hooks/exhaustive-deps
+        return null;
+      }
+      await act(async () => {
+        root.render(createElement(QueryClientProvider, { client }, createElement(Probe)));
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      await act(async () => root.unmount());
+      return { client, fetchSpy, invalidatedKeys: invalidate.mock.calls.map(([filters]) => filters?.queryKey) };
+    }
+
+    it('posts to /unfreeze, caches the release and refreshes dependent queries on success', async () => {
+      const release: Release = { ...summary({ id: 'r1', status: 'OPEN' }), items: [], manualItems: [], unfreezeBlockedReason: null, packagesUrl: null };
+      const { client, fetchSpy, invalidatedKeys } = await runUnfreeze(jsonResponse(200, release));
+
+      const [url, init] = fetchSpy.mock.calls.at(-1)!;
+      expect(String(url)).toBe('/api/releases/r1/unfreeze');
+      expect(init?.method).toBe('POST');
+      expect(client.getQueryData(releaseQueryKey('r1'))).toEqual(release);
+      expect(invalidatedKeys).toEqual(
+        expect.arrayContaining([
+          ['releases'],
+          ['dashboard'],
+          ['promotions', 'r1'],
+          ['installs', 'r1'],
+          ['documents', 'readiness'],
+        ]),
+      );
+    });
+
+    it('refetches the release on a 409 rejection', async () => {
+      const { invalidatedKeys } = await runUnfreeze(
+        jsonResponse(409, { status: 409, reason: 'UNFREEZE_HAS_PROMOTIONS' }),
+      );
+
+      expect(invalidatedKeys).toEqual([releaseQueryKey('r1')]);
+    });
+  });
+
+  describe('bundles (D-17.2-07)', () => {
+    async function runMutation<TVars>(
+      useHook: () => { mutate: (vars: TVars) => void },
+      vars: TVars,
+      body: unknown,
+    ): Promise<{ url: string; init: RequestInit | undefined }> {
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(200, body));
+      (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+      const root = createRoot(document.createElement('div'));
+      function Probe() {
+        const mutation = useHook();
+        useEffect(() => mutation.mutate(vars), []); // eslint-disable-line react-hooks/exhaustive-deps
+        return null;
+      }
+      await act(async () => {
+        root.render(createElement(QueryClientProvider, { client: new QueryClient() }, createElement(Probe)));
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      await act(async () => root.unmount());
+      const [url, init] = fetchSpy.mock.calls.at(-1)!;
+      return { url: String(url), init };
+    }
+
+    const release = (): Release => ({
+      ...summary({ id: 'r1' }),
+      items: [],
+      manualItems: [],
+      unfreezeBlockedReason: null,
+      packagesUrl: null,
+    });
+    const addResult = () => ({ release: release(), added: 1, alreadyPresent: 0, notFound: 0 });
+    const createVars = { name: 'R1', version: '1.0', productId: 'p1' };
+
+    it('useCreateRelease sends the first group with its trimmed bundle', async () => {
+      const { init } = await runMutation(
+        releasesModule.useCreateRelease,
+        { ...createVars, groups: [{ ticketKeys: ['ABC-1'], bundle: ' Payments fixes ' }] },
+        addResult(),
+      );
+      expect(JSON.parse(String(init?.body))).toEqual({ ...createVars, ticketKeys: ['ABC-1'], bundle: 'Payments fixes' });
+    });
+
+    it('useCreateRelease omits a blank or missing bundle', async () => {
+      for (const bundle of ['', '   ', undefined]) {
+        const { init } = await runMutation(
+          releasesModule.useCreateRelease,
+          { ...createVars, groups: [{ ticketKeys: ['ABC-1'], bundle }] },
+          addResult(),
+        );
+        expect(JSON.parse(String(init?.body))).toEqual({ ...createVars, ticketKeys: ['ABC-1'] });
+      }
+    });
+
+    it('useAddTicketsToRelease sends { ticketKeys, bundle } with a bundle and exactly { ticketKeys } without', async () => {
+      const withBundle = await runMutation(
+        releasesModule.useAddTicketsToRelease,
+        { releaseId: 'r1', groups: [{ ticketKeys: ['ABC-1'], bundle: 'Audit' }] },
+        addResult(),
+      );
+      expect(withBundle.url).toBe('/api/releases/r1/items');
+      expect(JSON.parse(String(withBundle.init?.body))).toEqual({ ticketKeys: ['ABC-1'], bundle: 'Audit' });
+
+      const without = await runMutation(
+        releasesModule.useAddTicketsToRelease,
+        { releaseId: 'r1', groups: [{ ticketKeys: ['ABC-1'], bundle: ' ' }] },
+        addResult(),
+      );
+      expect(JSON.parse(String(without.init?.body))).toEqual({ ticketKeys: ['ABC-1'] });
+    });
+
+    describe('several groups', () => {
+      async function runGroups<TVars>(
+        useHook: () => { mutateAsync: (vars: TVars) => Promise<unknown> },
+        vars: TVars,
+        counts: { added: number; alreadyPresent: number; notFound: number }[],
+      ) {
+        let call = 0;
+        const fetchSpy = vi
+          .spyOn(globalThis, 'fetch')
+          .mockImplementation(async () => jsonResponse(200, { release: release(), ...counts[call++] }));
+        (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+        const root = createRoot(document.createElement('div'));
+        let result: unknown;
+        function Probe() {
+          const mutation = useHook();
+          useEffect(() => {
+            mutation.mutateAsync(vars).then((r) => (result = r));
+          }, []); // eslint-disable-line react-hooks/exhaustive-deps
+          return null;
+        }
+        await act(async () => {
+          root.render(createElement(QueryClientProvider, { client: new QueryClient() }, createElement(Probe)));
+        });
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
+        await act(async () => root.unmount());
+        const requests = fetchSpy.mock.calls.map(([url, init]) => ({
+          url: String(url),
+          body: JSON.parse(String(init?.body)),
+        }));
+        return { requests, result };
+      }
+
+      const groups = [{ ticketKeys: ['ABC-1'] }, { ticketKeys: ['ABC-2', 'ABC-3'], bundle: 'Payments' }];
+
+      it('useAddTicketsToRelease posts one request per group and sums the counts', async () => {
+        const { requests, result } = await runGroups(
+          releasesModule.useAddTicketsToRelease,
+          { releaseId: 'r1', groups },
+          [
+            { added: 1, alreadyPresent: 0, notFound: 0 },
+            { added: 1, alreadyPresent: 1, notFound: 0 },
+          ],
+        );
+        expect(requests).toEqual([
+          { url: '/api/releases/r1/items', body: { ticketKeys: ['ABC-1'] } },
+          { url: '/api/releases/r1/items', body: { ticketKeys: ['ABC-2', 'ABC-3'], bundle: 'Payments' } },
+        ]);
+        expect(result).toMatchObject({ added: 2, alreadyPresent: 1, notFound: 0 });
+      });
+
+      it('useCreateRelease creates with the first group, then adds the rest to the new release', async () => {
+        const { requests, result } = await runGroups(
+          releasesModule.useCreateRelease,
+          { ...createVars, groups },
+          [
+            { added: 1, alreadyPresent: 0, notFound: 0 },
+            { added: 2, alreadyPresent: 0, notFound: 1 },
+          ],
+        );
+        expect(requests).toEqual([
+          { url: '/api/releases', body: { ...createVars, ticketKeys: ['ABC-1'] } },
+          { url: '/api/releases/r1/items', body: { ticketKeys: ['ABC-2', 'ABC-3'], bundle: 'Payments' } },
+        ]);
+        expect(result).toMatchObject({ added: 3, alreadyPresent: 0, notFound: 1 });
+      });
+    });
+
+    it('useRemoveTicketItem appends ?withBundle=true only when asked', async () => {
+      const withBundle = await runMutation(
+        releasesModule.useRemoveTicketItem,
+        { releaseId: 'r1', ticketKey: 'ABC-1', withBundle: true },
+        release(),
+      );
+      expect(withBundle.url).toBe('/api/releases/r1/items/ABC-1?withBundle=true');
+      expect(withBundle.init?.method).toBe('DELETE');
+
+      const plain = await runMutation(
+        releasesModule.useRemoveTicketItem,
+        { releaseId: 'r1', ticketKey: 'ABC-1' },
+        release(),
+      );
+      expect(plain.url).toBe('/api/releases/r1/items/ABC-1');
+    });
+
+    it('releaseBundles returns the unique non-null bundles, sorted case-insensitively', () => {
+      expect(
+        releasesModule.releaseBundles([{ bundle: 'b' }, { bundle: null }, { bundle: 'A' }, { bundle: 'b' }]),
+      ).toEqual(['A', 'b']);
+    });
   });
 });

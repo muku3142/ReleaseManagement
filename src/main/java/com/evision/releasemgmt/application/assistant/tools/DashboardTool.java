@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Component
@@ -67,7 +68,7 @@ public class DashboardTool implements AssistantTool {
         if (!"active".equals(scope) && !"all".equals(scope)) {
             throw new ToolArgumentException("scope must be active or all");
         }
-        DashboardView view = dashboardService.releases("all".equals(scope));
+        DashboardView view = dashboardService.releases("all".equals(scope), Set.of());
         Map<UUID, String> stageNames = new java.util.HashMap<>();
         ladderService.ladder().forEach(stage -> stageNames.put(stage.id(), stage.name()));
         view.stages().forEach(stage -> stageNames.putIfAbsent(stage.id(), stage.name()));

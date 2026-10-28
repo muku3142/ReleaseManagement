@@ -1,15 +1,24 @@
 package com.evision.releasemgmt.application;
 
 import com.evision.releasemgmt.domain.auth.JiraAuthFailureReason;
+import com.evision.releasemgmt.domain.enrichment.CodeLinks;
 import com.evision.releasemgmt.domain.jira.JiraTicketReadException;
 import com.evision.releasemgmt.domain.jira.TicketDetail;
 import com.evision.releasemgmt.domain.jira.TicketSearchCriteria;
+import com.evision.releasemgmt.domain.portfolio.PortfolioEditRejectedException;
+import com.evision.releasemgmt.domain.portfolio.PortfolioEditRejection;
+import com.evision.releasemgmt.domain.portfolio.Product;
+import com.evision.releasemgmt.domain.portfolio.ProductNotFoundException;
 import com.evision.releasemgmt.domain.release.AddTicketsResult;
 import com.evision.releasemgmt.domain.release.Release;
 import com.evision.releasemgmt.domain.release.ReleaseFrozenException;
 import com.evision.releasemgmt.domain.release.ReleaseItem;
 import com.evision.releasemgmt.domain.release.ReleaseRefreshIncompleteException;
 import com.evision.releasemgmt.domain.release.ReleaseStatus;
+import com.evision.releasemgmt.domain.release.UnfreezeRejectedException;
+import com.evision.releasemgmt.domain.release.UnfreezeRejection;
+import com.evision.releasemgmt.ports.ProductRepository;
+import com.evision.releasemgmt.ports.ReleaseProductRepository;
 import com.evision.releasemgmt.ports.ReleaseRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +31,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
@@ -32,9 +42,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -49,11 +61,22 @@ class ReleaseServiceTicketsTest {
     @Mock
     private EnrichmentService enrichmentService;
 
+    @Mock
+    private ReleaseProductRepository releaseProducts;
+
+    @Mock
+    private ProductRepository products;
+
+    private static final UUID PRODUCT_ID = UUID.randomUUID();
+
     private ReleaseService service;
 
     @BeforeEach
     void setUp() {
-        service = new ReleaseService(repository, ticketSearchService, enrichmentService);
+        service = new ReleaseService(repository, ticketSearchService, enrichmentService,
+                releaseProducts, products);
+        lenient().when(products.findById(PRODUCT_ID)).thenReturn(Optional.of(new Product(PRODUCT_ID, "Core", null)));
+        lenient().when(products.jiraProjectKeys()).thenReturn(Map.of(PRODUCT_ID, List.of("ABC", "CNV")));
     }
 
     private static TicketDetail ticket(String key) {
@@ -65,7 +88,7 @@ class ReleaseServiceTicketsTest {
     private static Release release(UUID id, ReleaseStatus status) {
         return new Release(id, "Sprint 42", "2026.08", status, "CNV",
                 Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null, null, null,
-                List.of(), List.of());
+                List.of(), List.of(), null);
     }
 
     @Test
@@ -77,7 +100,7 @@ class ReleaseServiceTicketsTest {
         TicketDetail cnv2 = ticket("CNV-2");
         when(ticketSearchService.search(any())).thenReturn(List.of(cnv1, cnv2));
 
-        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2"));
+        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2"), null);
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ReleaseItem>> itemsCaptor = ArgumentCaptor.forClass(List.class);
@@ -96,7 +119,7 @@ class ReleaseServiceTicketsTest {
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
 
-        AddTicketsResult result = service.addTickets(id, List.of("CNV-1"));
+        AddTicketsResult result = service.addTickets(id, List.of("CNV-1"), null);
 
         verify(ticketSearchService, never()).search(any());
         verify(repository, never()).addItems(any(), any());
@@ -111,7 +134,7 @@ class ReleaseServiceTicketsTest {
         when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-2"), ticket("CNV-3")));
 
-        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2", "CNV-3"));
+        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2", "CNV-3"), null);
 
         assertThat(result.added()).isEqualTo(2);
         assertThat(result.alreadyPresent()).isEqualTo(1);
@@ -124,7 +147,7 @@ class ReleaseServiceTicketsTest {
         when(repository.findTicketKeys(id)).thenReturn(List.of());
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1"), ticket("CNV-2")));
 
-        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-1", "CNV-2"));
+        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-1", "CNV-2"), null);
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
         verify(ticketSearchService).search(criteria.capture());
@@ -139,7 +162,7 @@ class ReleaseServiceTicketsTest {
         when(repository.findTicketKeys(id)).thenReturn(List.of());
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
 
-        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2"));
+        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2"), null);
 
         assertThat(result.added()).isEqualTo(1);
         assertThat(result.notFound()).isEqualTo(1);
@@ -156,7 +179,7 @@ class ReleaseServiceTicketsTest {
         when(repository.findTicketKeys(id)).thenReturn(List.of());
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
 
-        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "not a key"));
+        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "not a key"), null);
 
         assertThat(result.added()).isEqualTo(1);
         assertThat(result.notFound()).isEqualTo(1);
@@ -171,7 +194,7 @@ class ReleaseServiceTicketsTest {
         when(repository.findTicketKeys(id)).thenReturn(List.of("NEW-5"));
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("NEW-5")));
 
-        AddTicketsResult result = service.addTickets(id, List.of("OLD-1"));
+        AddTicketsResult result = service.addTickets(id, List.of("OLD-1"), null);
 
         verify(repository, never()).addItems(any(), any());
         assertThat(result.added()).isEqualTo(0);
@@ -186,7 +209,7 @@ class ReleaseServiceTicketsTest {
         when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-2")));
 
-        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2", "CNV-3"));
+        AddTicketsResult result = service.addTickets(id, List.of("CNV-1", "CNV-2", "CNV-3"), null);
 
         assertThat(result.added() + result.alreadyPresent() + result.notFound()).isEqualTo(3);
         assertThat(result.notFound()).isEqualTo(1);
@@ -199,8 +222,8 @@ class ReleaseServiceTicketsTest {
         when(repository.create(any(), any())).thenReturn(release(createdId, ReleaseStatus.OPEN));
         when(repository.findById(createdId)).thenReturn(Optional.of(release(createdId, ReleaseStatus.OPEN)));
 
-        AddTicketsResult result = service.createWithTickets("Sprint 42", "2026.08", "CNV",
-                List.of("CNV-1", "CNV-2"), "557058:abc-123");
+        AddTicketsResult result = service.createWithTickets("Sprint 42", "2026.08",
+                List.of("CNV-1", "CNV-2"), PRODUCT_ID, null, "557058:abc-123");
 
         assertThat(result.added()).isEqualTo(1);
         assertThat(result.notFound()).isEqualTo(1);
@@ -213,7 +236,7 @@ class ReleaseServiceTicketsTest {
         when(repository.findTicketKeys(id)).thenReturn(List.of());
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1"), ticket("CNV-2")));
 
-        service.addTickets(id, List.of("CNV-1", "CNV-2"));
+        service.addTickets(id, List.of("CNV-1", "CNV-2"), null);
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
         verify(ticketSearchService).search(criteria.capture());
@@ -227,7 +250,7 @@ class ReleaseServiceTicketsTest {
         when(repository.findTicketKeys(id)).thenReturn(List.of());
         when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
 
-        service.addTickets(id, List.of("CNV-1", "CNV-1) OR project = SECRET--"));
+        service.addTickets(id, List.of("CNV-1", "CNV-1) OR project = SECRET--"), null);
 
         ArgumentCaptor<TicketSearchCriteria> criteria = ArgumentCaptor.forClass(TicketSearchCriteria.class);
         verify(ticketSearchService).search(criteria.capture());
@@ -241,7 +264,7 @@ class ReleaseServiceTicketsTest {
         UUID id = UUID.randomUUID();
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.FROZEN)));
 
-        assertThatThrownBy(() -> service.addTickets(id, List.of("CNV-1")))
+        assertThatThrownBy(() -> service.addTickets(id, List.of("CNV-1"), null))
                 .isInstanceOf(ReleaseFrozenException.class);
 
         verify(ticketSearchService, never()).search(any());
@@ -253,7 +276,7 @@ class ReleaseServiceTicketsTest {
         UUID id = UUID.randomUUID();
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.FROZEN)));
 
-        assertThatThrownBy(() -> service.removeTicket(id, "CNV-1"))
+        assertThatThrownBy(() -> service.removeTicket(id, "CNV-1", false))
                 .isInstanceOf(ReleaseFrozenException.class);
 
         verify(repository, never()).removeItem(any(), any());
@@ -291,6 +314,42 @@ class ReleaseServiceTicketsTest {
         assertThat(itemsCaptor.getValue().get(0).ticket().status()).isEqualTo("In Progress");
         assertThat(refreshedAtCaptor.getValue()).isNotNull();
         assertThat(itemsCaptor.getValue().get(0).addedAt()).isEqualTo(refreshedAtCaptor.getValue());
+    }
+
+    @Test
+    void unfreezeReturnsTheRepositoryResult() {
+        UUID id = UUID.randomUUID();
+        Release open = release(id, ReleaseStatus.OPEN);
+        when(repository.unfreeze(id)).thenReturn(open);
+
+        assertThat(service.unfreeze(id, "557058:abc-123")).isSameAs(open);
+    }
+
+    @Test
+    void unfreezePropagatesARejectionUnchanged() {
+        UUID id = UUID.randomUUID();
+        UnfreezeRejectedException rejected = new UnfreezeRejectedException(UnfreezeRejection.UNFREEZE_HAS_PROMOTIONS);
+        when(repository.unfreeze(id)).thenThrow(rejected);
+
+        assertThatThrownBy(() -> service.unfreeze(id, "557058:abc-123")).isSameAs(rejected);
+    }
+
+    @Test
+    void anOpenReleaseHasNoUnfreezeBlockerAndTheRepositoryIsNotAsked() {
+        Release open = release(UUID.randomUUID(), ReleaseStatus.OPEN);
+
+        assertThat(service.unfreezeBlocker(open)).isEmpty();
+
+        verify(repository, never()).unfreezeBlocker(any());
+    }
+
+    @Test
+    void aFrozenReleaseReportsTheRepositoryBlocker() {
+        UUID id = UUID.randomUUID();
+        when(repository.unfreezeBlocker(id)).thenReturn(Optional.of(UnfreezeRejection.UNFREEZE_HAS_INSTALLS));
+
+        assertThat(service.unfreezeBlocker(release(id, ReleaseStatus.FROZEN)))
+                .contains(UnfreezeRejection.UNFREEZE_HAS_INSTALLS);
     }
 
     private static List<TicketDetail> tickets(int fromInclusive, int toInclusive) {
@@ -344,8 +403,8 @@ class ReleaseServiceTicketsTest {
         when(repository.create(any(), any())).thenReturn(release(createdId, ReleaseStatus.OPEN));
         when(repository.findById(createdId)).thenReturn(Optional.of(release(createdId, ReleaseStatus.OPEN)));
 
-        AddTicketsResult result = service.createWithTickets("Sprint 42", "2026.08", "CNV",
-                List.of("CNV-1", "CNV-2"), "557058:abc-123");
+        AddTicketsResult result = service.createWithTickets("Sprint 42", "2026.08",
+                List.of("CNV-1", "CNV-2"), PRODUCT_ID, null, "557058:abc-123");
 
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<ReleaseItem>> itemsCaptor = ArgumentCaptor.forClass(List.class);
@@ -360,8 +419,8 @@ class ReleaseServiceTicketsTest {
         when(ticketSearchService.search(any()))
                 .thenThrow(new JiraTicketReadException(JiraAuthFailureReason.JIRA_UNREACHABLE));
 
-        assertThatThrownBy(() -> service.createWithTickets("Sprint 42", "2026.08", "CNV",
-                List.of("CNV-1"), "557058:abc-123"))
+        assertThatThrownBy(() -> service.createWithTickets("Sprint 42", "2026.08",
+                List.of("CNV-1"), PRODUCT_ID, null, "557058:abc-123"))
                 .isInstanceOf(JiraTicketReadException.class);
 
         verify(repository, never()).create(any(), any());
@@ -403,7 +462,7 @@ class ReleaseServiceTicketsTest {
         TicketDetail added = ticket("CNV-2");
         when(ticketSearchService.search(any())).thenReturn(List.of(added));
 
-        service.addTickets(id, List.of("CNV-1", "CNV-2"));
+        service.addTickets(id, List.of("CNV-1", "CNV-2"), null);
 
         verify(enrichmentService).enrich(id, List.of(added));
     }
@@ -416,9 +475,104 @@ class ReleaseServiceTicketsTest {
         when(repository.create(any(), any())).thenReturn(release(createdId, ReleaseStatus.OPEN));
         when(repository.findById(createdId)).thenReturn(Optional.of(release(createdId, ReleaseStatus.OPEN)));
 
-        service.createWithTickets("Sprint 42", "2026.08", "CNV", List.of("CNV-1"), "557058:abc-123");
+        service.createWithTickets("Sprint 42", "2026.08", List.of("CNV-1"),
+                PRODUCT_ID, null, "557058:abc-123");
 
         verify(enrichmentService).enrich(createdId, List.of(fetched));
+    }
+
+    @Test
+    void createWithoutAProductIsRejectedBeforeJiraOrInsert() {
+        assertThatThrownBy(() -> service.createWithTickets("Sprint 42", "2026.08",
+                List.of("CNV-1"), null, null, "557058:abc-123"))
+                .isInstanceOfSatisfying(PortfolioEditRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(PortfolioEditRejection.RELEASE_PRODUCT_REQUIRED));
+
+        verify(ticketSearchService, never()).search(any());
+        verify(repository, never()).create(any(), any());
+    }
+
+    @Test
+    void createWithAnArchivedProductIsRejectedBeforeJiraOrInsert() {
+        UUID archived = UUID.randomUUID();
+        when(products.findById(archived))
+                .thenReturn(Optional.of(new Product(archived, "Old", Instant.parse("2026-01-01T00:00:00Z"))));
+
+        assertThatThrownBy(() -> service.createWithTickets("Sprint 42", "2026.08",
+                List.of("CNV-1"), archived, null, "557058:abc-123"))
+                .isInstanceOfSatisfying(PortfolioEditRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(PortfolioEditRejection.PRODUCT_ARCHIVED));
+
+        verify(ticketSearchService, never()).search(any());
+        verify(repository, never()).create(any(), any());
+    }
+
+    @Test
+    void createWithAnUnknownProductIsRejectedBeforeJiraOrInsert() {
+        UUID unknown = UUID.randomUUID();
+        when(products.findById(unknown)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createWithTickets("Sprint 42", "2026.08",
+                List.of("CNV-1"), unknown, null, "557058:abc-123"))
+                .isInstanceOf(ProductNotFoundException.class);
+
+        verify(ticketSearchService, never()).search(any());
+        verify(repository, never()).create(any(), any());
+    }
+
+    @Test
+    void createForAProductWithoutAJiraProjectIsRejectedWithoutCallingJira() {
+        UUID unmapped = UUID.randomUUID();
+        when(products.findById(unmapped)).thenReturn(Optional.of(new Product(unmapped, "Bare", null)));
+
+        assertThatThrownBy(() -> service.createWithTickets("Sprint 42", "2026.08",
+                List.of("CNV-1"), unmapped, null, "557058:abc-123"))
+                .isInstanceOfSatisfying(PortfolioEditRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(PortfolioEditRejection.PRODUCT_NO_JIRA_PROJECT));
+
+        verifyNoInteractions(ticketSearchService);
+        verify(repository, never()).create(any(), any());
+    }
+
+    @Test
+    void createTakesTheProductsFirstJiraKeyAndAssignsTheProduct() {
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
+        UUID createdId = UUID.randomUUID();
+        when(repository.create(any(), any())).thenReturn(release(createdId, ReleaseStatus.OPEN));
+        when(repository.findById(createdId)).thenReturn(Optional.of(release(createdId, ReleaseStatus.OPEN)));
+
+        service.createWithTickets("Sprint 42", "2026.08", List.of("CNV-1"), PRODUCT_ID, null, "557058:abc-123");
+
+        ArgumentCaptor<Release> created = ArgumentCaptor.forClass(Release.class);
+        verify(repository).create(created.capture(), any());
+        assertThat(created.getValue().jiraProjectKey()).isEqualTo("ABC");
+        verify(releaseProducts).setProduct(createdId, PRODUCT_ID);
+    }
+
+    @Test
+    void createDeletesTheNewReleaseWhenProductAssignmentFails() {
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
+        UUID createdId = UUID.randomUUID();
+        when(repository.create(any(), any())).thenReturn(release(createdId, ReleaseStatus.OPEN));
+        doThrow(new PortfolioEditRejectedException(PortfolioEditRejection.PRODUCT_ARCHIVED))
+                .when(releaseProducts).setProduct(any(), any());
+
+        assertThatThrownBy(() -> service.createWithTickets("Sprint 42", "2026.08",
+                List.of("CNV-1"), PRODUCT_ID, null, "557058:abc-123"))
+                .isInstanceOfSatisfying(PortfolioEditRejectedException.class,
+                        e -> assertThat(e.reason()).isEqualTo(PortfolioEditRejection.PRODUCT_ARCHIVED));
+
+        verify(repository).delete(createdId);
+    }
+
+    @Test
+    void setProductWorksOnAFrozenRelease() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.FROZEN)));
+
+        service.setProduct(id, PRODUCT_ID);
+
+        verify(releaseProducts).setProduct(id, PRODUCT_ID);
     }
 
     @Test
@@ -462,6 +616,141 @@ class ReleaseServiceTicketsTest {
         when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
         when(repository.removeItem(id, "CNV-99")).thenReturn(release(id, ReleaseStatus.OPEN));
 
-        assertThatCode(() -> service.removeTicket(id, "CNV-99")).doesNotThrowAnyException();
+        assertThatCode(() -> service.removeTicket(id, "CNV-99", false)).doesNotThrowAnyException();
+    }
+
+    private static Release releaseWithItems(UUID id, ReleaseStatus status, ReleaseItem... items) {
+        return new Release(id, "Sprint 42", "2026.08", status, "CNV",
+                Instant.parse("2026-08-04T09:00:00Z"), "557058:abc-123", null, null, null, null,
+                List.of(items), List.of(), null);
+    }
+
+    private static ReleaseItem bundledItem(String key, String bundle) {
+        return new ReleaseItem(ticket(key), Instant.now(), CodeLinks.notAttempted(), bundle);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<ReleaseItem> createdItems() {
+        ArgumentCaptor<List<ReleaseItem>> captor = ArgumentCaptor.forClass(List.class);
+        verify(repository).create(any(), captor.capture());
+        return captor.getValue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<ReleaseItem> addedItems(UUID id) {
+        ArgumentCaptor<List<ReleaseItem>> captor = ArgumentCaptor.forClass(List.class);
+        verify(repository).addItems(eq(id), captor.capture());
+        return captor.getValue();
+    }
+
+    private void stubCreate() {
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-1")));
+        UUID createdId = UUID.randomUUID();
+        when(repository.create(any(), any())).thenReturn(release(createdId, ReleaseStatus.OPEN));
+        when(repository.findById(createdId)).thenReturn(Optional.of(release(createdId, ReleaseStatus.OPEN)));
+    }
+
+    @Test
+    void createStoresTheTrimmedBundleOnEveryItem() {
+        stubCreate();
+
+        service.createWithTickets("Sprint 42", "2026.08", List.of("CNV-1"), PRODUCT_ID, "  Payments fixes ", "u");
+
+        assertThat(createdItems()).extracting(ReleaseItem::bundle).containsExactly("Payments fixes");
+    }
+
+    @Test
+    void createWithABlankBundleCreatesUngroupedItems() {
+        stubCreate();
+
+        service.createWithTickets("Sprint 42", "2026.08", List.of("CNV-1"), PRODUCT_ID, "   ", "u");
+
+        assertThat(createdItems()).extracting(ReleaseItem::bundle).containsOnlyNulls();
+    }
+
+    @Test
+    void addingUnderAnExistingBundleNameReusesItsSpellingIgnoringCase() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(
+                releaseWithItems(id, ReleaseStatus.OPEN, bundledItem("CNV-1", "Payments fixes"))));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-2")));
+
+        service.addTickets(id, List.of("CNV-2"), " payments FIXES ");
+
+        assertThat(addedItems(id)).extracting(ReleaseItem::bundle).containsExactly("Payments fixes");
+    }
+
+    @Test
+    void addingUnderANewBundleNameStoresItTrimmed() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(
+                releaseWithItems(id, ReleaseStatus.OPEN, bundledItem("CNV-1", "Payments fixes"))));
+        when(repository.findTicketKeys(id)).thenReturn(List.of("CNV-1"));
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-2")));
+
+        service.addTickets(id, List.of("CNV-2"), " Login ");
+
+        assertThat(addedItems(id)).extracting(ReleaseItem::bundle).containsExactly("Login");
+    }
+
+    @Test
+    void addingWithABlankBundleNameStoresUngroupedItems() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(release(id, ReleaseStatus.OPEN)));
+        when(repository.findTicketKeys(id)).thenReturn(List.of());
+        when(ticketSearchService.search(any())).thenReturn(List.of(ticket("CNV-2")));
+
+        service.addTickets(id, List.of("CNV-2"), "");
+
+        assertThat(addedItems(id)).extracting(ReleaseItem::bundle).containsOnlyNulls();
+    }
+
+    @Test
+    void removingABundledTicketWithItsBundleRemovesTheWholeBundle() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(
+                releaseWithItems(id, ReleaseStatus.OPEN, bundledItem("CNV-1", "Payments fixes"))));
+
+        service.removeTicket(id, "CNV-1", true);
+
+        verify(repository).removeBundle(id, "Payments fixes");
+        verify(repository, never()).removeItem(any(), any());
+    }
+
+    @Test
+    void removingAnUngroupedTicketWithItsBundleRemovesOnlyThatTicket() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(
+                releaseWithItems(id, ReleaseStatus.OPEN, bundledItem("CNV-1", null))));
+
+        service.removeTicket(id, "CNV-1", true);
+
+        verify(repository).removeItem(id, "CNV-1");
+        verify(repository, never()).removeBundle(any(), any());
+    }
+
+    @Test
+    void removingABundledTicketWithoutTheFlagRemovesOnlyThatTicket() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(
+                releaseWithItems(id, ReleaseStatus.OPEN, bundledItem("CNV-1", "Payments fixes"))));
+
+        service.removeTicket(id, "CNV-1", false);
+
+        verify(repository).removeItem(id, "CNV-1");
+        verify(repository, never()).removeBundle(any(), any());
+    }
+
+    @Test
+    void removingAWholeBundleFromAFrozenReleaseIsRefusedBeforeAnyDelete() {
+        UUID id = UUID.randomUUID();
+        when(repository.findById(id)).thenReturn(Optional.of(
+                releaseWithItems(id, ReleaseStatus.FROZEN, bundledItem("CNV-1", "Payments fixes"))));
+
+        assertThatThrownBy(() -> service.removeTicket(id, "CNV-1", true)).isInstanceOf(ReleaseFrozenException.class);
+
+        verify(repository, never()).removeBundle(any(), any());
+        verify(repository, never()).removeItem(any(), any());
     }
 }

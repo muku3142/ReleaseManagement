@@ -1,4 +1,5 @@
 import type { PromotionStage } from '../api/promotions';
+import { usePulseOnChange } from '@/hooks/usePulseOnChange';
 
 export function LadderDots({
   stages,
@@ -13,6 +14,8 @@ export function LadderDots({
   ariaLabel?: string;
   compact?: boolean;
 }) {
+  const currentPulse = usePulseOnChange(currentStageId);
+  const failedPulse = usePulseOnChange(failedStageId);
   const current = stages.find((s) => s.id === currentStageId);
   const drawn = stages.filter((s) => !s.retired || s.id === currentStageId);
   return (
@@ -26,6 +29,7 @@ export function LadderDots({
         const failed = !reached && stage.id === failedStageId;
         const label = `${stage.name}${stage.retired ? ' (retired)' : ''}`;
         const dotColour = failed ? 'border-2 border-red-600 bg-white' : reached ? 'bg-blue-600' : 'bg-gray-300';
+        const pulse = isCurrent && currentPulse.pulsing ? currentPulse : stage.id === failedStageId && failedPulse.pulsing ? failedPulse : null;
         return (
           <li
             key={stage.id}
@@ -35,7 +39,8 @@ export function LadderDots({
             className="flex items-center gap-1"
           >
             <span
-              className={`inline-block h-3 w-3 rounded-full ${dotColour} ${isCurrent ? 'ring-2 ring-blue-300' : ''}`}
+              className={`inline-block h-3 w-3 rounded-full ${dotColour} ${isCurrent ? 'ring-2 ring-blue-300' : ''}${pulse ? ' motion-safe:animate-status-pulse' : ''}`}
+              onAnimationEnd={pulse?.onAnimationEnd}
             />
             {compact ? (
               <span className="sr-only">{label}</span>
